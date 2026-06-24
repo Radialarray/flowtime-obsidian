@@ -257,6 +257,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 	buildRows(tbody) {
 		tbody.empty();
 		this.rowData = [];
+		const todayStr = new Date().toISOString().split("T")[0];
 		// Clean up orphaned dropdowns and date popups
 		document
 			.querySelectorAll(".tp-start-dd, .tp-date-popup")
@@ -421,13 +422,24 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 
 			const applyDate = async (nd) => {
 				closeDatePopup();
-				await this.updateTaskDate(task, nd);
-				task.taskDate = nd;
-				dateSpan.setText(nd || "+");
-				if (nd) {
-					dateSpan.removeClass("tp-date-none");
-				} else {
-					dateSpan.addClass("tp-date-none");
+				try {
+					await this.updateTaskDate(task, nd);
+					task.taskDate = nd;
+					if (nd && nd === todayStr) {
+						// Same date — just update badge text
+						dateSpan.setText(nd);
+						dateSpan.removeClass("tp-date-none");
+					} else {
+						// Date changed or removed — remove row, rebuild if empty
+						row.remove();
+						this.tasks = this.tasks.filter((t) => t !== task);
+						this.rowData = this.rowData.filter((rd) => rd.task !== task);
+						if (this.tasks.length === 0) {
+							this.renderTable();
+						}
+					}
+				} catch (e) {
+					new Notice("❌ " + e.message);
 				}
 			};
 

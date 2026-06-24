@@ -35,3 +35,4 @@
 {"id":"int-c488b74f8b1baf19b9becb4121ad9a7e","kind":"field_change","created_at":"2026-06-24T13:30:34.619072Z","actor":"Radialarray","issue_id":"flowtime-fht.2","extra":{"field":"status","new_value":"closed","old_value":"open"}}
 {"id":"int-283555ece937485657bd39cdbd8b334a","kind":"field_change","created_at":"2026-06-24T13:31:41.218624Z","actor":"Radialarray","issue_id":"flowtime-fht.3","extra":{"field":"status","new_value":"closed","old_value":"open"}}
 {"id":"int-ec1a136f257445ad60488a5542da441a","kind":"field_change","created_at":"2026-06-24T13:31:43.025446Z","actor":"Radialarray","issue_id":"flowtime-fht","extra":{"field":"status","new_value":"closed","old_value":"open","reason":"Closed"}}
+{"id":"int-d1704cc7d49729b10a0a898b2001c8eb","kind":"field_change","created_at":"2026-06-24T13:38:52.033584Z","actor":"Radialarray","issue_id":"flowtime-j0p.4","extra":{"field":"status","new_value":"closed","old_value":"open"}}

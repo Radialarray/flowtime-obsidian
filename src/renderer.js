@@ -17,6 +17,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		this.tasks = [];
 		this.rowData = [];
 		this.startOpts = [];
+		this._columnVisibility = null;
 	}
 
 	async onload() {
@@ -137,6 +138,31 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			if (!b.time) return -1;
 			return a.time.localeCompare(b.time);
 		});
+	}
+
+	/* Count how many columns are visible for current mode */
+	_visibleColCount(isCompact) {
+		const v = this._columnVisibility || {};
+		let count = 0;
+		if (isCompact) {
+			if (v.check !== false) count++;
+			if (v.task !== false) count++;
+			if (v.project !== false) count++;
+			if (v.bucket !== false) count++;
+			if (v.source !== false) count++;
+			if (v.date !== false) count++;
+			if (v.actions !== false) count++;
+		} else {
+			if (v.time !== false) count++;
+			if (v.check !== false) count++;
+			if (v.task !== false) count++;
+			if (v.project !== false) count++;
+			if (v.bucket !== false) count++;
+			if (v.source !== false) count++;
+			if (v.date !== false) count++;
+			if (v.timer !== false) count++;
+		}
+		return count || 1;
 	}
 
 	/* ─── load ─── */
@@ -295,6 +321,21 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 	renderTable() {
 		this.containerEl.empty();
 		this.rowData = [];
+
+		// Initialize column visibility defaults
+		if (!this._columnVisibility) {
+			this._columnVisibility = {
+				check: true,
+				task: true,
+				project: true,
+				bucket: true,
+				source: true,
+				date: true,
+				actions: true,
+				time: true,
+				timer: true,
+			};
+		}
 		if (this.mode === "sessions") {
 			this._renderSessionHistory();
 			return;
@@ -405,27 +446,93 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			});
 		}
 
+		// ── Column visibility toggle ──
+		const colBtn = toolbar.createEl("button", { text: "☰ Columns", cls: "ft-col-btn" });
+		const colDD = document.createElement("div");
+		colDD.className = "ft-col-dd";
+
+		const colDefs = [
+			{ id: "time", label: "Time" },
+			{ id: "check", label: "✓" },
+			{ id: "task", label: "Task" },
+			{ id: "project", label: "Project" },
+			{ id: "bucket", label: "Bucket" },
+			{ id: "source", label: "Source" },
+			{ id: "date", label: "Date" },
+			{ id: "actions", label: "Actions" },
+			{ id: "timer", label: "⏱" },
+		];
+
+		for (const def of colDefs) {
+			if (isCompact && (def.id === "time" || def.id === "timer")) continue;
+			if (!isCompact && def.id === "actions") continue;
+
+			const item = colDD.createEl("label", { cls: "ft-col-dd-item" });
+			const cb = item.createEl("input", { type: "checkbox" });
+			cb.checked = this._columnVisibility[def.id] !== false;
+			item.createEl("span", { text: " " + def.label });
+
+			cb.addEventListener("change", () => {
+				this._columnVisibility[def.id] = cb.checked;
+				this.renderTable();
+			});
+		}
+
+		const toggleDD = () => {
+			const r = colBtn.getBoundingClientRect();
+			colDD.style.left = r.left + "px";
+			colDD.style.top = (r.bottom + 4) + "px";
+			colDD.classList.toggle("ft-col-dd-open");
+			document.body.appendChild(colDD);
+		};
+		colBtn.addEventListener("click", (e) => {
+			e.stopPropagation();
+			toggleDD();
+		});
+		const closeDD = (e) => {
+			if (!colDD.contains(e.target) && e.target !== colBtn) {
+				colDD.classList.remove("ft-col-dd-open");
+				if (colDD.parentNode) colDD.parentNode.removeChild(colDD);
+			}
+		};
+		document.addEventListener("click", closeDD, true);
+
 		const table = this.containerEl.createEl("table", {
 			cls: "flowtime-table",
 		});
 		const hr = table.createEl("thead").createEl("tr");
 		if (isCompact) {
-			hr.createEl("th", { text: "✓", cls: "col-check" });
-			hr.createEl("th", { text: "Task", cls: "col-task" });
-			hr.createEl("th", { text: "Project", cls: "col-project" });
-			hr.createEl("th", { text: "Bucket", cls: "col-bucket" });
-			hr.createEl("th", { text: "Source", cls: "col-source" });
-			hr.createEl("th", { text: dw ? "Due" : "Date", cls: "col-date" });
-			hr.createEl("th", { cls: "col-actions" });
+			if (this._columnVisibility.check !== false)
+				hr.createEl("th", { text: "✓", cls: "col-check" });
+			if (this._columnVisibility.task !== false)
+				hr.createEl("th", { text: "Task", cls: "col-task" });
+			if (this._columnVisibility.project !== false)
+				hr.createEl("th", { text: "Project", cls: "col-project" });
+			if (this._columnVisibility.bucket !== false)
+				hr.createEl("th", { text: "Bucket", cls: "col-bucket" });
+			if (this._columnVisibility.source !== false)
+				hr.createEl("th", { text: "Source", cls: "col-source" });
+			if (this._columnVisibility.date !== false)
+				hr.createEl("th", { text: dw ? "Due" : "Date", cls: "col-date" });
+			if (this._columnVisibility.actions !== false)
+				hr.createEl("th", { cls: "col-actions" });
 		} else {
-			hr.createEl("th", { text: "Time", cls: "col-time" });
-			hr.createEl("th", { text: "✓", cls: "col-check" });
-			hr.createEl("th", { text: "Task", cls: "col-task" });
-			hr.createEl("th", { text: "Project", cls: "col-project" });
-			hr.createEl("th", { text: "Bucket", cls: "col-bucket" });
-			hr.createEl("th", { text: "Source", cls: "col-source" });
-			hr.createEl("th", { text: "Date", cls: "col-date" });
-			hr.createEl("th", { text: "⏱", cls: "col-timer" });
+			if (this._columnVisibility.time !== false)
+				hr.createEl("th", { text: "Time", cls: "col-time" });
+			if (this._columnVisibility.check !== false)
+				hr.createEl("th", { text: "✓", cls: "col-check" });
+			if (this._columnVisibility.task !== false)
+				hr.createEl("th", { text: "Task", cls: "col-task" });
+			if (this._columnVisibility.project !== false)
+				hr.createEl("th", { text: "Project", cls: "col-project" });
+			if (this._columnVisibility.bucket !== false)
+				hr.createEl("th", { text: "Bucket", cls: "col-bucket" });
+			if (this._columnVisibility.source !== false)
+				hr.createEl("th", { text: "Source", cls: "col-source" });
+			if (this._columnVisibility.date !== false)
+				hr.createEl("th", { text: "Date", cls: "col-date" });
+			if (this._columnVisibility.timer !== false)
+				hr.createEl("th", { text: "⏱", cls: "col-timer" });
 		}
 		const tbody = table.createEl("tbody");
 		this.bucketTotals = this._computeBucketTotals();
@@ -526,7 +633,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				const gr = tbody.createEl("tr", { cls: "ft-project-group" });
 				gr.createEl("td", {
 					text: proj === "__none__" ? "Other" : proj,
-					attr: { colspan: "7" },
+					attr: { colspan: String(this._visibleColCount(true)) },
 				});
 				for (const task of projTasks) {
 					this._renderTaskRow(tbody, task, tdy, od, _dw, wk, pj, isCompact);
@@ -547,217 +654,229 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		let si, ds; // startInput, durationSelect
 
 		if (!isCompact) {
-			const tc = row.createEl("td");
-			const wr = tc.createEl("div", { cls: "ft-start-wrap" });
-			si = wr.createEl("input", {
-				type: "text",
-				value: start || "",
-				placeholder: "09:00",
-				cls: "ft-start-input",
-			});
-			const tb = wr.createEl("button", { text: "▾", cls: "ft-start-toggle" });
-			const dd = document.createElement("div");
-			dd.className = "ft-start-dd";
-			for (const t of this.startOpts) {
-				const it = dd.createEl("button", { text: t, cls: "ft-dd-item" });
-				if (t === start) it.addClass("ft-dd-sel");
-				it.addEventListener("click", () => {
-					si.value = t;
-					cd();
-					up();
+			if (this._columnVisibility.time !== false) {
+				const tc = row.createEl("td");
+				const wr = tc.createEl("div", { cls: "ft-start-wrap" });
+				si = wr.createEl("input", {
+					type: "text",
+					value: start || "",
+					placeholder: "09:00",
+					cls: "ft-start-input",
 				});
-			}
-			const od2 = () => {
-				const r = wr.getBoundingClientRect();
-				["left", "top"].forEach(
-					(p) =>
-						(dd.style[p] =
-							r[p === "left" ? "left" : "bottom"] +
-							(p === "left" ? 0 : 4) +
-							"px"),
-				);
-				dd.style.width = Math.max(r.width, 80) + "px";
-				dd.classList.add("ft-dd-open");
-				document.body.appendChild(dd);
-			};
-			const cd = () => {
-				dd.classList.remove("ft-dd-open");
-				if (dd.parentNode) dd.parentNode.removeChild(dd);
-			};
-			tb.addEventListener("click", (e) => {
-				e.stopPropagation();
-				dd.classList.contains("ft-dd-open") ? cd() : od2();
-			});
-			si.addEventListener("focusout", (e) => {
-				if (!wr.contains(e.relatedTarget)) cd();
-			});
+				const tb = wr.createEl("button", { text: "▾", cls: "ft-start-toggle" });
+				const dd = document.createElement("div");
+				dd.className = "ft-start-dd";
+				for (const t of this.startOpts) {
+					const it = dd.createEl("button", { text: t, cls: "ft-dd-item" });
+					if (t === start) it.addClass("ft-dd-sel");
+					it.addEventListener("click", () => {
+						si.value = t;
+						cd();
+						up();
+					});
+				}
+				const od2 = () => {
+					const r = wr.getBoundingClientRect();
+					["left", "top"].forEach(
+						(p) =>
+							(dd.style[p] =
+								r[p === "left" ? "left" : "bottom"] +
+								(p === "left" ? 0 : 4) +
+								"px"),
+					);
+					dd.style.width = Math.max(r.width, 80) + "px";
+					dd.classList.add("ft-dd-open");
+					document.body.appendChild(dd);
+				};
+				const cd = () => {
+					dd.classList.remove("ft-dd-open");
+					if (dd.parentNode) dd.parentNode.removeChild(dd);
+				};
+				tb.addEventListener("click", (e) => {
+					e.stopPropagation();
+					dd.classList.contains("ft-dd-open") ? cd() : od2();
+				});
+				si.addEventListener("focusout", (e) => {
+					if (!wr.contains(e.relatedTarget)) cd();
+				});
 
-			tc.createEl("span", { text: "  +  ", cls: "ft-plus" });
-			ds = tc.createEl("select", { cls: "ft-time-dur" });
-			ds.createEl("option", { attr: { value: "" }, text: "--" });
-			for (const d of DUR_OPTS) {
-				const o = ds.createEl("option", {
-					text: formatDuration(d),
-					attr: { value: d },
-				});
-				if (d === dur) o.selected = true;
+				tc.createEl("span", { text: "  +  ", cls: "ft-plus" });
+				ds = tc.createEl("select", { cls: "ft-time-dur" });
+				ds.createEl("option", { attr: { value: "" }, text: "--" });
+				for (const d of DUR_OPTS) {
+					const o = ds.createEl("option", {
+						text: formatDuration(d),
+						attr: { value: d },
+					});
+					if (d === dur) o.selected = true;
+				}
+				const ps = tc.createEl("span", { text: "", cls: "ft-preview" });
+				const up = () => {
+					const s = si.value,
+						d = parseInt(ds.value, 10);
+					ps.setText(s && d > 0 ? "→ " + this._calcEnd(s, d) : "");
+				};
+				si.addEventListener("input", up);
+				ds.addEventListener("change", up);
+				up();
 			}
-			const ps = tc.createEl("span", { text: "", cls: "ft-preview" });
-			const up = () => {
-				const s = si.value,
-					d = parseInt(ds.value, 10);
-				ps.setText(s && d > 0 ? "→ " + this._calcEnd(s, d) : "");
-			};
-			si.addEventListener("input", up);
-			ds.addEventListener("change", up);
-			up();
 		}
 
 		// Checkbox column
-		this._buildCheckCell(row, task);
+		if (this._columnVisibility.check !== false)
+			this._buildCheckCell(row, task);
 
 		// Task cell: priority + text
-		this._buildTaskCell(row, task);
+		if (this._columnVisibility.task !== false)
+			this._buildTaskCell(row, task);
 
-		const pc = row.createEl("td", { cls: "ft-project-cell" });
-		if (task.project) {
-			const plink = pc.createEl("a", {
-				text: task.project,
-				cls: "ft-project-link",
-			});
-			if (task.projectPath) {
-				plink.addEventListener("click", () =>
-					this.app.workspace.openLinkText(task.projectPath, "", false),
-				);
+		if (this._columnVisibility.project !== false) {
+			const pc = row.createEl("td", { cls: "ft-project-cell" });
+			if (task.project) {
+				const plink = pc.createEl("a", {
+					text: task.project,
+					cls: "ft-project-link",
+				});
+				if (task.projectPath) {
+					plink.addEventListener("click", () =>
+						this.app.workspace.openLinkText(task.projectPath, "", false),
+					);
+				}
+			} else {
+				pc.createEl("span", { text: "—", cls: "ft-project-none" });
 			}
-		} else {
-			pc.createEl("span", { text: "—", cls: "ft-project-none" });
 		}
 
 		// Bucket cell
-		const bc = row.createEl("td", { cls: "ft-bucket-cell" });
-		const bucketId = task.bucket;
-		if (bucketId) {
-			const buckets = this.plugin?.settings?.buckets || [];
-			const bucketDef = buckets.find(b => b.id === bucketId);
-			if (bucketDef) {
-				if (bucketDef.weeklyLimit > 0) {
-					const used = (this.bucketTotals?.[bucketId] || 0) / 60;
-					const bar = renderProgressBar(used, bucketDef.weeklyLimit, `${formatHours(used)}h / ${bucketDef.weeklyLimit}h`);
-					bar.style.minWidth = "100px";
-					bc.appendChild(bar);
+		if (this._columnVisibility.bucket !== false) {
+			const bc = row.createEl("td", { cls: "ft-bucket-cell" });
+			const bucketId = task.bucket;
+			if (bucketId) {
+				const buckets = this.plugin?.settings?.buckets || [];
+				const bucketDef = buckets.find(b => b.id === bucketId);
+				if (bucketDef) {
+					if (bucketDef.weeklyLimit > 0) {
+						const used = (this.bucketTotals?.[bucketId] || 0) / 60;
+						const bar = renderProgressBar(used, bucketDef.weeklyLimit, `${formatHours(used)}h / ${bucketDef.weeklyLimit}h`);
+						bar.style.minWidth = "100px";
+						bc.appendChild(bar);
+					} else {
+						const badge = bc.createEl("span", {
+							text: bucketDef.name,
+							cls: "ft-bucket-badge",
+						});
+						badge.style.borderLeftColor = bucketDef.color;
+					}
 				} else {
-					const badge = bc.createEl("span", {
-						text: bucketDef.name,
-						cls: "ft-bucket-badge",
-					});
-					badge.style.borderLeftColor = bucketDef.color;
+					bc.createEl("span", { text: bucketId, cls: "ft-bucket-missing" });
 				}
 			} else {
-				bc.createEl("span", { text: bucketId, cls: "ft-bucket-missing" });
+				bc.createEl("span", { text: "—", cls: "ft-bucket-none" });
 			}
-		} else {
-			bc.createEl("span", { text: "—", cls: "ft-bucket-none" });
 		}
 
-		const sc = row.createEl("td", { cls: "ft-source" });
-		const lnk = sc.createEl("a", {
-			text: task.file.basename,
-			cls: "ft-source-link",
-		});
-		lnk.addEventListener("click", () =>
-			this.app.workspace.openLinkText(task.file.path, "", false, {
-				line: task.line + 1,
-			}),
-		);
+		if (this._columnVisibility.source !== false) {
+			const sc = row.createEl("td", { cls: "ft-source" });
+			const lnk = sc.createEl("a", {
+				text: task.file.basename,
+				cls: "ft-source-link",
+			});
+			lnk.addEventListener("click", () =>
+				this.app.workspace.openLinkText(task.file.path, "", false, {
+					line: task.line + 1,
+				}),
+			);
+		}
 
 		/* Date cell (shared) */
-		const dc = row.createEl("td", { cls: "ft-date-cell" });
-		const dw = dc.createEl("div", { cls: "ft-date-wrap" });
-		const dispDate = task.taskDate || "+";
-		const hasDate = task.taskDate;
-		const ds2 = dw.createEl("span", {
-			text: dispDate,
-			cls: "ft-date-badge" + (hasDate ? "" : " ft-date-none"),
-		});
-		const dp = document.createElement("div");
-		dp.className = "ft-date-popup";
-		const dpi = dp.createEl("input", {
-			type: "date",
-			value: task.taskDate || "",
-			cls: "ft-dp-input",
-		});
-		const mkDpBtn = (txt, cls) => dp.createEl("button", { text: txt, cls });
-		const bTdy = mkDpBtn("Today", "ft-dp-btn"),
-			bTmw = mkDpBtn("Tomorrow", "ft-dp-btn"),
-			bNw = mkDpBtn("Next Week", "ft-dp-btn"),
-			bBkl = mkDpBtn("✕ Backlog", "ft-dp-btn ft-dp-remove");
-		const fmt = (d) => d.toISOString().split("T")[0];
-		// Register one document capture handler for all popups
-		if (!this._closePopups) {
-			this._closePopups = (ev) => {
-				document
-					.querySelectorAll(".ft-date-popup.ft-dp-open")
-					.forEach((p) => {
-						if (
-							p.contains(ev.target) ||
-							(p._badge && p._badge.contains(ev.target))
-						)
-							return;
-						p.classList.remove("ft-dp-open");
-						if (p.parentNode) p.parentNode.removeChild(p);
-					});
-			};
-			document.addEventListener("click", this._closePopups, true);
-		}
-		dp._badge = ds2;
-		const op = () => {
-			const r = dw.getBoundingClientRect();
-			dp.style.left = r.left + "px";
-			dp.style.top = r.bottom + 4 + "px";
-			dp.classList.add("ft-dp-open");
-			document.body.appendChild(dp);
-		};
-		const cp = () => {
-			dp.classList.remove("ft-dp-open");
-			if (dp.parentNode) dp.parentNode.removeChild(dp);
-		};
-		ds2.addEventListener("click", (e) => {
-			e.stopPropagation();
-			dp.classList.contains("ft-dp-open") ? cp() : op();
-		});
-		const ap = async (nd) => {
-			cp();
-			try {
-				await this.updateDate(task, nd);
-				task.taskDate = nd;
-				if (nd && nd === tdy) {
-					ds2.setText(nd);
-					ds2.removeClass("ft-date-none");
-					await this._refreshSiblings();
-				} else {
-					row.remove();
-					this.tasks = this.tasks.filter((t) => t !== task);
-					this.rowData = this.rowData.filter((r) => r.task !== task);
-					if (!this.tasks.length) this.renderTable();
-					if (nd && nd !== tdy) await this._refreshSiblings();
-				}
-			} catch (e) {
-				this.plugin?.notify?.("❌ " + e.message, true);
+		if (this._columnVisibility.date !== false) {
+			const dc = row.createEl("td", { cls: "ft-date-cell" });
+			const dw = dc.createEl("div", { cls: "ft-date-wrap" });
+			const dispDate = task.taskDate || "+";
+			const hasDate = task.taskDate;
+			const ds2 = dw.createEl("span", {
+				text: dispDate,
+				cls: "ft-date-badge" + (hasDate ? "" : " ft-date-none"),
+			});
+			const dp = document.createElement("div");
+			dp.className = "ft-date-popup";
+			const dpi = dp.createEl("input", {
+				type: "date",
+				value: task.taskDate || "",
+				cls: "ft-dp-input",
+			});
+			const mkDpBtn = (txt, cls) => dp.createEl("button", { text: txt, cls });
+			const bTdy = mkDpBtn("Today", "ft-dp-btn"),
+				bTmw = mkDpBtn("Tomorrow", "ft-dp-btn"),
+				bNw = mkDpBtn("Next Week", "ft-dp-btn"),
+				bBkl = mkDpBtn("✕ Backlog", "ft-dp-btn ft-dp-remove");
+			const fmt = (d) => d.toISOString().split("T")[0];
+			// Register one document capture handler for all popups
+			if (!this._closePopups) {
+				this._closePopups = (ev) => {
+					document
+						.querySelectorAll(".ft-date-popup.ft-dp-open")
+						.forEach((p) => {
+							if (
+								p.contains(ev.target) ||
+								(p._badge && p._badge.contains(ev.target))
+							)
+								return;
+							p.classList.remove("ft-dp-open");
+							if (p.parentNode) p.parentNode.removeChild(p);
+						});
+				};
+				document.addEventListener("click", this._closePopups, true);
 			}
-		};
-		dpi.addEventListener("change", () => ap(dpi.value));
-		bTdy.addEventListener("click", () => ap(fmt(new Date())));
-		bTmw.addEventListener("click", () =>
-			ap(fmt(new Date(Date.now() + 864e5))),
-		);
-		bNw.addEventListener("click", () =>
-			ap(fmt(new Date(Date.now() + 7 * 864e5))),
-		);
-		bBkl.addEventListener("click", () => ap(""));
+			dp._badge = ds2;
+			const op = () => {
+				const r = dw.getBoundingClientRect();
+				dp.style.left = r.left + "px";
+				dp.style.top = r.bottom + 4 + "px";
+				dp.classList.add("ft-dp-open");
+				document.body.appendChild(dp);
+			};
+			const cp = () => {
+				dp.classList.remove("ft-dp-open");
+				if (dp.parentNode) dp.parentNode.removeChild(dp);
+			};
+			ds2.addEventListener("click", (e) => {
+				e.stopPropagation();
+				dp.classList.contains("ft-dp-open") ? cp() : op();
+			});
+			const ap = async (nd) => {
+				cp();
+				try {
+					await this.updateDate(task, nd);
+					task.taskDate = nd;
+					if (nd && nd === tdy) {
+						ds2.setText(nd);
+						ds2.removeClass("ft-date-none");
+						await this._refreshSiblings();
+					} else {
+						row.remove();
+						this.tasks = this.tasks.filter((t) => t !== task);
+						this.rowData = this.rowData.filter((r) => r.task !== task);
+						if (!this.tasks.length) this.renderTable();
+						if (nd && nd !== tdy) await this._refreshSiblings();
+					}
+				} catch (e) {
+					this.plugin?.notify?.("❌ " + e.message, true);
+				}
+			};
+			dpi.addEventListener("change", () => ap(dpi.value));
+			bTdy.addEventListener("click", () => ap(fmt(new Date())));
+			bTmw.addEventListener("click", () =>
+				ap(fmt(new Date(Date.now() + 864e5))),
+			);
+			bNw.addEventListener("click", () =>
+				ap(fmt(new Date(Date.now() + 7 * 864e5))),
+			);
+			bBkl.addEventListener("click", () => ap(""));
+		}
 
 		/* Timer (today) or action buttons (compact) */
-		if (isCompact) {
+		if (isCompact && this._columnVisibility.actions !== false) {
 			const ac = row.createEl("td", { cls: "ft-actions-cell" });
 			const aw = ac.createEl("div", { cls: "ft-actions-wrap" });
 			const abTdy = aw.createEl("button", {
@@ -784,7 +903,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 					if (!this.tasks.length) this.renderTable();
 				});
 			}
-		} else {
+		} else if (!isCompact && this._columnVisibility.timer !== false) {
 			const ts = {
 				remaining: (dur || 0) * 60,
 				total: (dur || 0) * 60,
@@ -846,14 +965,14 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 						}
 					}
 				}, 1000);
-				// Sync with status bar
-				if (this.plugin?.statusTimer?.start) {
-					const dm = parseInt(ds.value, 10);
-					this.plugin.statusTimer.start(task.cleanText, dm * 60);
-				}
+			// Sync with status bar
+			if (this.plugin?.statusTimer?.start) {
+				const dm = ds ? parseInt(ds.value, 10) : dur;
+				this.plugin.statusTimer.start(task.cleanText, dm * 60);
+			}
 			};
 			pb.addEventListener("click", () => {
-				const dm = parseInt(ds.value, 10);
+				const dm = ds ? parseInt(ds.value, 10) : dur;
 				if (!dm || dm <= 0) return;
 				if (ts.running) {
 					stp();
@@ -868,18 +987,20 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			});
 			rb.addEventListener("click", () => {
 				stp();
-				const dm = parseInt(ds.value, 10);
+				const dm = ds ? parseInt(ds.value, 10) : dur;
 				ts.remaining = dm && dm > 0 ? dm * 60 : 0;
 				ts.total = ts.remaining;
 				ud();
 			});
-			ds.addEventListener("change", () => {
-				stp();
-				const dm = parseInt(ds.value, 10);
-				ts.remaining = dm && dm > 0 ? dm * 60 : 0;
-				ts.total = ts.remaining;
-				ud();
-			});
+			if (ds) {
+				ds.addEventListener("change", () => {
+					stp();
+					const dm = parseInt(ds.value, 10);
+					ts.remaining = dm && dm > 0 ? dm * 60 : 0;
+					ts.total = ts.remaining;
+					ud();
+				});
+			}
 		}
 		if (!isCompact) this.rowData.push({ task, si, ds });
 	}
@@ -1040,8 +1161,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 								text: `${usedHours.toFixed(1)}h`,
 								cls: "ft-sesh-analytics-value",
 							});
-						}
-					} else {
+			}
+		} else if (!isCompact && this._columnVisibility.timer !== false) {
 						row.createEl("span", { text: w.bucket || "unassigned", cls: "ft-sesh-analytics-name" });
 						row.createEl("span", {
 							text: `${(w.total_minutes / 60).toFixed(1)}h`,

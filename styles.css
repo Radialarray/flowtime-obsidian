@@ -1071,3 +1071,46 @@
 	border: none;
 	border-top: 1px solid var(--background-modifier-border);
 }
+
+/* ── Column Visibility ── */
+.ft-col-btn {
+	background: none;
+	border: 1px solid var(--background-modifier-border);
+	padding: 2px 8px;
+	border-radius: var(--radius-s);
+	cursor: pointer;
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+}
+.ft-col-btn:hover {
+	background: var(--background-modifier-hover);
+}
+.ft-col-dd {
+	display: none;
+	position: fixed;
+	z-index: 1000;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+	padding: 6px 0;
+	min-width: 140px;
+}
+.ft-col-dd-open {
+	display: block;
+}
+.ft-col-dd-item {
+	display: block;
+	padding: 4px 12px;
+	cursor: pointer;
+	font-size: var(--font-ui-small);
+	color: var(--text-normal);
+	white-space: nowrap;
+}
+.ft-col-dd-item:hover {
+	background: var(--background-modifier-hover);
+}
+.ft-col-dd-item input {
+	margin: 0;
+	vertical-align: middle;
+}

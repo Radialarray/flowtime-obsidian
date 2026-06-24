@@ -31,16 +31,19 @@
 }
 
 .col-time {
-	width: 24%;
+	width: 22%;
 }
 .col-task {
-	width: 28%;
+	width: 22%;
 }
-.col-source {
+.col-project {
 	width: 12%;
 }
+.col-source {
+	width: 10%;
+}
 .col-date {
-	width: 14%;
+	width: 12%;
 	text-align: center;
 }
 .col-timer {
@@ -225,6 +228,27 @@
 .tp-task-text {
 	font-size: var(--font-ui-small);
 	line-height: 1.4;
+}
+
+/* --- Project cell --- */
+.tp-project-cell {
+	text-align: left;
+}
+
+.tp-project-link {
+	cursor: pointer;
+	color: var(--text-accent);
+	font-size: var(--font-ui-smaller);
+	text-decoration: none;
+}
+
+.tp-project-link:hover {
+	text-decoration: underline;
+}
+
+.tp-project-none {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
 }
 
 /* --- Source link --- */

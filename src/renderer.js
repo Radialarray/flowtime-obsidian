@@ -5,11 +5,12 @@ const START_H = 7;
 const START_END = 20;
 
 class TaskPlannerRenderer extends MarkdownRenderChild {
-	constructor(app, containerEl, mode) {
+	constructor(app, containerEl, mode, projectEngine) {
 		super(containerEl);
 		this.app = app;
 		this.plugin = null;
 		this.mode = mode || "today";
+		this.projectEngine = projectEngine || null;
 		this.tasks = [];
 		this.rowData = [];
 		this.startOpts = [];
@@ -161,6 +162,10 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 					rest = rest.slice(tm[0].length);
 				}
 
+				const project = this.projectEngine
+					? await this.projectEngine.resolve(file.path)
+					: null;
+
 				this.tasks.push({
 					file,
 					line: i,
@@ -171,6 +176,9 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 					rawText: rest.trim(),
 					cleanText: this._clean(rest),
 					status,
+					project: project?.name || null,
+					projectPath: project?.path || null,
+					projectSource: project?.source || null,
 				});
 			}
 		}
@@ -263,12 +271,14 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 		const hr = table.createEl("thead").createEl("tr");
 		if (od || dw) {
 			hr.createEl("th", { text: "Task", cls: "col-task" });
+			hr.createEl("th", { text: "Project", cls: "col-project" });
 			hr.createEl("th", { text: "Source", cls: "col-source" });
 			hr.createEl("th", { text: dw ? "Due" : "Date", cls: "col-date" });
 			hr.createEl("th", { cls: "col-actions" });
 		} else {
 			hr.createEl("th", { text: "Time", cls: "col-time" });
 			hr.createEl("th", { text: "Task", cls: "col-task" });
+			hr.createEl("th", { text: "Project", cls: "col-project" });
 			hr.createEl("th", { text: "Source", cls: "col-source" });
 			hr.createEl("th", { text: "Date", cls: "col-date" });
 			hr.createEl("th", { text: "⏱", cls: "col-timer" });
@@ -365,6 +375,20 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 			}
 
 			row.createEl("td", { text: task.cleanText, cls: "tp-task-text" });
+			const pc = row.createEl("td", { cls: "tp-project-cell" });
+			if (task.project) {
+				const plink = pc.createEl("a", {
+					text: task.project,
+					cls: "tp-project-link",
+				});
+				if (task.projectPath) {
+					plink.addEventListener("click", () =>
+						this.app.workspace.openLinkText(task.projectPath, "", false),
+					);
+				}
+			} else {
+				pc.createEl("span", { text: "—", cls: "tp-project-none" });
+			}
 			const sc = row.createEl("td", { cls: "tp-source" });
 			const lnk = sc.createEl("a", {
 				text: task.file.basename,

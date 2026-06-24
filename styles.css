@@ -592,3 +592,18 @@
 	background: var(--background-modifier-hover);
 	color: var(--text-normal);
 }
+
+/* --- Status Bar Timer --- */
+.flowtime-status-timer {
+	cursor: pointer;
+	padding: 0 8px;
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	user-select: none;
+}
+
+.flowtime-status-timer:hover {
+	color: var(--text-normal);
+	background: var(--background-modifier-hover);
+}

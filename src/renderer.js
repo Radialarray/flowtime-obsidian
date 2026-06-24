@@ -89,6 +89,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 	}
 
 	_beep() {
+		if (this.plugin?.settings?.timerSound === false) return;
 		try {
 			for (const [freq, delay] of [
 				[880, 0],
@@ -555,6 +556,9 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 					}
 					ts.running = false;
 					pb.setText("▶");
+					if (this.plugin?.stopStatusTimer) {
+						this.plugin.stopStatusTimer();
+					}
 				};
 				const sta = () => {
 					if (ts.remaining <= 0) return;
@@ -568,10 +572,25 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 							ts.remaining = 0;
 							ud();
 							disp.addClass("tp-timer-expired");
-							new Notice("⏰ Time's up! " + task.cleanText);
-							this._beep();
+							if (!this.plugin?.settings?.quietMode) {
+								new Notice(
+									"⏰ Time's up! " + task.cleanText,
+									this.plugin?.settings?.noticeDuration || 4000,
+								);
+							}
+							if (this.plugin?.settings?.timerSound !== false) {
+								this._beep();
+							}
+							if (this.plugin?.stopStatusTimer) {
+								this.plugin.stopStatusTimer();
+							}
 						}
 					}, 1000);
+					// Sync with status bar
+					if (this.plugin?.startStatusTimer) {
+						const dm = parseInt(ds.value, 10);
+						this.plugin.startStatusTimer(task.cleanText, dm * 60);
+					}
 				};
 				pb.addEventListener("click", () => {
 					const dm = parseInt(ds.value, 10);

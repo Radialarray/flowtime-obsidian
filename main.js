@@ -49,9 +49,18 @@ class AddTaskSuggest extends EditorSuggest {
 }
 
 /**
- * Autocomplete for @-directives inside task lines.
- * Triggers on task lines (- [ ]) when typing @.
- * Completions: dates, durations, buckets, @due:
+ * Unified @-completions.
+ *
+ * Two modes based on context:
+ *
+ * COMMAND MODE — @ is first non-whitespace on line → show task macros
+ *   @td  → - [ ]  @today
+ *   @tm  → - [ ]  @tomorrow
+ *   @rec → - [ ]  🔁 every day @today
+ *   @weekly → `flowtime-weekly` block
+ *
+ * DIRECTIVE MODE — @ inside a task line → show dates, durations, buckets, projects
+ *   @today, @b:deep-work, @p:Website, @30m, @due:tomorrow
  */
 class AtCompletionsSuggest extends EditorSuggest {
 	constructor(app, plugin) {
@@ -61,31 +70,57 @@ class AtCompletionsSuggest extends EditorSuggest {
 
 	onTrigger(cursor, editor, file) {
 		const line = editor.getLine(cursor.line);
-		// Only trigger on task lines
-		if (!line.match(/^\s*[-*+]\s*\[[^\]]*\]\s*/)) return null;
-
 		const before = line.slice(0, cursor.ch);
-		// Find the last @ before cursor
 		const atIndex = before.lastIndexOf("@");
 		if (atIndex < 0) return null;
 
 		const textAfterAt = before.slice(atIndex + 1);
-		// Don't trigger if there's a space before — isolated @ needs completions too
-		// Don't trigger if @ has trailing space already
 		if (textAfterAt.includes(" ")) return null;
 
+		// Detect COMMAND MODE: @ is the first non-whitespace char
+		const lineLead = line.slice(0, atIndex);
+		const isCommandMode = lineLead.trim() === "" && !line.match(/^\s*[-*+]\s*\[[^\]]*\]/);
+
 		return {
-			start: { line: cursor.line, ch: atIndex },
+			start: isCommandMode
+				? { line: cursor.line, ch: 0 }           // Replace whole line
+				: { line: cursor.line, ch: atIndex },     // Replace from @
 			end: cursor,
 			query: textAfterAt,
+			isCommandMode,
 		};
 	}
 
 	async getSuggestions(context) {
 		const q = context.query.toLowerCase();
+		const isCommandMode = context.isCommandMode;
+
+		if (isCommandMode) {
+			// ── COMMAND MODE: task macros & code blocks ──
+			const macros = [
+				{ label: "@td", insert: "- [ ]  @today ", desc: "Today task skeleton" },
+				{ label: "@tm", insert: "- [ ]  @tomorrow ", desc: "Tomorrow task skeleton" },
+				{ label: "@tk", insert: "- [ ]  ", desc: "Task skeleton (no date)" },
+				{ label: "@now", insert: "- [ ]  @today @15m ", desc: "Quick 15m task now" },
+				{ label: "@1h", insert: "- [ ]  @today @1h ", desc: "Quick 1h task today" },
+				{ label: "@rec", insert: "- [ ]  🔁 every day @today ", desc: "Recurring daily task" },
+				{ label: "@rep", insert: "- [ ]  🔁 every week @monday ", desc: "Recurring weekly task" },
+				{ label: "@today", insert: "```flowtime-today\n```", desc: "Today tasks code block" },
+				{ label: "@overdue", insert: "```flowtime-overdue\n```", desc: "Overdue tasks code block" },
+				{ label: "@weekly", insert: "```flowtime-weekly\n```", desc: "Weekly view code block" },
+				{ label: "@budget", insert: "```flowtime-buckets\n```", desc: "Budget overview code block" },
+				{ label: "@sessions", insert: "```flowtime-sessions\n```", desc: "Session history code block" },
+				{ label: "@proj", insert: "```flowtime-project\n```", desc: "Project tasks code block" },
+				{ label: "@dueweek", insert: "```flowtime-dueweek\n```", desc: "Due this week code block" },
+			];
+			return macros
+				.filter(m => m.label.slice(1).includes(q)) // match after @
+				.map(m => ({ ...m, type: "macro" }));
+		}
+
+		// ── DIRECTIVE MODE: normal @ completions ──
 		const suggestions = [];
 
-		// Date keywords
 		const dates = [
 			{ label: "today", description: "Current date" },
 			{ label: "tomorrow", description: "Next day" },
@@ -100,8 +135,6 @@ class AtCompletionsSuggest extends EditorSuggest {
 			{ label: "next-week", description: "7 days from now" },
 			{ label: "next-monday", description: "Monday after next" },
 		];
-
-		// Duration presets
 		const durations = [
 			{ label: "15m", description: "15 minutes" },
 			{ label: "30m", description: "30 minutes" },
@@ -111,181 +144,84 @@ class AtCompletionsSuggest extends EditorSuggest {
 			{ label: "2h", description: "2 hours" },
 			{ label: "3h", description: "3 hours" },
 		];
-
-		// Buckets from settings
 		const buckets = (this.plugin?.settings?.buckets || []).map(b => ({
 			label: "b:" + b.id,
-			description: b.name + " — " + b.color,
+			description: b.name,
 		}));
-
-		// @due: prefix
 		const dueDates = [
 			{ label: "due:today", description: "Due today" },
 			{ label: "due:tomorrow", description: "Due tomorrow" },
 		];
 
-		// @p: projects from project engine (v0.4.0)
 		let projects = [];
 		try {
 			if (this.plugin?.projectEngine) {
 				const projList = await this.plugin.projectEngine.getAllProjects();
 				projects = projList.map(p => ({
 					label: "p:" + p.name,
-					description: "Project — " + (p.path || ""),
+					description: "Project",
 				}));
 			}
 		} catch (_) {}
 
-		// Determine category based on query
 		if (q.startsWith("b:") || q.startsWith("bucket:")) {
 			const bucketQ = q.replace(/^(b:|bucket:)/, "");
 			for (const b of buckets) {
-				if (b.label.toLowerCase().includes(bucketQ) || b.description.toLowerCase().includes(bucketQ)) {
+				if (b.label.toLowerCase().includes(bucketQ) || b.description.toLowerCase().includes(bucketQ))
 					suggestions.push({ label: "@" + b.label, description: b.description, type: "bucket" });
-				}
 			}
 		} else if (q.startsWith("due:")) {
 			const dueQ = q.slice(4);
 			for (const d of dueDates) {
-				if (d.label.toLowerCase().includes(dueQ)) {
+				if (d.label.toLowerCase().includes(dueQ))
 					suggestions.push({ label: "@" + d.label, description: d.description, type: "due" });
-				}
 			}
 		} else if (q.startsWith("p:")) {
 			const pQ = q.slice(2);
 			for (const p of projects) {
-				if (p.label.toLowerCase().includes(pQ) || p.description.toLowerCase().includes(pQ)) {
+				if (p.label.toLowerCase().includes(pQ) || p.description.toLowerCase().includes(pQ))
 					suggestions.push({ label: "@" + p.label, description: p.description, type: "project" });
-				}
 			}
 		} else {
-			// Mixed: show everything
-			for (const d of dates) {
-				if (d.label.toLowerCase().includes(q)) {
-					suggestions.push({ label: "@" + d.label, description: d.description, type: "date" });
-				}
-			}
-			for (const d of durations) {
-				if (d.label.toLowerCase().includes(q)) {
-					suggestions.push({ label: "@" + d.label, description: d.description, type: "duration" });
-				}
-			}
-			for (const b of buckets) {
-				if (b.label.toLowerCase().includes(q) || b.description.toLowerCase().includes(q)) {
-					suggestions.push({ label: "@" + b.label, description: b.description, type: "bucket" });
-				}
-			}
-			for (const d of dueDates) {
-				if (d.label.toLowerCase().includes(q)) {
-					suggestions.push({ label: "@" + d.label, description: d.description, type: "due" });
-				}
-			}
-			for (const p of projects) {
-				if (p.label.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)) {
-					suggestions.push({ label: "@" + p.label, description: p.description, type: "project" });
-				}
-			}
+			for (const d of dates)
+				if (d.label.toLowerCase().includes(q)) suggestions.push({ label: "@" + d.label, description: d.description, type: "date" });
+			for (const d of durations)
+				if (d.label.toLowerCase().includes(q)) suggestions.push({ label: "@" + d.label, description: d.description, type: "duration" });
+			for (const b of buckets)
+				if (b.label.toLowerCase().includes(q) || b.description.toLowerCase().includes(q)) suggestions.push({ label: "@" + b.label, description: b.description, type: "bucket" });
+			for (const d of dueDates)
+				if (d.label.toLowerCase().includes(q)) suggestions.push({ label: "@" + d.label, description: d.description, type: "due" });
+			for (const p of projects)
+				if (p.label.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)) suggestions.push({ label: "@" + p.label, description: p.description, type: "project" });
 		}
 
 		return suggestions.slice(0, 14);
 	}
 
 	renderSuggestion(suggestion, el) {
-		const icons = { date: "📅", duration: "⏱", bucket: "📊", due: "⏰", project: "📁" };
-		el.createEl("span", { text: (icons[suggestion.type] || "•") + " " + suggestion.label, cls: "ft-at-completion-label" });
-		el.createEl("small", { text: "  " + suggestion.description, cls: "ft-at-completion-desc" });
+		const icons = { date: "📅", duration: "⏱", bucket: "📊", due: "⏰", project: "📁", macro: "⚡" };
+		const icon = icons[suggestion.type] || "•";
+		if (suggestion.type === "macro") {
+			el.createEl("span", { text: icon + " " + suggestion.label, cls: "ft-at-completion-label" });
+			el.createEl("small", { text: "  → " + (suggestion.insert || "").replace(/\n/g, "↵ "), cls: "ft-at-completion-desc" });
+		} else {
+			el.createEl("span", { text: icon + " " + suggestion.label, cls: "ft-at-completion-label" });
+			el.createEl("small", { text: "  " + suggestion.description, cls: "ft-at-completion-desc" });
+		}
 	}
 
 	selectSuggestion(suggestion, event) {
 		if (!this.context) return;
 		const editor = this.context.editor;
 		const { start, end } = this.context;
-		editor.replaceRange(suggestion.label + " ", start, end);
-	}
-}
 
-/**
- * Flow Command Mode — type > at line start for mnemonic task macros.
- * >td  → - [ ]  @today
- * >tm  → - [ ]  @tomorrow
- * >tk  → - [ ]  (skeleton)
- * >now → - [ ]  @today @15m
- * >1h  → - [ ]  @today @1h
- * >rec → - [ ]  🔁 every day @today
- * >rep → - [ ]  🔁 every week @monday
- * >today   → ``` flowtime-today code block
- * >overdue → ``` flowtime-overdue code block
- * >weekly  → ``` flowtime-weekly code block
- * >budget  → ``` flowtime-buckets code block
- * >proj    → ``` flowtime-project code block
- * >sessions → ``` flowtime-sessions code block
- */
-class FlowCommandSuggest extends EditorSuggest {
-	constructor(app, plugin) {
-		super(app);
-		this.plugin = plugin;
-	}
-
-	onTrigger(cursor, editor, file) {
-		const line = editor.getLine(cursor.line);
-		// Only trigger when > is at line start (no other content before it)
-		if (!line.startsWith(">")) return null;
-
-		const before = line.slice(0, cursor.ch);
-		// Only trigger if > is the first non-whitespace character
-		const match = before.match(/^\s*>(>)?(\w*)$/);
-		if (!match) return null;
-
-		// Don't trigger on >> (blockquote continuation)
-		if (match[1]) return null;
-
-		const query = match[2] || "";
-		return {
-			start: { line: cursor.line, ch: 0 },
-			end: { line: cursor.line, ch: before.length },
-			query,
-		};
-	}
-
-	getSuggestions(context) {
-		const q = context.query.toLowerCase();
-		const macros = [
-			{ label: "td", insert: "- [ ]  @today ", desc: "Today task skeleton" },
-			{ label: "tm", insert: "- [ ]  @tomorrow ", desc: "Tomorrow task skeleton" },
-			{ label: "tk", insert: "- [ ]  ", desc: "Task skeleton (no date)" },
-			{ label: "now", insert: "- [ ]  @today @15m ", desc: "Quick 15m task now" },
-			{ label: "1h", insert: "- [ ]  @today @1h ", desc: "Quick 1h task today" },
-			{ label: "rec", insert: "- [ ]  🔁 every day @today ", desc: "Recurring daily task" },
-			{ label: "rep", insert: "- [ ]  🔁 every week @monday ", desc: "Recurring weekly task" },
-			{ label: "today", insert: "```flowtime-today\n```", desc: "Today tasks code block" },
-			{ label: "overdue", insert: "```flowtime-overdue\n```", desc: "Overdue tasks code block" },
-			{ label: "weekly", insert: "```flowtime-weekly\n```", desc: "Weekly view code block" },
-			{ label: "budget", insert: "```flowtime-buckets\n```", desc: "Budget overview code block" },
-			{ label: "sessions", insert: "```flowtime-sessions\n```", desc: "Session history code block" },
-			{ label: "proj", insert: "```flowtime-project\n```", desc: "Project tasks code block" },
-			{ label: "dueweek", insert: "```flowtime-dueweek\n```", desc: "Due this week code block" },
-		];
-
-		return macros
-			.filter(m => m.label.includes(q))
-			.map(m => ({
-				label: ">" + m.label,
-				insert: m.insert,
-				description: m.desc,
-			}));
-	}
-
-	renderSuggestion(suggestion, el) {
-		el.createEl("span", { text: suggestion.label, cls: "ft-at-completion-label" });
-		el.createEl("small", { text: "  " + suggestion.description, cls: "ft-at-completion-desc" });
-	}
-
-	selectSuggestion(suggestion, event) {
-		if (!this.context) return;
-		const editor = this.context.editor;
-		const { start, end } = this.context;
-		// Replace >cmd with the expanded text
-		editor.replaceRange(suggestion.insert, start, end);
+		if (suggestion.type === "macro") {
+			// Replace the entire line with the expanded macro
+			editor.replaceRange(suggestion.insert, start, end);
+		} else {
+			// Replace @query with the completed directive
+			editor.replaceRange(suggestion.label + " ", start, end);
+		}
 	}
 }
 
@@ -380,11 +316,8 @@ module.exports = class FlowtimePlugin extends Plugin {
 		// Register /add-task slash command suggester
 		this.registerEditorSuggest(new AddTaskSuggest(this.app, this));
 
-		// v0.4.0: Register @-completions for task lines (dates, durations, buckets, @p:projects)
+		// v0.4.0: Register unified @-completions (directives + command macros)
 		this.registerEditorSuggest(new AtCompletionsSuggest(this.app, this));
-
-		// v0.4.0: Register > command macros (Flow Command Mode)
-		this.registerEditorSuggest(new FlowCommandSuggest(this.app, this));
 
 		// Quick entry command
 		this.addCommand({

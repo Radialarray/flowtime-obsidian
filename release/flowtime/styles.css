@@ -68,9 +68,6 @@
 
 /* --- ft-: Top bar: callout-style heading + toolbar on same row --- */
 .ft-topbar {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
 	padding: 8px 12px 8px 14px;
 	margin-bottom: 8px;
 	border-left: 4px solid var(--interactive-accent);
@@ -78,19 +75,21 @@
 	border-radius: 0 4px 4px 0;
 }
 
-.ft-heading-text {
-	font-size: var(--font-ui-smaller);
+.ft-heading-row {
+	font-size: var(--font-ui-small);
 	font-weight: var(--font-semibold);
 	color: var(--text-muted);
-	line-height: 1.4;
+	margin-bottom: 6px;
+}
+
+.ft-toolbar-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
 }
 
 /* --- Toolbar --- */
-.ft-toolbar {
-	display: flex;
-	gap: 6px;
-	flex-shrink: 0;
-}
 
 .ft-save-all-btn,
 .ft-bulk-btn {

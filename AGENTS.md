@@ -13,7 +13,7 @@ Custom Obsidian plugin for editing task time slots with an inline countdown time
 ## Release
 
 ```bash
-bash release.sh   # Builds + assembles release/flowtime/
+npm run release   # Builds + assembles release/flowtime/
 cp -r release/flowtime /path/to/vault/.obsidian/plugins/
 ```
 

@@ -454,9 +454,9 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
 		const bar = this.containerEl.createEl("div", { cls: "ft-topbar" });
 		if (heading) {
-			bar.createEl("span", { text: heading, cls: "ft-heading-text" });
+			bar.createEl("div", { text: heading, cls: "ft-heading-row" });
 		}
-		const toolbar = bar.createEl("div", { cls: "ft-toolbar" });
+		const toolbar = bar.createEl("div", { cls: "ft-toolbar-row" });
 
 		if (isCompact) {
 			const mkBtn = (text, cls, fn) => {

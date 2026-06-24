@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "build": "node esbuild.config.mjs production",
-    "dev": "node esbuild.config.mjs"
+    "dev": "node esbuild.config.mjs",
+    "release": "npm run build && mkdir -p release/flowtime && cp dist/main.js manifest.json styles.css release/flowtime/ && cp README.md skill.md release/flowtime/ 2>/dev/null; echo 'Release ready at release/flowtime/'"
   },
   "devDependencies": {
     "esbuild": "^0.25.0"

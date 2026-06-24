@@ -99,8 +99,7 @@ function cleanTaskText(text) {
 		.replace(/@p:[^\s]+/g, "")             // v0.4.0: project directive
 		.replace(/@(?:high|med|low|soon)\b/gi, "") // v0.4.0: priority/status tags
 		.replace(/[🟥🟨🟩]/g, "")
-		.replace(/🔁 every \d* (day|days|week|weeks|month|months)/g, "")
-		.replace(/🔁 [^\s]+( \d+[dwmy])?/g, "")
+		.replace(/🔁 every .+$/gm, "") // v0.5.0: all recurrence markers
 		.replace(/#\S+/g, "")
 		.replace(/\s+/g, " ")
 		.trim();
@@ -108,14 +107,166 @@ function cleanTaskText(text) {
 
 /**
  * Extract recurrence info from task line text.
- * Returns { interval, unit } or null.
+ * Returns a Recurrence object or null.
+ *
+ * Recognized patterns:
+ *   🔁 every day
+ *   🔁 every workday
+ *   🔁 every week
+ *   🔁 every month
+ *   🔁 every Sun / Mon / Tue / Wed / Thu / Fri / Sat
+ *   🔁 every Mon Wed Fri  (any combination of day names)
+ *   🔁 every 2nd Sun / 1st Mon / 3rd Tue  (nth weekday of month)
+ *   🔁 every month on 15th  (specific date of month)
+ *   🔁 every 3 days / every 2 weeks / every 3 months  (interval gap)
+ *
+ * @param {string} text
+ * @returns {object|null}
  */
 function parseRecurrence(text) {
-	const match = text.match(/🔁\s*every\s+(\d*)\s*(day|days|week|weeks|month|months)/);
-	if (!match) return null;
-	const n = parseInt(match[1] || "1", 10);
-	const unit = match[2].replace(/s$/, "");
-	return { interval: n, unit };
+	const m = text.match(/🔁\s*every\s+(.+)$/);
+	if (!m) return null;
+
+	const expr = m[1].trim().toLowerCase();
+
+	// Simple patterns
+	if (expr === 'day' || expr === 'days' || expr === '1 day') return { type: 'daily' };
+	if (expr === 'workday' || expr === 'workdays') return { type: 'workday' };
+	if (expr === 'week' || expr === 'weeks' || expr === '1 week') return { type: 'weekly' };
+	if (expr === 'month' || expr === 'months' || expr === '1 month') return { type: 'monthly' };
+
+	// Interval gap: "every 3 days", "every 2 weeks", "every 3 months"
+	const intervalMatch = expr.match(/^(\d+)\s*(day|days|week|weeks|month|months)$/);
+	if (intervalMatch) {
+		const n = parseInt(intervalMatch[1], 10);
+		const unit = intervalMatch[2].replace(/s$/, '');
+		if (n > 1) return { type: 'interval', every: n, unit };
+	}
+
+	// Day names: "every sun", "every mon wed fri"
+	const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+
+	// Check for nth-weekday pattern: "every 2nd sun", "every 1st mon"
+	const nthMatch = expr.match(/^(1st|2nd|3rd|4th|last)\s+(sun|mon|tue|wed|thu|fri|sat)$/i);
+	if (nthMatch) {
+		const nthMap = { '1st': 1, '2nd': 2, '3rd': 3, '4th': 4, 'last': -1 };
+		return {
+			type: 'nth-weekday',
+			nth: nthMap[nthMatch[1].toLowerCase()],
+			weekday: dayNames.indexOf(nthMatch[2].toLowerCase()),
+		};
+	}
+
+	// Month date: "every month on 15th"
+	const monthDateMatch = expr.match(/^month\s+on\s+(\d{1,2})(?:st|nd|rd|th)?$/);
+	if (monthDateMatch) {
+		return { type: 'month-date', monthDay: parseInt(monthDateMatch[1], 10) };
+	}
+
+	// Plain day names: "every sun", "every mon wed fri"
+	const dayNameMatch = expr.match(/\b(sun|mon|tue|wed|thu|fri|sat)\b/gi);
+	if (dayNameMatch) {
+		const days = [...new Set(dayNameMatch.map(d => dayNames.indexOf(d.toLowerCase())))];
+		return { type: 'custom-days', days };
+	}
+
+	return null;
+}
+
+/**
+ * Evaluate whether a recurrence is due on the given date.
+ *
+ * For interval-based types (every N days/weeks/months), the
+ * lastGenerated date from tracking is needed to determine if
+ * enough time has passed. Without it, returns true.
+ *
+ * @param {object} recurrence - Result from parseRecurrence
+ * @param {string} dateStr - Date in YYYY-MM-DD format
+ * @param {object} [options]
+ * @param {number[]} [options.workdays] - Day indices for workday mode (default [1,2,3,4,5])
+ * @param {string} [options.lastGenerated] - Last generation date YYYY-MM-DD
+ * @returns {boolean}
+ */
+function isRecurrenceDue(recurrence, dateStr, options = {}) {
+	if (!recurrence || !dateStr) return false;
+
+	const date = new Date(dateStr + 'T12:00:00');
+	const dayOfWeek = date.getDay(); // 0=Sun
+	const dayOfMonth = date.getDate();
+	const month = date.getMonth();
+	const year = date.getFullYear();
+
+	switch (recurrence.type) {
+		case 'daily':
+			return true;
+
+		case 'workday': {
+			const workdays = options.workdays || [1, 2, 3, 4, 5];
+			return workdays.includes(dayOfWeek);
+		}
+
+		case 'weekly':
+			return dayOfWeek === 1;
+
+		case 'monthly':
+			return dayOfMonth === 1;
+
+		case 'custom-days':
+			return recurrence.days.includes(dayOfWeek);
+
+		case 'nth-weekday': {
+			const daysInMonth = new Date(year, month + 1, 0).getDate();
+			if (recurrence.nth === -1) {
+				// Last occurrence: count from end
+				for (let d = daysInMonth; d >= 1; d--) {
+					const dt = new Date(year, month, d);
+					if (dt.getDay() === recurrence.weekday) {
+						return dayOfMonth === d;
+					}
+				}
+				return false;
+			}
+			// Nth occurrence: count from start
+			let count = 0;
+			for (let d = 1; d <= daysInMonth; d++) {
+				const dt = new Date(year, month, d);
+				if (dt.getDay() === recurrence.weekday) {
+					count++;
+					if (d === dayOfMonth) return count === recurrence.nth;
+				}
+			}
+			return false;
+		}
+
+		case 'month-date':
+			return dayOfMonth === recurrence.monthDay;
+
+		case 'interval': {
+			if (!options.lastGenerated) {
+				// First time — assume due. Engine deduplicates via .generated.json.
+				return true;
+			}
+			const lastDate = new Date(options.lastGenerated + 'T12:00:00');
+			const diffMs = date - lastDate;
+			const diffDays = diffMs / (1000 * 60 * 60 * 24);
+			switch (recurrence.unit) {
+				case 'day':
+					return diffDays >= recurrence.every;
+				case 'week':
+					return diffDays >= recurrence.every * 7;
+				case 'month': {
+					const monthDiff = (year - lastDate.getFullYear()) * 12
+						+ (month - lastDate.getMonth());
+					return monthDiff >= recurrence.every;
+				}
+				default:
+					return true;
+			}
+		}
+
+		default:
+			return false;
+	}
 }
 
 /**
@@ -144,4 +295,4 @@ function formatTimer(seconds) {
 		: `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-module.exports = { parseTaskLine, cleanTaskText, parseRecurrence, formatDuration, formatTimer };
+module.exports = { parseTaskLine, cleanTaskText, parseRecurrence, isRecurrenceDue, formatDuration, formatTimer };

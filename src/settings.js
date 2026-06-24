@@ -39,6 +39,12 @@ const DEFAULT_SETTINGS = {
 	projectTemplate:
 		"---\ntype: project\nname: {{NAME}}\nstatus: active\ntags: [project]\n---\n\n# {{NAME}}\n\n## 🎯 Goal\n\n## 📋 Tasks\n\n```flowtime-project\n```\n\n## 📝 Notes\n",
 
+	// Inbox
+	inboxPath: "Inbox.md",
+	inboxDefaultDuration: 30,
+	inboxDefaultBucket: "",
+	inboxDefaultProject: "",
+
 	// Saved Views
 	savedViews: {},
 };
@@ -160,6 +166,7 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 					.addOption("daily-note", "Daily note")
 					.addOption("active-file", "Active file")
 					.addOption("project-file", "Project file")
+					.addOption("inbox", "Inbox")
 					.setValue(this.plugin.settings.quickEntryTargetFile)
 					.onChange(async (value) => {
 						this.plugin.settings.quickEntryTargetFile = value;
@@ -277,6 +284,56 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 					this.display(); // Re-render
 				}),
 		);
+
+		// ── Inbox ──
+		containerEl.createEl("h2", { text: "Inbox" });
+
+		new Setting(containerEl)
+			.setName("Inbox file path")
+			.setDesc("Path to the inbox file where you capture tasks. Relative to vault root.")
+			.addText((text) =>
+				text
+					.setPlaceholder("Inbox.md")
+					.setValue(this.plugin.settings.inboxPath)
+					.onChange(async (value) => {
+						this.plugin.settings.inboxPath = value || "Inbox.md";
+						await this.plugin.saveData(this.plugin.settings);
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName("Default duration (minutes)")
+			.setDesc("Pre-filled duration when processing inbox items as tasks")
+			.addText((text) =>
+				text
+					.setPlaceholder("30")
+					.setValue(String(this.plugin.settings.inboxDefaultDuration))
+					.onChange(async (value) => {
+						const num = parseInt(value, 10);
+						if (!isNaN(num) && num >= 0) {
+							this.plugin.settings.inboxDefaultDuration = num;
+							await this.plugin.saveData(this.plugin.settings);
+						}
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName("Default bucket")
+			.setDesc("Pre-filled bucket when processing inbox items as tasks (leave empty for none)")
+			.addDropdown((dropdown) => {
+				dropdown.addOption("", "None");
+				const buckets = this.plugin.settings.buckets || [];
+				for (const b of buckets) {
+					dropdown.addOption(b.id, b.name);
+				}
+				dropdown
+					.setValue(this.plugin.settings.inboxDefaultBucket)
+					.onChange(async (value) => {
+						this.plugin.settings.inboxDefaultBucket = value;
+						await this.plugin.saveData(this.plugin.settings);
+					});
+				return dropdown;
+			});
 
 		// ── Display ──
 		containerEl.createEl("h2", { text: "Display" });

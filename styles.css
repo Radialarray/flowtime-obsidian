@@ -612,6 +612,21 @@
 	align-items: baseline;
 }
 
+/* --- Completed task --- */
+.tp-task-done td {
+	opacity: 0.45;
+}
+
+.tp-task-done:hover td {
+	opacity: 0.75;
+}
+
+.tp-task-done-text {
+	text-decoration: line-through;
+	text-decoration-color: var(--text-muted);
+	text-decoration-thickness: 1px;
+}
+
 /* --- Priority --- */
 .tp-priority {
 	margin-right: 4px;

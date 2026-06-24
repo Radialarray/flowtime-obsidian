@@ -737,7 +737,11 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 		if (task.priority) {
 			tc.createEl("span", { text: task.priority, cls: "tp-priority" });
 		}
-		tc.createEl("span", { text: task.cleanText, cls: "tp-task-text" });
+		const textEl = tc.createEl("span", { text: task.cleanText, cls: "tp-task-text" });
+		if (task.status === "x" || task.status === "X") {
+			row.addClass("tp-task-done");
+			textEl.addClass("tp-task-done-text");
+		}
 	}
 
 	async saveTime(task, time) {
@@ -793,19 +797,17 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 		lines[task.line] = newLine;
 		await this.app.vault.modify(task.file, lines.join("\n"));
 
+		// Toggle status in memory
+		task.status = wasCompleted ? " " : "x";
+
 		// Handle recurrence if completing
 		if (!wasCompleted) {
 			await this._handleRecurrence(task, newLine);
 		}
 
-		// Remove from display
-		this.tasks = this.tasks.filter((t) => t !== task);
-		if (this.tasks.length === 0) {
-			this.renderTable();
-		} else {
-			const tbody = this.containerEl.querySelector("tbody");
-			if (tbody) this.buildRows(tbody);
-		}
+		// Rebuild to reflect new status — keep task in table
+		const tbody = this.containerEl.querySelector("tbody");
+		if (tbody) this.buildRows(tbody);
 		await this._refreshSiblings();
 	}
 

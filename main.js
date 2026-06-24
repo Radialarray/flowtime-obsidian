@@ -417,6 +417,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 		});
 
 		this.renderers = [];
+		const { WeekplanRenderer } = require("./src/weekplan-renderer");
 		for (const [name, mode] of [
 			["flowtime-today", "today"],
 			["flowtime-overdue", "overdue"],
@@ -426,7 +427,6 @@ module.exports = class FlowtimePlugin extends Plugin {
 			["flowtime-project", "project"],
 			["flowtime-buckets", "budget"],
 			["flowtime-sessions", "sessions"],
-			["flowtime-weekplan", "weekplan"],
 		]) {
 			this.registerMarkdownCodeBlockProcessor(name, (_src, el, ctx) => {
 				const r = new FlowtimeRenderer(this.app, el, mode, this.projectEngine, ctx.sourcePath);
@@ -435,6 +435,13 @@ module.exports = class FlowtimePlugin extends Plugin {
 				ctx.addChild(r);
 			});
 		}
+
+		// v0.5.0: Weekplan renderer (uses dedicated WeekplanRenderer)
+		this.registerMarkdownCodeBlockProcessor("flowtime-weekplan", (_src, el, ctx) => {
+			const r = new WeekplanRenderer(this.app, el, this, this.projectEngine, ctx.sourcePath);
+			this.renderers.push(r);
+			ctx.addChild(r);
+		});
 
 		// ── Template Engine Commands ──
 

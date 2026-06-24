@@ -162,11 +162,13 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 					rawText = rest.slice(timeMatch[0].length);
 				}
 
+				const dateMatch = rawText.match(/⏳\s*(\d{4}-\d{2}-\d{2})/);
 				this.tasks.push({
 					file,
 					line: i,
 					rawLine: line,
 					time,
+					taskDate: dateMatch ? dateMatch[1] : "",
 					rawText: rawText.trim(),
 					cleanText: this._cleanTaskText(rawText),
 					status,
@@ -256,7 +258,9 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 		tbody.empty();
 		this.rowData = [];
 		// Clean up orphaned dropdowns and date popups
-		document.querySelectorAll(".tp-start-dd, .tp-date-popup").forEach((el) => el.remove());
+		document
+			.querySelectorAll(".tp-start-dd, .tp-date-popup")
+			.forEach((el) => el.remove());
 
 		for (const task of this.tasks) {
 			const { start, duration } = this._parseStoredTime(task.time);
@@ -410,7 +414,9 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 
 			dateSpan.addEventListener("click", (e) => {
 				e.stopPropagation();
-				datePopup.classList.contains("tp-dp-open") ? closeDatePopup() : openDatePopup();
+				datePopup.classList.contains("tp-dp-open")
+					? closeDatePopup()
+					: openDatePopup();
 			});
 
 			const applyDate = async (nd) => {
@@ -418,13 +424,21 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 				await this.updateTaskDate(task, nd);
 				task.taskDate = nd;
 				dateSpan.setText(nd || "+");
-				if (nd) { dateSpan.removeClass("tp-date-none"); } else { dateSpan.addClass("tp-date-none"); }
+				if (nd) {
+					dateSpan.removeClass("tp-date-none");
+				} else {
+					dateSpan.addClass("tp-date-none");
+				}
 			};
 
 			dpInput.addEventListener("change", () => applyDate(dpInput.value));
 			dpToday.addEventListener("click", () => applyDate(fmt(new Date())));
-			dpTomorrow.addEventListener("click", () => applyDate(fmt(new Date(Date.now() + 86400000))));
-			dpNextWeek.addEventListener("click", () => applyDate(fmt(new Date(Date.now() + 7 * 86400000))));
+			dpTomorrow.addEventListener("click", () =>
+				applyDate(fmt(new Date(Date.now() + 86400000))),
+			);
+			dpNextWeek.addEventListener("click", () =>
+				applyDate(fmt(new Date(Date.now() + 7 * 86400000))),
+			);
 			dpBacklog.addEventListener("click", () => applyDate(""));
 
 			// --- Countdown timer ---
@@ -555,7 +569,10 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 		if (newDate) {
 			// Replace or add ⏳ date
 			if (/⏳\s*\d{4}-\d{2}-\d{2}/.test(line)) {
-				lines[task.line] = line.replace(/⏳\s*\d{4}-\d{2}-\d{2}/, "⏳ " + newDate);
+				lines[task.line] = line.replace(
+					/⏳\s*\d{4}-\d{2}-\d{2}/,
+					"⏳ " + newDate,
+				);
 			} else {
 				const m = line.match(/^(\s*[-*+]\s*\[[^\]]*\]\s*)(.*)$/);
 				if (m) lines[task.line] = m[1] + m[2] + " ⏳ " + newDate;

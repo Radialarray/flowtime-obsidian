@@ -865,6 +865,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 	buildRows(tbody) {
 		tbody.empty();
 		this.rowData = [];
+		this._resyncDone = false;
 		document
 			.querySelectorAll(".ft-start-dd,.ft-date-popup")
 			.forEach((e) => e.remove());
@@ -1303,7 +1304,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			};
 
 			// If timer was running (from status bar), resume display without restarting
-			if (matchActive && activeTimer.isRunning) {
+			// Only resync the FIRST matching row to prevent double-starts
+			const resynced = this._resyncDone;
+			if (matchActive && activeTimer.isRunning && !resynced) {
+				this._resyncDone = true;
 				ts.running = true;
 				pb.setText("⏸");
 				ts.interval = setInterval(() => {

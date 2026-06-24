@@ -45,6 +45,7 @@ class StatusTimer {
 			clearInterval(this.currentTimer.interval);
 		}
 		// Record session end (avoid double-fire via flag)
+		const hadTimer = !!this.currentTimer;
 		if (this.currentTimer && !this._sessionRecorded) {
 			this._sessionRecorded = true;
 			if (this.onSessionEnd && this._startTime) {
@@ -57,7 +58,8 @@ class StatusTimer {
 				});
 			}
 		}
-		if (this.onTimerStop) {
+		// Only fire onTimerStop if we actually had a timer (prevents recursive loop)
+		if (hadTimer && this.onTimerStop) {
 			this.onTimerStop();
 		}
 		this.currentTimer = null;

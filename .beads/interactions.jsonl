@@ -48,3 +48,4 @@
 {"id":"int-f5a717c46f57fad563677d9bf434319e","kind":"field_change","created_at":"2026-06-24T14:29:58.283689Z","actor":"Radialarray","issue_id":"flowtime-gv2","extra":{"field":"status","new_value":"closed","old_value":"open","reason":"Closed"}}
 {"id":"int-0fb1b18e903b8cfb3be66cf4208550a0","kind":"field_change","created_at":"2026-06-24T14:29:59.349704Z","actor":"Radialarray","issue_id":"flowtime-fja","extra":{"field":"status","new_value":"closed","old_value":"open","reason":"Closed"}}
 {"id":"int-0920a395e67133a56de7a231da860700","kind":"field_change","created_at":"2026-06-24T14:45:18.752778Z","actor":"Radialarray","issue_id":"flowtime-bt4","extra":{"field":"status","new_value":"closed","old_value":"open","reason":"Closed"}}
+{"id":"int-75fa1ead4346dd0859d0905740fc5b4c","kind":"field_change","created_at":"2026-06-24T14:50:03.602Z","actor":"Radialarray","issue_id":"flowtime-ykx.5","extra":{"field":"status","new_value":"closed","old_value":"open","reason":"Closed"}}

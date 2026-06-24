@@ -134,7 +134,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 	/* ─── load ─── */
 	async loadTasks() {
 		const today = new Date().toISOString().split("T")[0];
-		// End of current week (Sunday)
+		// End of current week — Sunday
 		const eow = new Date();
 		eow.setDate(eow.getDate() + ((7 - eow.getDay()) % 7));
 		const eowStr = eow.toISOString().split("T")[0];
@@ -158,11 +158,10 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 				if (this.mode === "today" && taskDate !== today) continue;
 				if (this.mode === "overdue" && (!taskDate || taskDate >= today))
 					continue;
-				if (
-					this.mode === "dueweek" &&
-					(!dueDate || dueDate < today || dueDate > eowStr)
-				)
-					continue;
+				if (this.mode === "dueweek") {
+					const inWeek = (d, inclToday) => d && (inclToday ? d >= today : d > today) && d <= eowStr;
+					if (!inWeek(dueDate, true) && !inWeek(taskDate, false)) continue;
+				}
 
 				let time = "",
 					rest = m[3];

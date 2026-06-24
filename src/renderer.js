@@ -1339,7 +1339,18 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				}
 			});
 			rb.addEventListener("click", () => {
-				stp();
+				const isActiveTimer = ts.running || this.plugin?.statusTimer?.currentTimer?.taskName === task.cleanText;
+				if (isActiveTimer) {
+					stp(); // Full stop — clears status bar and this row
+				} else {
+					// Local reset only — don't touch status bar or other rows
+					if (ts.interval) {
+						clearInterval(ts.interval);
+						ts.interval = null;
+					}
+					ts.running = false;
+					pb.setText("▶");
+				}
 				const dm = ds ? parseInt(ds.value, 10) : dur;
 				ts.remaining = dm && dm > 0 ? dm * 60 : 0;
 				ts.total = ts.remaining;
@@ -1347,7 +1358,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			});
 			if (ds) {
 				ds.addEventListener("change", () => {
-					stp();
+					const isActiveTimer = ts.running || this.plugin?.statusTimer?.currentTimer?.taskName === task.cleanText;
+					if (isActiveTimer) {
+						stp(); // Stop active timer
+					}
 					const dm = parseInt(ds.value, 10);
 					ts.remaining = dm && dm > 0 ? dm * 60 : 0;
 					ts.total = ts.remaining;

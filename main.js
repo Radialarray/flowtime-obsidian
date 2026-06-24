@@ -153,6 +153,14 @@ class AtCompletionsSuggest extends EditorSuggest {
 			{ label: "due:tomorrow", description: "Due tomorrow" },
 		];
 
+		// v0.4.0: Status & priority tags
+		const statusTags = [
+			{ label: "soon", description: "Up next / backlog item" },
+			{ label: "high", description: "🔺 High priority" },
+			{ label: "med", description: "🔼 Medium priority" },
+			{ label: "low", description: "🔽 Low priority" },
+		];
+
 		let projects = [];
 		try {
 			if (this.plugin?.projectEngine) {
@@ -193,13 +201,15 @@ class AtCompletionsSuggest extends EditorSuggest {
 				if (d.label.toLowerCase().includes(q)) suggestions.push({ label: "@" + d.label, description: d.description, type: "due" });
 			for (const p of projects)
 				if (p.label.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)) suggestions.push({ label: "@" + p.label, description: p.description, type: "project" });
+			for (const s of statusTags)
+				if (s.label.toLowerCase().includes(q)) suggestions.push({ label: "@" + s.label, description: s.description, type: "status" });
 		}
 
 		return suggestions.slice(0, 14);
 	}
 
 	renderSuggestion(suggestion, el) {
-		const icons = { date: "📅", duration: "⏱", bucket: "📊", due: "⏰", project: "📁", macro: "⚡" };
+		const icons = { date: "📅", duration: "⏱", bucket: "📊", due: "⏰", project: "📁", macro: "⚡", status: "🏷" };
 		const icon = icons[suggestion.type] || "•";
 		if (suggestion.type === "macro") {
 			el.createEl("span", { text: icon + " " + suggestion.label, cls: "ft-at-completion-label" });

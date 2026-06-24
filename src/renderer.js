@@ -358,11 +358,17 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			for (const parsed of fileTasks) {
 				if (parsed.status === "x" || parsed.status === "-" || parsed.status === "X") continue;
 
-				const { taskDate, rawText, time, status, priority, cleanText, bucket, durationMinutes, projectTag } = parsed;
+				const { taskDate, rawText, time, status, priority, cleanText, bucket, durationMinutes, projectTag, isSoon } = parsed;
 
-				if (this.mode === "today" && taskDate !== today) continue;
-				if (this.mode === "overdue" && (!taskDate || taskDate >= today))
-					continue;
+				// v0.4.0: @soon tasks appear in today + overdue views even without dates
+				const isSoonTask = isSoon && !taskDate;
+
+				if (this.mode === "today") {
+					if (taskDate !== today && !isSoonTask) continue;
+				}
+				if (this.mode === "overdue") {
+					if ((!taskDate || taskDate >= today) && !isSoonTask) continue;
+				}
 				if (this.mode === "dueweek") {
 					if (!taskDate || taskDate < today || taskDate > eowStr) continue;
 				}
@@ -415,6 +421,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 					project: projName,
 					projectPath: projPath,
 					projectSource: projSource,
+					isSoon: isSoonTask,     // v0.4.0: @soon tag
 				});
 			}
 		}
@@ -964,9 +971,24 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				}
 			}
 		} else {
-			// Standard flat rendering
-			for (const task of this.tasks) {
+			// Standard flat rendering — separate @soon tasks
+			const normalTasks = this.tasks.filter(t => !t.isSoon);
+			const soonTasks = this.tasks.filter(t => t.isSoon);
+
+			for (const task of normalTasks) {
 				this._renderTaskRow(tbody, task, tdy, od, _dw, wk, pj, isCompact);
+			}
+
+			// v0.4.0: "Coming Soon" section for @soon tasks
+			if (soonTasks.length > 0) {
+				const gr = tbody.createEl("tr", { cls: "ft-project-group" });
+				gr.createEl("td", {
+					text: "📋 Up Next  (" + soonTasks.length + " tasks)",
+					attr: { colspan: String(this._visibleColCount(isCompact)) },
+				});
+				for (const task of soonTasks) {
+					this._renderTaskRow(tbody, task, tdy, od, _dw, wk, pj, isCompact);
+				}
 			}
 		}
 	}

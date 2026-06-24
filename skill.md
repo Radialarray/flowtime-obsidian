@@ -369,14 +369,18 @@ Tasks are markdown list items with checkbox status and annotation tags.
 | Date | `@YYYY-MM-DD` | `@2026-06-24` | Also `@today`, `@tomorrow`, `@next-monday` |
 | Duration | `@1.5h` or `@30m` | `@1.5h` | Hours or minutes |
 | Bucket | `@b:name` / `@bucket:name` | `@b:deep-work` | Links to bucket definition |
-| Project tag | `#project/Name` | `#project/website` | Configurable prefix in settings |
-| Priority | Emoji | `🔺⏫🔼🔽⏬` | 🔺=highest, ⏬=lowest |
+| Project tag | `@p:Name` | `@p:Website` | New `@p:` syntax (v0.4.0). Legacy `#project/Name` still works |
+| Priority emoji | Emoji | `🔺⏫🔼🔽⏬` | 🔺=highest, ⏬=lowest |
+| Priority text | `@high` / `@med` / `@low` | `@high` | Aliases for 🔺/🔼/🔽 (v0.4.0) |
+| Status tag | `@soon` | `@soon` | Marks as backlog/up-next. Shows in "📋 Up Next" section (v0.4.0) |
 | Recurrence | `🔁 every <period>` | `🔁 every day` | Auto-reschedules on completion |
 
-### Full Example
+### Full Examples
 
 ```markdown
-- [ ] 09:00—11:30 Code review @2026-06-24 🔼 @1.5h @b:deep-work #project/backend
+- [ ] 09:00—11:30 Code review @2026-06-24 🔼 @1.5h @b:deep-work @p:backend
+- [ ] Review PR draft @soon @high
+- [ ] Morning standup @tomorrow @med @15m @b:meetings
 ```
 
 ### `@due:` Syntax
@@ -429,6 +433,26 @@ When you need to insert a task date, use the plugin's natural date parser rather
 | `@next-week` | 7 days from now |
 | `@weekend` | Not supported — use next Saturday/Sunday |
 | `YYYY-MM-DD` | Exact date |
+
+### @-Command Macros (v0.4.0)
+
+Type `@` at the **start of a line** (no task marker) to open command macros. Select one and it expands the entire line:
+
+| Macro | Expands to |
+|-------|-----------|
+| `@td` | `- [ ]  @today ` — quick today task |
+| `@tm` | `- [ ]  @tomorrow ` — tomorrow task |
+| `@tk` | `- [ ]  ` — empty skeleton |
+| `@now` | `- [ ]  @today @15m ` — quick 15min pomodoro |
+| `@1h` | `- [ ]  @today @1h ` — quick 1h block |
+| `@rec` | `- [ ]  🔁 every day @today ` — daily recurring |
+| `@rep` | `- [ ]  🔁 every week @monday ` — weekly recurring |
+| `@today` | ``flowtime-today`` code block |
+| `@overdue` | ``flowtime-overdue`` code block |
+| `@weekly` | ``flowtime-weekly`` code block |
+| `@budget` | ``flowtime-buckets`` code block |
+| `@proj` | ``flowtime-project`` code block |
+| `@sessions` | ``flowtime-sessions`` code block |
 
 ### READ Tasks (List All)
 
@@ -627,6 +651,7 @@ These are registered Obsidian commands. You can ask the user to run them via the
 |-----------|------|----------|-------------|
 | `add-task` | Add Task | `Cmd+Shift+I` | Opens Quick Entry modal |
 | `add-task-inline` | Add Task at Cursor | — | Inserts `- [ ] @today ` at cursor |
+| `@` completions | (built-in) | — | `@` in task lines → directives (@today, @b:, @p:, @soon). `@` at line start → command macros (@td, @now, @weekly) |
 | `insert-daily-dashboard` | Insert daily dashboard | — | Inserts today/overdue/due-week blocks |
 | `insert-weekly-dashboard` | Insert weekly dashboard | — | Inserts weekly review blocks |
 | `new-project` | New Project | — | Creates project folder + all 3 files (folder note, Tasks.md, Wiki.md) |
@@ -927,6 +952,8 @@ Guidelines for agent behavior when managing Flowtime data:
 .replace(/[@⏳📅]\s*\d{4}-\d{2}-\d{2}/g, "")
 .replace(/@\d+(?:\.\d+)?[hm]/g, "")
 .replace(/@(?:bucket|b):[^\s]+/g, "")
+.replace(/@p:[^\s]+/g, "")              // project directive
+.replace(/@(?:high|med|low|soon)\b/gi, "") // status/priority tags
 .replace(/🔺|⏫|🔼|🔽|⏬/g, "")
 .replace(/🔁 every \d* (day|days|week|weeks|month|months)/g, "")
 .replace(/#\S+/g, "")

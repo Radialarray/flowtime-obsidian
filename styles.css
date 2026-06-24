@@ -661,16 +661,20 @@
 /* --- Checkbox in table --- */
 /* --- Checkbox column --- */
 .ft-check-cell {
-	width: 30px;
+	width: 24px;
+	min-width: 24px;
 	padding: 0 !important;
 	text-align: center;
+	overflow: visible;
 }
 
 .ft-check-cell .ft-checkbox {
 	cursor: pointer;
 	accent-color: var(--interactive-accent);
+	width: 14px;
+	height: 14px;
 	display: block;
-	margin: 4px auto;
+	margin: 0 auto;
 }
 
 .ft-task-text {

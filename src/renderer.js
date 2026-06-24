@@ -1445,12 +1445,11 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		const taskRow = popup.createEl("div", { cls: "ft-detail-row" });
 		taskRow.createEl("span", { text: task.cleanText, cls: "ft-detail-task-text" });
 
-		// Refresh helper: invalidate cache, close popup, full re-render
-		const refreshAfterEdit = async () => {
+		// Refresh helper: invalidate cache, re-render, keep popup open
+		const saveAndRefresh = async () => {
 			if (this.plugin?.taskCache && task.file) {
 				this.plugin.taskCache.invalid(task.file.path);
 			}
-			popup.remove();
 			await this.loadTasks();
 			this.renderTable();
 		};
@@ -1464,7 +1463,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		dateInput.addEventListener("change", async () => {
 			await this.updateDate(task, dateInput.value || "");
 			task.taskDate = dateInput.value || "";
-			await refreshAfterEdit();
+			await saveAndRefresh();
 		});
 
 		// Bucket
@@ -1479,14 +1478,22 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		}
 		bucketSel.addEventListener("change", async () => {
 			const newBucket = bucketSel.value || "";
-			const lines = (await this.app.vault.read(task.file)).split("\n");
+			if (!task.file) return;
+			const content = await this.app.vault.read(task.file);
+			const lines = content.split("\n");
 			const line = lines[task.line];
-			lines[task.line] = line
-				.replace(/@(?:bucket|b):[^\s]+/g, newBucket ? `@b:${newBucket}` : "")
-				.replace(/\s+$/, "");
+			if (!line) return;
+			// Replace existing @bucket:/@b: directive, or add new one
+			const hasBucketDir = /@(?:bucket|b):[^\s]+/.test(line);
+			if (hasBucketDir) {
+				lines[task.line] = line.replace(/@(?:bucket|b):[^\s]+/g, newBucket ? `@b:${newBucket}` : "");
+			} else if (newBucket) {
+				// Append at end of line
+				lines[task.line] = line + ` @b:${newBucket}`;
+			}
 			await this.app.vault.modify(task.file, lines.join("\n"));
 			task.bucket = newBucket || null;
-			await refreshAfterEdit();
+			await saveAndRefresh();
 		});
 
 		// Project
@@ -1522,17 +1529,15 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		const closeBtn = popup.createEl("button", { text: "✕", cls: "ft-detail-close" });
 		closeBtn.addEventListener("click", () => popup.remove());
 
-		// Close on outside click — use mousedown to catch clicks on date picker overlay
-		let ignoreNextClick = false;
-		popup.addEventListener("pointerdown", () => { ignoreNextClick = false; });
+		// Close on outside click — delayed registration to avoid self-close
 		const closeOnOutside = (e) => {
-			if (ignoreNextClick) return;
+			// Don't close for clicks inside popup or date picker calendar
 			if (popup.contains(e.target)) return;
+			if (e.target.tagName === "INPUT" && e.target.type === "date") return;
 			popup.remove();
 			document.removeEventListener("click", closeOnOutside, true);
 		};
-		// Delay registration to avoid the click that opened the popup from closing it
-		setTimeout(() => document.addEventListener("click", closeOnOutside, true), 100);
+		setTimeout(() => document.addEventListener("click", closeOnOutside, true), 200);
 
 		document.body.appendChild(popup);
 	}

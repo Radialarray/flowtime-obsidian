@@ -2,6 +2,7 @@ const { Plugin, Notice } = require("obsidian");
 const { TaskPlannerRenderer } = require("./src/renderer");
 const { FlowtimeSettingsTab, DEFAULT_SETTINGS } = require("./src/settings");
 const { ProjectEngine } = require("./src/project-engine");
+const { TemplateEngine } = require("./src/template-engine");
 const { QuickEntryModal } = require("./src/quick-entry");
 
 module.exports = class FlowtimePlugin extends Plugin {
@@ -16,6 +17,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 		this.addSettingTab(new FlowtimeSettingsTab(this.app, this));
 
 		this.projectEngine = new ProjectEngine(this.app, this.settings);
+		this.templateEngine = new TemplateEngine(this.app, this);
 
 		this.registerEvent(this.app.vault.on("modify", (file) => {
 			this.projectEngine.invalidate(file.path);
@@ -144,5 +146,93 @@ module.exports = class FlowtimePlugin extends Plugin {
 				ctx.addChild(r);
 			});
 		}
+
+		// ── Template Engine Commands ──
+
+		this.addCommand({
+			id: "insert-daily-dashboard",
+			name: "Insert daily dashboard",
+			editorCallback: (editor) => {
+				this.templateEngine.insertDaily();
+			},
+		});
+
+		this.addCommand({
+			id: "insert-weekly-dashboard",
+			name: "Insert weekly dashboard",
+			editorCallback: (editor) => {
+				this.templateEngine.insertWeekly();
+			},
+		});
+
+		this.addCommand({
+			id: "new-project",
+			name: "New Project",
+			callback: () => {
+				const { Modal } = require("obsidian");
+				class ProjectNameModal extends Modal {
+					constructor(app, onSubmit) {
+						super(app);
+						this.onSubmit = onSubmit;
+					}
+					onOpen() {
+						const { contentEl } = this;
+						contentEl.createEl("h2", { text: "New Project" });
+						contentEl.createEl("p", {
+							text: "Creates a project folder note with frontmatter marker.",
+							cls: "flowtime-label",
+						});
+
+						const input = contentEl.createEl("input", {
+							type: "text",
+							placeholder: "Project name",
+							cls: "flowtime-input",
+						});
+						input.style.marginTop = "8px";
+						input.focus();
+
+						const btnRow = contentEl.createEl("div", { cls: "flowtime-btn-row" });
+						const cancelBtn = btnRow.createEl("button", {
+							text: "Cancel",
+							cls: "flowtime-btn-cancel",
+						});
+						const createBtn = btnRow.createEl("button", {
+							text: "Create",
+							cls: "flowtime-btn-submit",
+						});
+
+						cancelBtn.addEventListener("click", () => this.close());
+						createBtn.addEventListener("click", () => {
+							const name = input.value.trim();
+							if (name) {
+								this.onSubmit(name);
+								this.close();
+							}
+						});
+						input.addEventListener("keydown", (e) => {
+							if (e.key === "Enter") {
+								const name = input.value.trim();
+								if (name) {
+									this.onSubmit(name);
+									this.close();
+								}
+							}
+						});
+					}
+					onClose() {
+						this.contentEl.empty();
+					}
+				}
+
+				new ProjectNameModal(this.app, async (name) => {
+					try {
+						await this.templateEngine.createProject(name);
+						this.notify("✅ Project created: " + name);
+					} catch (e) {
+						this.notify("❌ Failed to create project: " + e.message, true);
+					}
+				}).open();
+			},
+		});
 	}
 };

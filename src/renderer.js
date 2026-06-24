@@ -26,6 +26,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 	}
 
 	async onload() {
+		// Add some spacing above the code block for breathing room
+		this.containerEl.style.marginTop = "6px";
 		try {
 			await this.loadTasks();
 			this.renderTable();
@@ -731,7 +733,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			cls: "flowtime-table",
 		});
 		// Force fixed table layout for reliable column widths
-		this._tableEl = table;
+		table.style.tableLayout = "fixed";
+		// Colgroup for column widths
+		const colgroup = table.createEl("colgroup");
+		colgroup.createEl("col", { cls: "col-check" });
 		const hr = table.createEl("thead").createEl("tr");
 
 		const sortByColumn = (field) => (e) => {

@@ -35,17 +35,16 @@
 }
 
 .col-check {
-	width: 32px !important;
-	max-width: 32px !important;
+	width: 32px;
+	max-width: 32px;
 	text-align: center;
 }
 
 .ft-check-cell {
-	width: 32px !important;
-	max-width: 32px !important;
-	padding: 0 !important;
+	width: 32px;
+	max-width: 32px;
+	padding: 0 4px;
 	text-align: center;
-	overflow: visible;
 }
 
 .ft-check-cell .ft-checkbox {

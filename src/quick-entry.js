@@ -61,32 +61,65 @@ class QuickEntryModal extends Modal {
 			updateLivePreview();
 		});
 
-		// ── Project (with datalist from vault projects) ──
+		// ── Project (custom dropdown from vault projects) ──
 		contentEl.createEl("label", { text: "Project", cls: "flowtime-label" });
-		const projInput = contentEl.createEl("input", {
+		const projWrap = contentEl.createEl("div", { cls: "flowtime-proj-wrap" });
+		const projInput = projWrap.createEl("input", {
 			type: "text",
-			placeholder: "e.g. website, personal",
+			placeholder: "Type or select a project",
 			cls: "flowtime-input",
-			attr: { list: "flowtime-project-list" },
 		});
-		const projDatalist = contentEl.createEl("datalist", {
-			attr: { id: "flowtime-project-list" },
+		const projList = projWrap.createEl("div", { cls: "flowtime-proj-list" });
+		let allProjects = [];
+
+		const filterProjects = (query) => {
+			projList.empty();
+			const q = query.toLowerCase().trim();
+			const matches = q
+				? allProjects.filter((p) => p.name.toLowerCase().includes(q))
+				: allProjects;
+			if (matches.length === 0) {
+				projList.style.display = "none";
+				return;
+			}
+			for (const proj of matches.slice(0, 8)) {
+				const item = projList.createEl("div", {
+					text: proj.name,
+					cls: "flowtime-proj-item",
+				});
+				item.addEventListener("mousedown", (e) => {
+					e.preventDefault();
+					projInput.value = proj.name;
+					projList.style.display = "none";
+					updateLivePreview();
+				});
+			}
+			projList.style.display = "block";
+		};
+
+		projInput.addEventListener("focus", () => filterProjects(projInput.value));
+		projInput.addEventListener("input", () => {
+			filterProjects(projInput.value);
+			updateLivePreview();
+		});
+		projInput.addEventListener("blur", () => {
+			setTimeout(() => { projList.style.display = "none"; }, 150);
+		});
+		projInput.addEventListener("keydown", (e) => {
+			if (e.key === "Escape") projList.style.display = "none";
 		});
 
-		// Populate datalist from vault projects
+		// Load projects and auto-detect
 		const activeFile = this.app.workspace.getActiveFile();
 		if (this.plugin.projectEngine) {
 			this.plugin.projectEngine.getAllProjects().then((projects) => {
-				for (const proj of projects) {
-					projDatalist.createEl("option", { attr: { value: proj.name } });
-				}
+				allProjects = projects;
 			});
-			// Auto-detect project from active file
 			if (activeFile) {
 				this.plugin.projectEngine.resolve(activeFile.path).then((result) => {
 					if (result?.name && !projInput.value) {
 						projInput.value = result.name;
-						projInput.setAttribute("data-auto", "true");
+						updateLivePreview();
 					}
 				}).catch(() => {});
 			}

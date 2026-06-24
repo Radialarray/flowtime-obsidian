@@ -623,6 +623,50 @@
 	color: var(--text-normal);
 }
 
+/* --- Project dropdown in quick entry --- */
+.flowtime-proj-wrap {
+	position: relative;
+}
+
+.flowtime-proj-list {
+	display: none;
+	position: absolute;
+	top: 100%;
+	left: 0;
+	right: 0;
+	z-index: 10;
+	max-height: 180px;
+	overflow-y: auto;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+	margin-top: 2px;
+}
+
+.flowtime-proj-item {
+	padding: 6px 10px;
+	font-size: var(--font-ui-small);
+	color: var(--text-normal);
+	cursor: pointer;
+}
+
+.flowtime-proj-item:hover {
+	background: var(--background-modifier-hover);
+}
+
+.flowtime-proj-item:first-child {
+	border-radius: 4px 4px 0 0;
+}
+
+.flowtime-proj-item:last-child {
+	border-radius: 0 0 4px 4px;
+}
+
+.flowtime-proj-item:only-child {
+	border-radius: 4px;
+}
+
 /* --- Checkbox in table --- */
 /* --- Checkbox column --- */
 .tp-check-cell {

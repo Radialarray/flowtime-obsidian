@@ -4,6 +4,7 @@ const { FlowtimeSettingsTab, DEFAULT_SETTINGS } = require("./src/settings");
 const { ProjectEngine } = require("./src/project-engine");
 const { TemplateEngine } = require("./src/template-engine");
 const { QuickEntryModal } = require("./src/quick-entry");
+const { runOnboard } = require("./src/onboard");
 
 module.exports = class FlowtimePlugin extends Plugin {
 	async onload() {
@@ -233,6 +234,15 @@ module.exports = class FlowtimePlugin extends Plugin {
 						this.notify("❌ Failed to create project: " + e.message, true);
 					}
 				}).open();
+			},
+		});
+
+		// ── Onboard / Migrate Command ──
+		this.addCommand({
+			id: "onboard",
+			name: "Onboard / Migrate",
+			callback: () => {
+				runOnboard(this.app, this);
 			},
 		});
 	}

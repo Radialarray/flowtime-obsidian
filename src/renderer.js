@@ -81,7 +81,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 
 	_clean(t) {
 		return t
-			.replace(/@\s*\d{4}-\d{2}-\d{2}/gu, "")
+			.replace(/[@⏳📅]\s*\d{4}-\d{2}-\d{2}/gu, "")
 			.replace(/🔺|⏫|🔼|🔽|⏬/g, "")
 			.replace(/🔁 every \d* (day|days|week|weeks|month|months)/g, "")
 			.replace(/🔁 [^\s]+( \d+[dwmy])?/g, "")
@@ -179,7 +179,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 				const status = m[2].trim();
 				if (status === "x" || status === "-" || status === "X") continue;
 
-				const dateMatch = m[3].match(/@\s*(\d{4}-\d{2}-\d{2})/);
+				const dateMatch = m[3].match(/[@⏳📅]\s*(\d{4}-\d{2}-\d{2})/);
 				const taskDate = (dateMatch || [])[1] || "";
 
 				if (this.mode === "today" && taskDate !== today) continue;
@@ -775,7 +775,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 		const line = lines[task.line];
 		if (!line) return;
 		if (nd) {
-			const re = /@\s*\d{4}-\d{2}-\d{2}/;
+			const re = /[@⏳📅]\s*\d{4}-\d{2}-\d{2}/;
 			lines[task.line] = re.test(line)
 				? line.replace(re, "@" + nd)
 				: line.replace(
@@ -783,7 +783,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 						(_, p, r) => p + r + " @" + nd,
 					);
 		} else {
-			lines[task.line] = line.replace(/\s*@\s*\d{4}-\d{2}-\d{2}/, "");
+			lines[task.line] = line.replace(/\s*[@⏳📅]\s*\d{4}-\d{2}-\d{2}/, "");
 		}
 		await this.app.vault.modify(task.file, lines.join("\n"));
 	}
@@ -850,7 +850,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 
 		const newTaskLine = completedLine
 			.replace(/\[x\]/i, "[ ]")
-			.replace(/@\s*\d{4}-\d{2}-\d{2}/, "@" + nextDate);
+			.replace(/[@⏳📅]\s*\d{4}-\d{2}-\d{2}/, "@" + nextDate);
 
 		const content = await this.app.vault.read(task.file);
 		const lines = content.split("\n");

@@ -5,9 +5,17 @@ Custom Obsidian plugin for editing task time slots with an inline countdown time
 ## Development workflow
 
 1. Edit files in this repo
-2. Copy to vault: `cp main.js manifest.json styles.css /path/to/vault/.obsidian/plugins/flowtime/`
-3. Commit: `git add -A && git commit -m "type: description"`
-4. User reloads Obsidian to apply changes
+2. Build: `npm run build`
+3. Copy to vault: `cp dist/main.js manifest.json styles.css /path/to/vault/.obsidian/plugins/flowtime/`
+4. Commit: `git add -A && git commit -m "type: description"`
+5. User reloads Obsidian to apply changes
+
+## Release
+
+```bash
+bash release.sh   # Builds + assembles release/flowtime/
+cp -r release/flowtime /path/to/vault/.obsidian/plugins/
+```
 
 ## Architecture
 

@@ -189,6 +189,28 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		}
 	}
 
+	/**
+	 * Format a YYYY-MM-DD date for human-readable display.
+	 * Returns "today", "tomorrow", "yesterday", "Mon 24", etc.
+	 */
+	_fmtDate(dateStr) {
+		if (!dateStr) return "";
+		const today = new Date();
+		today.setHours(0, 0, 0, 0);
+		const d = new Date(dateStr + "T00:00:00");
+		const diff = Math.round((d - today) / 86400000);
+		if (diff === 0) return "Today";
+		if (diff === 1) return "Tomorrow";
+		if (diff === -1) return "Yesterday";
+		// Within this week: show day name
+		if (diff > -7 && diff < 7) {
+			const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+			return days[d.getDay()] + " " + d.getDate();
+		}
+		// Otherwise show short date
+		return `${d.getDate()}.${d.getMonth() + 1}.`;
+	}
+
 	_isCompactMode() {
 		return this.mode === "overdue" || this.mode === "dueweek" || this.mode === "weekly";
 	}
@@ -215,7 +237,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			if (v.date !== false) count++;
 			if (v.timer !== false) count++;
 		}
-		return count || 1;
+		return (count || 1) + 1; // +1 for the detail column
 	}
 
 	/* ─── helpers ─── */
@@ -415,11 +437,11 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			this._columnVisibility = {
 				check: true,
 				task: true,
-				project: true,
-				bucket: true,
-				source: true,
-				date: true,
-				actions: true,
+				project: false,
+				bucket: false,
+				source: false,
+				date: false,
+				actions: false,
 				time: true,
 				timer: true,
 			};
@@ -463,7 +485,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
 		// Heading + toolbar on same row
 		const headings = {
-			today: "💡 Set times and durations — edits save to source files",
+			today: "💡 Times and durations auto-save to source files",
 			overdue: "📋 Tasks past their scheduled date — reassign or backlog",
 			dueweek: "⚠️ Tasks due this week — schedule or defer",
 			weekly: "📊 This week's tasks grouped by project",
@@ -500,38 +522,6 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 					this.plugin?.notify?.("🗑 All sent to backlog");
 				});
 			}
-		} else {
-			const sv = toolbar.createEl("button", {
-				text: "💾 Save All",
-				cls: "ft-save-all-btn",
-			});
-			sv.addEventListener("click", async () => {
-				sv.setText("⏳ Saving...");
-				let ok = 0, err = 0;
-				for (const rd of this.rowData) {
-					if (!rd.si || !rd.ds) continue;
-					const s = rd.si.value,
-						d = parseInt(rd.ds.value, 10);
-					if (!s || !d || d <= 0) continue;
-					const nt = `${s}—${this._calcEnd(s, d)}`;
-					if (nt === rd.task.time) continue;
-					try {
-						await this.saveTime(rd.task, nt);
-						rd.task.time = nt;
-						ok++;
-					} catch (_) { err++; }
-				}
-				if (ok + err > 0) {
-					this._sort();
-					const tbody = this.containerEl.querySelector("tbody");
-					if (tbody) this.buildRows(tbody);
-				}
-				const p = [];
-				if (ok) p.push(`✅ ${ok} saved`);
-				if (err) p.push(`❌ ${err} failed`);
-				sv.setText(p.length ? p.join(" ") : "💾 Save All");
-				if (p.length) this.plugin?.notify?.(p.join(", "), err > 0);
-			});
 		}
 
 		// ── Column visibility toggle ──
@@ -795,6 +785,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				makeSortableHeader(dw ? "Due" : "Date", "date", "col-date");
 			if (this._columnVisibility.actions !== false)
 				hr.createEl("th", { cls: "col-actions" });
+			hr.createEl("th", { cls: "col-detail", text: "···" });
 		} else {
 			if (this._columnVisibility.time !== false)
 				makeSortableHeader("Time", "time", "col-time");
@@ -812,6 +803,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				makeSortableHeader("Date", "date", "col-date");
 			if (this._columnVisibility.timer !== false)
 				hr.createEl("th", { cls: "col-timer" });
+			hr.createEl("th", { cls: "col-detail", text: "···" });
 		}
 		const tbody = table.createEl("tbody");
 		this.bucketTotals = this._computeBucketTotals();
@@ -1016,8 +1008,14 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 						d = parseInt(ds.value, 10);
 					ps.setText(s && d > 0 ? "→ " + this._calcEnd(s, d) : "");
 				};
-				si.addEventListener("input", up);
-				ds.addEventListener("change", up);
+				si.addEventListener("change", async () => {
+					up();
+					await this._autoSaveTime(task, si, ds);
+				});
+				ds.addEventListener("change", async () => {
+					up();
+					await this._autoSaveTime(task, si, ds);
+				});
 				up();
 			}
 		}
@@ -1055,17 +1053,16 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				const buckets = this.plugin?.settings?.buckets || [];
 				const bucketDef = buckets.find(b => b.id === bucketId);
 				if (bucketDef) {
+					// Bucket name text above
+					bc.createEl("div", { text: bucketDef.name, cls: "ft-bucket-label" });
+					// Progress bar below (if has limit)
 					if (bucketDef.weeklyLimit > 0) {
 						const used = (this.bucketTotals?.[bucketId] || 0) / 60;
 						const bar = renderProgressBar(used, bucketDef.weeklyLimit, `${formatHours(used)}h / ${bucketDef.weeklyLimit}h`);
 						bar.style.minWidth = "100px";
 						bc.appendChild(bar);
 					} else {
-						const badge = bc.createEl("span", {
-							text: bucketDef.name,
-							cls: "ft-bucket-badge",
-						});
-						badge.style.borderLeftColor = bucketDef.color;
+						bc.createEl("div", { text: "no limit", cls: "ft-bucket-nolimit" });
 					}
 				} else {
 					bc.createEl("span", { text: bucketId, cls: "ft-bucket-missing" });
@@ -1092,10 +1089,9 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		if (this._columnVisibility.date !== false) {
 			const dc = row.createEl("td", { cls: "ft-date-cell" });
 			const dw = dc.createEl("div", { cls: "ft-date-wrap" });
-			const dispDate = task.taskDate || "+";
 			const hasDate = task.taskDate;
 			const ds2 = dw.createEl("span", {
-				text: dispDate,
+				text: hasDate ? this._fmtDate(task.taskDate) : "+",
 				cls: "ft-date-badge" + (hasDate ? "" : " ft-date-none"),
 			});
 			const dp = document.createElement("div");
@@ -1150,7 +1146,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 					await this.updateDate(task, nd);
 					task.taskDate = nd;
 					if (nd && nd === tdy) {
-						ds2.setText(nd);
+						ds2.setText(this._fmtDate(nd));
 						ds2.removeClass("ft-date-none");
 						await this._refreshSiblings();
 					} else {
@@ -1174,6 +1170,15 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			);
 			bBkl.addEventListener("click", () => ap(""));
 		}
+
+		/* ── Detail button (shows hidden fields popup) ── */
+		const detailCell = row.createEl("td", { cls: "ft-detail-cell" });
+		const detailBtn = detailCell.createEl("button", { text: "···", cls: "ft-detail-btn" });
+
+		detailBtn.addEventListener("click", (e) => {
+			e.stopPropagation();
+			this._showTaskDetail(task, detailBtn, tdy);
+		});
 
 		/* Timer (today) or action buttons (compact) */
 		if (isCompact && this._columnVisibility.actions !== false) {
@@ -1417,6 +1422,115 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			e.stopPropagation();
 			await this.toggleTaskComplete(task);
 		});
+	}
+
+	/**
+	 * Auto-save time block when start time or duration changes.
+	 */
+	async _autoSaveTime(task, si, ds) {
+		const s = si?.value;
+		const d = ds ? parseInt(ds.value, 10) : 0;
+		if (!s || !d || d <= 0) return;
+		const nt = `${s}—${this._calcEnd(s, d)}`;
+		if (nt === task.time) return;
+		try {
+			await this.saveTime(task, nt);
+			task.time = nt;
+		} catch (_) {}
+	}
+
+	/**
+	 * Show floating detail popup for a task (hidden fields).
+	 */
+	_showTaskDetail(task, anchorBtn, tdy) {
+		// Close any existing popup
+		document.querySelectorAll(".ft-detail-popup").forEach(e => e.remove());
+
+		const popup = document.createElement("div");
+		popup.className = "ft-detail-popup";
+
+		// Position near the button
+		const r = anchorBtn.getBoundingClientRect();
+		popup.style.left = Math.min(r.left, window.innerWidth - 320) + "px";
+		popup.style.top = (r.bottom + 4) + "px";
+
+		// Task text (readonly)
+		const taskRow = popup.createEl("div", { cls: "ft-detail-row" });
+		taskRow.createEl("span", { text: task.cleanText, cls: "ft-detail-task-text" });
+
+		// Date
+		const dateRow = popup.createEl("div", { cls: "ft-detail-row" });
+		dateRow.createEl("label", { text: "Date: ", cls: "ft-detail-label" });
+		const dateInput = dateRow.createEl("input", {
+			type: "date", value: task.taskDate || "", cls: "ft-detail-input",
+		});
+		dateInput.addEventListener("change", async () => {
+			await this.updateDate(task, dateInput.value || "");
+			task.taskDate = dateInput.value || "";
+			// Refresh
+			this.containerEl.querySelectorAll(".ft-detail-popup").forEach(e => e.remove());
+			const tbody = this.containerEl.querySelector("tbody");
+			if (tbody) this.buildRows(tbody);
+		});
+
+		// Bucket
+		const bucketRow = popup.createEl("div", { cls: "ft-detail-row" });
+		bucketRow.createEl("label", { text: "Bucket: ", cls: "ft-detail-label" });
+		const bucketSel = bucketRow.createEl("select", { cls: "ft-detail-select" });
+		const buckets = this.plugin?.settings?.buckets || [];
+		bucketSel.createEl("option", { text: "None", value: "" });
+		for (const b of buckets) {
+			const opt = bucketSel.createEl("option", { text: b.name, value: b.id });
+			if (b.id === task.bucket) opt.selected = true;
+		}
+		bucketSel.addEventListener("change", async () => {
+			const newBucket = bucketSel.value || "";
+			// Update the task line in source to change bucket directive
+			const lines = (await this.app.vault.read(task.file)).split("\n");
+			const line = lines[task.line];
+			const updated = line
+				.replace(/@(?:bucket|b):[^\s]+/g, newBucket ? `@b:${newBucket}` : "")
+				.replace(/\s+$/, "");
+			lines[task.line] = updated;
+			await this.app.vault.modify(task.file, lines.join("\n"));
+			task.bucket = newBucket || null;
+			this.containerEl.querySelectorAll(".ft-detail-popup").forEach(e => e.remove());
+			const tbody = this.containerEl.querySelector("tbody");
+			if (tbody) this.buildRows(tbody);
+		});
+
+		// Project
+		const projRow = popup.createEl("div", { cls: "ft-detail-row" });
+		projRow.createEl("label", { text: "Project: ", cls: "ft-detail-label" });
+		projRow.createEl("span", { text: task.project || "—", cls: "ft-detail-value" });
+
+		// Source
+		const srcRow = popup.createEl("div", { cls: "ft-detail-row" });
+		srcRow.createEl("label", { text: "Source: ", cls: "ft-detail-label" });
+		const srcLink = srcRow.createEl("a", {
+			text: task.file?.basename || "—",
+			cls: "ft-detail-link",
+		});
+		if (task.file) {
+			srcLink.addEventListener("click", () =>
+				this.app.workspace.openLinkText(task.file.path, "", false, { line: task.line + 1 }),
+			);
+		}
+
+		// Close button
+		const closeBtn = popup.createEl("button", { text: "✕", cls: "ft-detail-close" });
+		closeBtn.addEventListener("click", () => popup.remove());
+
+		// Close on outside click
+		const closeOnOutside = (e) => {
+			if (!popup.contains(e.target) && e.target !== anchorBtn) {
+				popup.remove();
+				document.removeEventListener("click", closeOnOutside, true);
+			}
+		};
+		setTimeout(() => document.addEventListener("click", closeOnOutside, true), 0);
+
+		document.body.appendChild(popup);
 	}
 
 	async saveTime(task, time) {

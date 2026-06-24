@@ -66,6 +66,115 @@
 	width: 22%;
 }
 
+.col-detail {
+	width: 36px;
+	text-align: center;
+}
+
+.ft-detail-cell {
+	width: 36px;
+	text-align: center;
+	vertical-align: middle;
+}
+
+.ft-detail-btn {
+	background: none;
+	border: none;
+	cursor: pointer;
+	color: var(--text-faint);
+	font-size: 14px;
+	letter-spacing: 1px;
+	padding: 2px 4px;
+	border-radius: 3px;
+	line-height: 1;
+}
+
+.ft-detail-btn:hover {
+	color: var(--text-normal);
+	background: var(--background-modifier-hover);
+}
+
+/* ── Task Detail Popup ── */
+.ft-detail-popup {
+	position: fixed;
+	z-index: 1000;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+	padding: 14px 16px;
+	min-width: 260px;
+	max-width: 320px;
+}
+
+.ft-detail-popup .ft-detail-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 4px 0;
+	font-size: var(--font-ui-small);
+}
+
+.ft-detail-popup .ft-detail-row + .ft-detail-row {
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.ft-detail-popup .ft-detail-task-text {
+	font-weight: var(--font-semibold);
+	font-size: var(--font-ui-medium);
+	padding-bottom: 4px;
+	flex: 1;
+}
+
+.ft-detail-popup .ft-detail-label {
+	color: var(--text-muted);
+	white-space: nowrap;
+	min-width: 52px;
+}
+
+.ft-detail-popup .ft-detail-value {
+	color: var(--text-normal);
+}
+
+.ft-detail-popup .ft-detail-input,
+.ft-detail-popup .ft-detail-select {
+	font-size: var(--font-ui-small);
+	padding: 2px 6px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-primary);
+	color: var(--text-normal);
+	flex: 1;
+}
+
+.ft-detail-popup .ft-detail-link {
+	cursor: pointer;
+	color: var(--text-accent);
+	text-decoration: none;
+}
+
+.ft-detail-popup .ft-detail-link:hover {
+	text-decoration: underline;
+}
+
+.ft-detail-popup .ft-detail-close {
+	position: absolute;
+	top: 6px;
+	right: 8px;
+	background: none;
+	border: none;
+	cursor: pointer;
+	color: var(--text-muted);
+	font-size: 14px;
+	padding: 2px 6px;
+	border-radius: 3px;
+}
+
+.ft-detail-popup .ft-detail-close:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
 /* --- ft-: Top bar: callout-style heading + toolbar on same row --- */
 .ft-topbar {
 	padding: 8px 12px 8px 14px;
@@ -91,7 +200,6 @@
 
 /* --- Toolbar --- */
 
-.ft-save-all-btn,
 .ft-bulk-btn {
 	padding: 4px 12px;
 	border: 1px solid var(--interactive-accent);
@@ -99,8 +207,10 @@
 	background: var(--interactive-accent);
 	color: var(--text-on-accent);
 	font-size: var(--font-ui-small);
-	font-weight: var(--font-semibold);
-	cursor: pointer;
+}
+
+.ft-bulk-btn:hover {
+	background: var(--interactive-accent-hover);
 }
 
 .ft-save-all-btn:hover,
@@ -670,12 +780,11 @@
 	text-align: center;
 	width: 36px;
 	padding: 2px 4px !important;
+	vertical-align: middle;
 }
 
 .ft-checkbox {
 	cursor: pointer;
-	display: block;
-	margin: 0 auto;
 	accent-color: var(--interactive-accent);
 }
 
@@ -828,6 +937,19 @@
 /* ── Bucket Column ── */
 .ft-bucket-cell {
 	vertical-align: middle;
+}
+.ft-bucket-label {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	margin-bottom: 2px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 120px;
+}
+.ft-bucket-nolimit {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
 }
 .ft-bucket-badge {
 	display: inline-block;

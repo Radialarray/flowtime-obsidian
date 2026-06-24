@@ -81,7 +81,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 
 	_clean(t) {
 		return t
-			.replace(/[⏳📅🛫➕✅] \d{4}-\d{2}-\d{2}/gu, "")
+			.replace(/[@⏳📅🛫➕✅]\s*\d{4}-\d{2}-\d{2}/gu, "")
 			.replace(/🔺|⏫|🔼|🔽|⏬/g, "")
 			.replace(/🔁 every \d* (day|days|week|weeks|month|months)/g, "")
 			.replace(/🔁 [^\s]+( \d+[dwmy])?/g, "")
@@ -180,7 +180,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 				if (status === "x" || status === "-" || status === "X") continue;
 
 				const schedMatch = m[3].match(/⏳\s*(\d{4}-\d{2}-\d{2})/);
-				const dueMatch = m[3].match(/📅\s*(\d{4}-\d{2}-\d{2})/);
+				const dueMatch = m[3].match(/[@📅]\s*(\d{4}-\d{2}-\d{2})/);
 				const taskDate = (schedMatch || [])[1] || "";
 				const dueDate = (dueMatch || [])[1] || "";
 

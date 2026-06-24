@@ -61,16 +61,31 @@ class QuickEntryModal extends Modal {
 			updateLivePreview();
 		});
 
-		// ── Project (custom dropdown from vault projects) ──
+		// ── Project (custom dropdown appended to body for z-index) ──
 		contentEl.createEl("label", { text: "Project", cls: "flowtime-label" });
-		const projWrap = contentEl.createEl("div", { cls: "flowtime-proj-wrap" });
-		const projInput = projWrap.createEl("input", {
+		const projInput = contentEl.createEl("input", {
 			type: "text",
 			placeholder: "Type or select a project",
 			cls: "flowtime-input",
 		});
-		const projList = projWrap.createEl("div", { cls: "flowtime-proj-list" });
 		let allProjects = [];
+
+		// Dropdown appended to body to escape modal overflow clipping
+		const projList = document.createElement("div");
+		projList.className = "flowtime-proj-list";
+
+		const openList = () => {
+			const r = projInput.getBoundingClientRect();
+			projList.style.top = (r.bottom + 2) + "px";
+			projList.style.left = r.left + "px";
+			projList.style.width = r.width + "px";
+			filterProjects(projInput.value);
+			document.body.appendChild(projList);
+		};
+
+		const closeList = () => {
+			if (projList.parentNode) projList.parentNode.removeChild(projList);
+		};
 
 		const filterProjects = (query) => {
 			projList.empty();
@@ -78,10 +93,7 @@ class QuickEntryModal extends Modal {
 			const matches = q
 				? allProjects.filter((p) => p.name.toLowerCase().includes(q))
 				: allProjects;
-			if (matches.length === 0) {
-				projList.style.display = "none";
-				return;
-			}
+			if (matches.length === 0) { closeList(); return; }
 			for (const proj of matches.slice(0, 8)) {
 				const item = projList.createEl("div", {
 					text: proj.name,
@@ -90,24 +102,31 @@ class QuickEntryModal extends Modal {
 				item.addEventListener("mousedown", (e) => {
 					e.preventDefault();
 					projInput.value = proj.name;
-					projList.style.display = "none";
+					closeList();
 					updateLivePreview();
 				});
 			}
-			projList.style.display = "block";
 		};
 
-		projInput.addEventListener("focus", () => filterProjects(projInput.value));
+		projInput.addEventListener("focus", () => openList());
 		projInput.addEventListener("input", () => {
-			filterProjects(projInput.value);
+			if (!projList.parentNode) openList();
+			else filterProjects(projInput.value);
 			updateLivePreview();
 		});
 		projInput.addEventListener("blur", () => {
-			setTimeout(() => { projList.style.display = "none"; }, 150);
+			setTimeout(closeList, 150);
 		});
 		projInput.addEventListener("keydown", (e) => {
-			if (e.key === "Escape") projList.style.display = "none";
+			if (e.key === "Escape") closeList();
 		});
+
+		// Global click to close
+		document.addEventListener("click", (e) => {
+			if (!projInput.contains(e.target) && !projList.contains(e.target)) {
+				closeList();
+			}
+		}, true);
 
 		// Load projects and auto-detect
 		const activeFile = this.app.workspace.getActiveFile();

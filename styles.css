@@ -623,25 +623,20 @@
 	color: var(--text-normal);
 }
 
-/* --- Project dropdown in quick entry --- */
+/* --- Project dropdown (appended to body, fixed positioning) --- */
 .flowtime-proj-wrap {
 	position: relative;
 }
 
 .flowtime-proj-list {
-	display: none;
-	position: absolute;
-	top: 100%;
-	left: 0;
-	right: 0;
-	z-index: 10;
+	position: fixed;
+	z-index: 1001;
 	max-height: 180px;
 	overflow-y: auto;
 	background: var(--background-primary);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: 4px;
 	box-shadow: 0 4px 16px rgba(0,0,0,0.15);
-	margin-top: 2px;
 }
 
 .flowtime-proj-item {

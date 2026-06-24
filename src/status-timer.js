@@ -1,9 +1,13 @@
 class StatusTimer {
-	constructor({ statusBarItem, settings, notify }) {
+	constructor({ statusBarItem, settings, notify, onSessionEnd }) {
 		this.statusBarItem = statusBarItem;
 		this.settings = settings;
 		this.notify = notify;
+		this.onSessionEnd = onSessionEnd;
 		this.currentTimer = null;
+		this._currentTaskName = "";
+		this._startTime = null;
+		this._sessionRecorded = false;
 
 		this.statusBarItem.addClass("flowtime-status-timer");
 		this.updateDisplay();
@@ -11,6 +15,9 @@ class StatusTimer {
 
 	start(taskName, totalSeconds) {
 		this.stop();
+		this._currentTaskName = taskName;
+		this._startTime = new Date();
+		this._sessionRecorded = false;
 
 		this.currentTimer = {
 			taskName,
@@ -35,6 +42,19 @@ class StatusTimer {
 	stop() {
 		if (this.currentTimer?.interval) {
 			clearInterval(this.currentTimer.interval);
+		}
+		// Record session end (avoid double-fire via flag)
+		if (this.currentTimer && !this._sessionRecorded) {
+			this._sessionRecorded = true;
+			if (this.onSessionEnd && this._startTime) {
+				const now = new Date();
+				this.onSessionEnd({
+					taskText: this._currentTaskName,
+					startTime: this._startTime,
+					endTime: now.toISOString(),
+					durationMinutes: Math.round((now - this._startTime) / 60000),
+				});
+			}
 		}
 		this.currentTimer = null;
 		this.updateDisplay();

@@ -141,6 +141,12 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
 	/* ─── load ─── */
 	async loadTasks() {
+		if (this.mode === "sessions") {
+			// Don't load tasks — we'll render directly from session store
+			this.tasks = [];
+			return;
+		}
+
 		const today = new Date().toISOString().split("T")[0];
 		// End of current week — Sunday
 		const eow = new Date();
@@ -289,6 +295,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 	renderTable() {
 		this.containerEl.empty();
 		this.rowData = [];
+		if (this.mode === "sessions") {
+			this._renderSessionHistory();
+			return;
+		}
 		if (this.mode === "budget") {
 			this._renderBudgetView();
 			return;
@@ -940,6 +950,211 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 	}
 
 	/* ─── checkbox toggle ─── */
+	async _renderSessionHistory() {
+		this.containerEl.empty();
+
+		if (!this.plugin?.sessionStore) {
+			this.containerEl.createEl("p", { text: "Session store not available.", cls: "flowtime-empty" });
+			return;
+		}
+
+		const buckets = this.plugin.settings.buckets || [];
+
+		// ── Filter controls ──
+		const filterBar = this.containerEl.createEl("div", { cls: "ft-sesh-filter-bar" });
+
+		// Bucket filter
+		filterBar.createEl("label", { text: "Bucket: ", cls: "ft-sesh-filter-label" });
+		const bucketFilter = filterBar.createEl("select", { cls: "ft-sesh-filter" });
+		bucketFilter.createEl("option", { text: "All", value: "" });
+		for (const b of buckets) {
+			bucketFilter.createEl("option", { text: b.name, value: b.id });
+		}
+
+		// Type filter
+		filterBar.createEl("label", { text: "Type: ", cls: "ft-sesh-filter-label" });
+		const typeFilter = filterBar.createEl("select", { cls: "ft-sesh-filter" });
+		for (const [val, label] of [["", "All"], ["session", "Sessions"], ["completion", "Completions"]]) {
+			typeFilter.createEl("option", { text: label, value: val });
+		}
+
+		// Limit
+		filterBar.createEl("label", { text: "Show: ", cls: "ft-sesh-filter-label" });
+		const limitFilter = filterBar.createEl("select", { cls: "ft-sesh-filter" });
+		for (const n of [20, 50, 100, 500]) {
+			limitFilter.createEl("option", { text: String(n), value: String(n), selected: n === 50 });
+		}
+
+		// ── Analytics Summary ──
+		const summaryEl = this.containerEl.createEl("div", { cls: "ft-sesh-summary" });
+
+		// Daily totals (today)
+		const todayStr = new Date().toISOString().split("T")[0];
+		const todayTotals = await this.plugin.sessionStore.getDailyTotals({ dateFrom: todayStr, dateTo: todayStr });
+
+		if (todayTotals.length > 0) {
+			const section = summaryEl.createEl("div", { cls: "ft-sesh-analytics-section" });
+			section.createEl("div", { text: "📊 Today", cls: "ft-sesh-analytics-title" });
+			for (const t of todayTotals) {
+				const row = section.createEl("div", { cls: "ft-sesh-analytics-row" });
+				const bDef = buckets.find(b => b.id === t.bucket);
+				if (bDef) {
+					const swatch = row.createEl("span", { cls: "ft-bucket-swatch" });
+					swatch.style.backgroundColor = bDef.color;
+					row.createEl("span", { text: bDef.name, cls: "ft-sesh-analytics-name" });
+				} else {
+					row.createEl("span", { text: t.bucket || "unassigned", cls: "ft-sesh-analytics-name" });
+				}
+				row.createEl("span", { text: `${Math.round(t.total_minutes)}m (${(t.total_minutes / 60).toFixed(1)}h)`, cls: "ft-sesh-analytics-value" });
+			}
+		}
+
+		// Weekly totals
+		const weeklyTotals = await this.plugin.sessionStore.getWeeklyTotals();
+		if (weeklyTotals.length > 0) {
+			const section = summaryEl.createEl("div", { cls: "ft-sesh-analytics-section" });
+			section.createEl("div", { text: "📅 This Week", cls: "ft-sesh-analytics-title" });
+
+			// Show current week only (first entry if sorted desc)
+			const currentWeekStart = weeklyTotals[0]?.weekStart;
+			if (currentWeekStart) {
+				const thisWeek = weeklyTotals.filter(w => w.weekStart === currentWeekStart);
+				for (const w of thisWeek) {
+					const row = section.createEl("div", { cls: "ft-sesh-analytics-row" });
+					const bDef = buckets.find(b => b.id === w.bucket);
+					if (bDef) {
+						const swatch = row.createEl("span", { cls: "ft-bucket-swatch" });
+						swatch.style.backgroundColor = bDef.color;
+						row.createEl("span", { text: bDef.name, cls: "ft-sesh-analytics-name" });
+
+						// Show vs weekly limit
+						const limitHours = bDef.weeklyLimit;
+						const usedHours = w.total_minutes / 60;
+						if (limitHours > 0) {
+							row.createEl("span", {
+								text: `${usedHours.toFixed(1)}h / ${limitHours}h`,
+								cls: "ft-sesh-analytics-value",
+							});
+						} else {
+							row.createEl("span", {
+								text: `${usedHours.toFixed(1)}h`,
+								cls: "ft-sesh-analytics-value",
+							});
+						}
+					} else {
+						row.createEl("span", { text: w.bucket || "unassigned", cls: "ft-sesh-analytics-name" });
+						row.createEl("span", {
+							text: `${(w.total_minutes / 60).toFixed(1)}h`,
+							cls: "ft-sesh-analytics-value",
+						});
+					}
+				}
+			}
+		}
+
+		// Last 5 completions
+		const completions = await this.plugin.sessionStore.query({ types: ["completion"], limit: 5 });
+		if (completions.length > 0) {
+			const section = summaryEl.createEl("div", { cls: "ft-sesh-analytics-section" });
+			section.createEl("div", { text: "✅ Recent Completions", cls: "ft-sesh-analytics-title" });
+			for (const c of completions) {
+				const row = section.createEl("div", { cls: "ft-sesh-analytics-row" });
+				row.createEl("span", { text: `☑ ${c.task_text || "—"}`, cls: "ft-sesh-analytics-name" });
+				row.createEl("span", { text: c.date, cls: "ft-sesh-analytics-value ft-sesh-faint" });
+			}
+		}
+
+		// Divider
+		summaryEl.createEl("hr", { cls: "ft-sesh-divider" });
+
+		// Results container
+		const resultsEl = this.containerEl.createEl("div", { cls: "ft-sesh-results" });
+
+		const loadResults = async () => {
+			resultsEl.empty();
+
+			const opts = {
+				limit: parseInt(limitFilter.value, 10),
+			};
+			if (bucketFilter.value) opts.bucket = bucketFilter.value;
+			if (typeFilter.value) opts.types = [typeFilter.value];
+
+			const records = await this.plugin.sessionStore.query(opts);
+
+			if (records.length === 0) {
+				resultsEl.createEl("p", { text: "No sessions yet. Start a timer to see records here.", cls: "ft-sesh-empty" });
+				return;
+			}
+
+			const table = resultsEl.createEl("table", { cls: "ft-sesh-table" });
+			const thead = table.createEl("thead").createEl("tr");
+			thead.createEl("th", { text: "Type" });
+			thead.createEl("th", { text: "Date" });
+			thead.createEl("th", { text: "Time" });
+			thead.createEl("th", { text: "Duration" });
+			thead.createEl("th", { text: "Bucket" });
+			thead.createEl("th", { text: "Task / Note" });
+
+			const tbody = table.createEl("tbody");
+			for (const rec of records) {
+				const row = tbody.createEl("tr");
+
+				// Type icon
+				const typeCell = row.createEl("td");
+				typeCell.createEl("span", {
+					text: rec.type === "session" ? "⏱" : "☑",
+					cls: "ft-sesh-type-icon",
+				});
+
+				// Date
+				row.createEl("td", { text: rec.date, cls: "ft-sesh-date" });
+
+				// Time range (for sessions) or completed time (for completions)
+				const timeCell = row.createEl("td", { cls: "ft-sesh-time" });
+				if (rec.type === "session" && rec.start_time && rec.end_time) {
+					const fmt = (iso) => iso.split("T")[1]?.slice(0, 5) || "";
+					timeCell.setText(`${fmt(rec.start_time)}—${fmt(rec.end_time)}`);
+				} else if (rec.completed_at) {
+					timeCell.setText(rec.completed_at.split("T")[1]?.slice(0, 5) || "");
+				}
+
+				// Duration
+				row.createEl("td", {
+					text: rec.duration_minutes ? `${rec.duration_minutes}m` : "—",
+					cls: "ft-sesh-dur",
+				});
+
+				// Bucket
+				const bucketCell = row.createEl("td", { cls: "ft-sesh-bucket" });
+				if (rec.bucket) {
+					const bDef = buckets.find(b => b.id === rec.bucket);
+					if (bDef) {
+						const badge = bucketCell.createEl("span", { text: bDef.name, cls: "ft-sesh-badge" });
+						badge.style.borderLeftColor = bDef.color;
+					} else {
+						bucketCell.createEl("span", { text: rec.bucket, cls: "ft-sesh-badge-unknown" });
+					}
+				} else {
+					bucketCell.createEl("span", { text: "—", cls: "ft-sesh-faint" });
+				}
+
+				// Task text
+				row.createEl("td", {
+					text: rec.task_text || rec.notes || "—",
+					cls: "ft-sesh-task",
+				});
+			}
+		};
+
+		// Reload on filter change
+		bucketFilter.addEventListener("change", loadResults);
+		typeFilter.addEventListener("change", loadResults);
+		limitFilter.addEventListener("change", loadResults);
+
+		// Initial load
+		await loadResults();
+	}
+
 	async toggleTaskComplete(task) {
 		const content = await this.app.vault.read(task.file);
 		const lines = content.split("\n");
@@ -959,6 +1174,15 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		// Handle recurrence if completing
 		if (!wasCompleted) {
 			await this._handleRecurrence(task, newLine);
+			// Write completion record to session store
+			if (this.plugin?.sessionStore) {
+				await this.plugin.sessionStore.writeCompletion({
+					date: task.taskDate || new Date().toISOString().split("T")[0],
+					bucket: task.bucket || "",
+					taskText: task.cleanText,
+					completedAt: new Date().toISOString(),
+				});
+			}
 		}
 
 		// Rebuild to reflect new status — keep task in table

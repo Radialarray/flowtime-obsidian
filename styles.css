@@ -947,3 +947,127 @@
 	text-align: center;
 	padding: 1em 0;
 }
+
+/* ── Session History ── */
+.ft-sesh-filter-bar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	margin-bottom: 12px;
+	padding: 8px 12px;
+	background: var(--background-primary-alt);
+	border-radius: var(--radius-s);
+}
+.ft-sesh-filter-label {
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+}
+.ft-sesh-filter {
+	font-size: var(--font-ui-small);
+	padding: 2px 6px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-primary);
+	color: var(--text-normal);
+}
+.ft-sesh-results {
+	max-height: 400px;
+	overflow-y: auto;
+}
+.ft-sesh-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: var(--font-ui-small);
+}
+.ft-sesh-table th {
+	text-align: left;
+	padding: 4px 8px;
+	border-bottom: 2px solid var(--background-modifier-border);
+	font-weight: var(--font-semibold);
+	color: var(--text-muted);
+	position: sticky;
+	top: 0;
+	background: var(--background-primary);
+}
+.ft-sesh-table td {
+	padding: 4px 8px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	vertical-align: middle;
+}
+.ft-sesh-table tr:hover td {
+	background: var(--background-primary-alt);
+}
+.ft-sesh-type-icon {
+	font-size: 14px;
+}
+.ft-sesh-date,
+.ft-sesh-time,
+.ft-sesh-dur {
+	white-space: nowrap;
+	color: var(--text-muted);
+}
+.ft-sesh-badge {
+	display: inline-block;
+	padding: 1px 6px;
+	border-radius: var(--radius-s);
+	font-size: var(--font-ui-smaller);
+	background: var(--background-modifier-hover);
+	border-left: 3px solid var(--interactive-accent);
+}
+.ft-sesh-badge-unknown {
+	color: var(--text-error);
+	font-size: var(--font-ui-smaller);
+}
+.ft-sesh-faint {
+	color: var(--text-faint);
+}
+.ft-sesh-task {
+	max-width: 300px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.ft-sesh-empty {
+	color: var(--text-faint);
+	text-align: center;
+	padding: 2em 0;
+}
+
+/* ── Session Analytics ── */
+.ft-sesh-summary {
+	margin-bottom: 12px;
+}
+.ft-sesh-analytics-section {
+	margin-bottom: 10px;
+	padding: 8px 12px;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+}
+.ft-sesh-analytics-title {
+	font-weight: var(--font-semibold);
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	margin-bottom: 6px;
+}
+.ft-sesh-analytics-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 3px 0;
+	font-size: var(--font-ui-small);
+}
+.ft-sesh-analytics-name {
+	flex: 1;
+}
+.ft-sesh-analytics-value {
+	color: var(--text-muted);
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+.ft-sesh-divider {
+	margin: 8px 0;
+	border: none;
+	border-top: 1px solid var(--background-modifier-border);
+}

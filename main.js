@@ -6,6 +6,7 @@ const { TemplateEngine } = require("./src/template-engine");
 const { QuickEntryModal } = require("./src/quick-entry");
 const { runOnboard } = require("./src/onboard");
 const { StatusTimer } = require("./src/status-timer");
+const { SessionStore } = require("./src/session-store");
 
 class AddTaskSuggest extends EditorSuggest {
 	constructor(app, plugin) {
@@ -59,6 +60,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 
 		this.projectEngine = new ProjectEngine(this.app, this.settings);
 		this.templateEngine = new TemplateEngine(this.app, this);
+		this.sessionStore = new SessionStore(this.app.vault);
 
 		this.registerEvent(this.app.vault.on("modify", (file) => {
 			this.projectEngine.invalidate(file.path);
@@ -99,6 +101,16 @@ module.exports = class FlowtimePlugin extends Plugin {
 			statusBarItem: this.addStatusBarItem(),
 			settings: this.settings,
 			notify: this.notify,
+			onSessionEnd: async (data) => {
+				await this.sessionStore.writeSession({
+					startTime: data.startTime,
+					endTime: data.endTime,
+					durationMinutes: data.durationMinutes,
+					bucket: "",
+					taskText: data.taskText,
+					notes: "",
+				});
+			},
 		});
 
 		this.registerDomEvent(this.statusTimer.statusBarItem, "click", () => {
@@ -117,6 +129,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 			["flowtime-weekly", "weekly"],
 			["flowtime-project", "project"],
 			["flowtime-buckets", "budget"],
+			["flowtime-sessions", "sessions"],
 		]) {
 			this.registerMarkdownCodeBlockProcessor(name, (_src, el, ctx) => {
 				const r = new FlowtimeRenderer(this.app, el, mode, this.projectEngine, ctx.sourcePath);

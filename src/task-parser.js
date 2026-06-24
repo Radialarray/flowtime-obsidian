@@ -40,6 +40,11 @@ function parseTaskLine(line, file, lineIndex) {
 	const bucketMatch = rest.match(/@(?:bucket|b):([^\s]+)/);
 	if (bucketMatch) bucket = bucketMatch[1];
 
+	// v0.4.0: Extract project from @p:<name> syntax
+	let projectTag = null;
+	const pMatch = rest.match(/@p:([^\s]+)/);
+	if (pMatch) projectTag = pMatch[1];
+
 	// Extract duration: @<number>h or @<number>m
 	let durationMinutes = 0;
 	const durMatch = rest.match(/@(\d+(?:\.\d+)?)([hm])/);
@@ -70,6 +75,7 @@ function parseTaskLine(line, file, lineIndex) {
 		status,
 		priority,
 		bucket,
+		projectTag,     // v0.4.0: @p:Name or null
 	};
 }
 
@@ -81,6 +87,7 @@ function cleanTaskText(text) {
 		.replace(/[@⏳📅]\s*\d{4}-\d{2}-\d{2}/gu, "")
 		.replace(/@\d+(?:\.\d+)?[hm]/g, "")  // duration: @1.5h @30m
 		.replace(/@(?:bucket|b):[^\s]+/g, "") // bucket directive
+		.replace(/@p:[^\s]+/g, "")             // v0.4.0: project directive
 		.replace(/🔺|⏫|🔼|🔽|⏬/g, "")
 		.replace(/🔁 every \d* (day|days|week|weeks|month|months)/g, "")
 		.replace(/🔁 [^\s]+( \d+[dwmy])?/g, "")

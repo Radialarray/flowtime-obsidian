@@ -358,7 +358,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			for (const parsed of fileTasks) {
 				if (parsed.status === "x" || parsed.status === "-" || parsed.status === "X") continue;
 
-				const { taskDate, rawText, time, status, priority, cleanText, bucket, durationMinutes } = parsed;
+				const { taskDate, rawText, time, status, priority, cleanText, bucket, durationMinutes, projectTag } = parsed;
 
 				if (this.mode === "today" && taskDate !== today) continue;
 				if (this.mode === "overdue" && (!taskDate || taskDate >= today))
@@ -374,16 +374,24 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 					? await this.projectEngine.resolve(file.path)
 					: null;
 
-				// Fallback: check task text for #project/xxx tag
+				// Fallback: check task text for #project/xxx tag or @p:Name
 				let projName = project?.name || null;
 				let projPath = project?.path || null;
 				let projSource = project?.source || null;
-				if (!projName && this.projectEngine && rawText) {
-					const tagPrefix = this.plugin?.settings?.tagPrefix || "project/";
-					const tagProject = this.projectEngine.resolveFromTag(rawText, tagPrefix);
-					if (tagProject) {
-						projName = tagProject;
+				if (!projName && this.projectEngine) {
+					// Try @p:Name first (v0.4.0 syntax)
+					if (projectTag) {
+						projName = projectTag;
 						projSource = "tag";
+					}
+					// Fallback to #project/xxx tag (legacy)
+					if (!projName && rawText) {
+						const tagPrefix = this.plugin?.settings?.tagPrefix || "project/";
+						const tagProject = this.projectEngine.resolveFromTag(rawText, tagPrefix);
+						if (tagProject) {
+							projName = tagProject;
+							projSource = "tag";
+						}
 					}
 				}
 

@@ -1488,19 +1488,20 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			if (tbody) this.buildRows(tbody);
 		});
 
-		// Project (clickable link)
+		// Project (clickable link — search vault if no projectPath)
 		const projRow = popup.createEl("div", { cls: "ft-detail-row" });
 		projRow.createEl("label", { text: "Project: ", cls: "ft-detail-label" });
-		if (task.projectPath) {
+		if (task.project) {
 			const projLink = projRow.createEl("a", {
 				text: task.project,
 				cls: "ft-detail-link",
 			});
+			const targetPath = task.projectPath || task.project;
 			projLink.addEventListener("click", () =>
-				this.app.workspace.openLinkText(task.projectPath, "", false),
+				this.app.workspace.openLinkText(targetPath, "", false),
 			);
 		} else {
-			projRow.createEl("span", { text: task.project || "—", cls: "ft-detail-value" });
+			projRow.createEl("span", { text: "—", cls: "ft-detail-value" });
 		}
 
 		// Source

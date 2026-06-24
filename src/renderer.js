@@ -877,7 +877,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		this.rowData = [];
 		this._resyncDone = false;
 		document
-			.querySelectorAll(".ft-start-dd,.ft-date-popup")
+			.querySelectorAll(".ft-date-popup,.ft-detail-popup")
 			.forEach((e) => e.remove());
 		// Remove stale outside-click handler
 		if (this._closePopups) {
@@ -946,64 +946,45 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		if (!isCompact) {
 			if (this._columnVisibility.time !== false) {
 				const tc = row.createEl("td");
-				const wr = tc.createEl("div", { cls: "ft-start-wrap" });
-				si = wr.createEl("input", {
+
+				// Container: inputs side by side
+				const timeRow = tc.createEl("div", { cls: "ft-time-row" });
+
+				// Start time combobox (text input + datalist)
+				const startId = "ft-time-list-" + (this.rowData.length || 0) + Math.random().toString(36).slice(2, 6);
+				const startGroup = timeRow.createEl("div", { cls: "ft-time-group" });
+				si = startGroup.createEl("input", {
 					type: "text",
 					value: start || "",
 					placeholder: "09:00",
 					cls: "ft-start-input",
+					attr: { list: startId },
 				});
-				const tb = wr.createEl("button", { text: "▾", cls: "ft-start-toggle" });
-				const dd = document.createElement("div");
-				dd.className = "ft-start-dd";
+				const startList = startGroup.createEl("datalist", { attr: { id: startId } });
 				for (const t of this.startOpts) {
-					const it = dd.createEl("button", { text: t, cls: "ft-dd-item" });
-					if (t === start) it.addClass("ft-dd-sel");
-					it.addEventListener("click", () => {
-						si.value = t;
-						cd();
-						up();
-					});
+					startList.createEl("option", { attr: { value: t } });
 				}
-				const od2 = () => {
-					const r = wr.getBoundingClientRect();
-					["left", "top"].forEach(
-						(p) =>
-							(dd.style[p] =
-								r[p === "left" ? "left" : "bottom"] +
-								(p === "left" ? 0 : 4) +
-								"px"),
-					);
-					dd.style.width = Math.max(r.width, 80) + "px";
-					dd.classList.add("ft-dd-open");
-					document.body.appendChild(dd);
-				};
-				const cd = () => {
-					dd.classList.remove("ft-dd-open");
-					if (dd.parentNode) dd.parentNode.removeChild(dd);
-				};
-				tb.addEventListener("click", (e) => {
-					e.stopPropagation();
-					dd.classList.contains("ft-dd-open") ? cd() : od2();
-				});
-				si.addEventListener("focusout", (e) => {
-					if (!wr.contains(e.relatedTarget)) cd();
-				});
 
-				tc.createEl("span", { text: "  +  ", cls: "ft-plus" });
-				ds = tc.createEl("select", { cls: "ft-time-dur" });
-				ds.createEl("option", { attr: { value: "" }, text: "--" });
+				// Duration combobox (text input + datalist)
+				const durId = "ft-dur-list-" + (this.rowData.length || 0) + Math.random().toString(36).slice(2, 6);
+				const durGroup = timeRow.createEl("div", { cls: "ft-time-group" });
+				ds = durGroup.createEl("input", {
+					type: "text",
+					value: dur ? formatDuration(dur) : "",
+					placeholder: "30m",
+					cls: "ft-dur-input",
+					attr: { list: durId },
+				});
+				const durList = durGroup.createEl("datalist", { attr: { id: durId } });
 				for (const d of DUR_OPTS) {
-					const o = ds.createEl("option", {
-						text: formatDuration(d),
-						attr: { value: d },
-					});
-					if (d === dur) o.selected = true;
+					durList.createEl("option", { attr: { value: formatDuration(d) } });
 				}
-				const ps = tc.createEl("span", { text: "", cls: "ft-preview" });
+
+				// End time preview below
+				const ps = tc.createEl("div", { text: "", cls: "ft-preview" });
 				const up = () => {
 					const s = si.value,
-						d = parseInt(ds.value, 10);
+						d = this._parseDurStr(ds.value);
 					ps.setText(s && d > 0 ? "→ " + this._calcEnd(s, d) : "");
 				};
 				const debounceSave = (() => {
@@ -1014,10 +995,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 					};
 				})();
 				si.addEventListener("input", () => { up(); debounceSave(); });
-				ds.addEventListener("change", async () => {
-					up();
-					await this._autoSaveTime(task, si, ds);
-				});
+				ds.addEventListener("input", () => { up(); debounceSave(); });
 				up();
 			}
 		}
@@ -1422,11 +1400,25 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 	}
 
 	/**
+	 * Parse a duration string like "30m", "1.5h", "1h 30m" to minutes.
+	 */
+	_parseDurStr(str) {
+		if (!str) return 0;
+		if (/^\d+$/.test(str)) return parseInt(str, 10); // plain minutes
+		let total = 0;
+		const hMatch = str.match(/([\d.]+)\s*h/);
+		if (hMatch) total += parseFloat(hMatch[1]) * 60;
+		const mMatch = str.match(/(\d+)\s*m/);
+		if (mMatch) total += parseInt(mMatch[1], 10);
+		return Math.round(total);
+	}
+
+	/**
 	 * Auto-save time block when start time or duration changes.
 	 */
 	async _autoSaveTime(task, si, ds) {
 		const s = si?.value;
-		const d = ds ? parseInt(ds.value, 10) : 0;
+		const d = ds ? this._parseDurStr(ds.value) : 0;
 		if (!s || !d || d <= 0) return;
 		const nt = `${s}—${this._calcEnd(s, d)}`;
 		if (nt === task.time) return;

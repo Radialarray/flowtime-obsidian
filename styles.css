@@ -668,53 +668,32 @@
 /* --- Checkbox column --- */
 .ft-check-cell {
 	text-align: center;
-	width: 34px;
+	width: 36px;
+	padding: 2px 4px !important;
 }
 
 .ft-checkbox {
 	cursor: pointer;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 22px;
-	height: 22px;
-	font-size: 15px;
-	line-height: 1;
-	color: var(--text-muted);
-	opacity: 0.6;
-	border-radius: 3px;
-	transition: opacity 120ms ease, color 120ms ease;
-	user-select: none;
+	display: block;
+	margin: 0 auto;
+	accent-color: var(--interactive-accent);
 }
 
-.ft-checkbox:hover {
-	opacity: 1;
-	color: var(--interactive-accent);
-	background: var(--background-modifier-hover);
-}
-
-.ft-task-cell {
-	/* let table td vertical-align handle alignment, no flex */
-}
-
-/* --- Completed task --- */
 .ft-task-done td:not(.ft-check-cell) {
-	opacity: 0.45;
+	opacity: 0.4;
 }
 
 .ft-task-done:hover td:not(.ft-check-cell) {
-	opacity: 0.75;
+	opacity: 0.65;
 }
 
 .ft-task-done .ft-checkbox {
-	opacity: 1;
-	color: var(--interactive-success);
+	accent-color: var(--interactive-success);
 }
 
 .ft-task-done-text {
 	text-decoration: line-through;
-	text-decoration-color: var(--text-muted);
-	text-decoration-thickness: 1px;
+	color: var(--text-faint);
 }
 
 /* --- Priority --- */

@@ -1408,9 +1408,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 	/* Build checkbox cell as dedicated column */
 	_buildCheckCell(row, task) {
 		const cc = row.createEl("td", { cls: "ft-check-cell" });
-		const chk = cc.createEl("span", {
-			text: task.status === "x" || task.status === "X" ? "☑" : "☐",
+		const chk = cc.createEl("input", {
+			type: "checkbox",
 			cls: "ft-checkbox",
+			attr: { checked: task.status === "x" || task.status === "X" ? true : null },
 		});
 		chk.addEventListener("click", async (e) => {
 			e.stopPropagation();

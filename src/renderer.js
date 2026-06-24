@@ -358,8 +358,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
 				this.tasks.push({
 					file,
-					line: i,
-					rawLine: lines[i],
+					line: parsed.line,
+					rawLine: parsed.rawLine,
 					time,
 					taskDate,
 					rawText,

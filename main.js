@@ -136,12 +136,13 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 		const today = new Date().toISOString().split("T")[0];
 		// End of current week (Sunday)
 		const eow = new Date();
-		eow.setDate(eow.getDate() + (7 - eow.getDay()) % 7);
+		eow.setDate(eow.getDate() + ((7 - eow.getDay()) % 7));
 		const eowStr = eow.toISOString().split("T")[0];
 
 		this.tasks = [];
 		for (const file of this.app.vault.getMarkdownFiles()) {
-			if (file.path.startsWith(".obsidian") || file.path.startsWith(".git")) continue;
+			if (file.path.startsWith(".obsidian") || file.path.startsWith(".git"))
+				continue;
 			const lines = (await this.app.vault.read(file)).split("\n");
 			for (let i = 0; i < lines.length; i++) {
 				const m = lines[i].match(/^(\s*[-*+]\s*\[([^\]]*)\]\s*)(.*)$/);
@@ -155,16 +156,31 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 				const dueDate = (dueMatch || [])[1] || "";
 
 				if (this.mode === "today" && taskDate !== today) continue;
-				if (this.mode === "overdue" && (!taskDate || taskDate >= today)) continue;
-				if (this.mode === "dueweek" && (!dueDate || dueDate < today || dueDate > eowStr)) continue;
+				if (this.mode === "overdue" && (!taskDate || taskDate >= today))
+					continue;
+				if (
+					this.mode === "dueweek" &&
+					(!dueDate || dueDate < today || dueDate > eowStr)
+				)
+					continue;
 
-				let time = "", rest = m[3];
-				const tm = rest.match(/^(\d{1,2}:\d{2}(?:\s*[—\-–]\s*\d{1,2}:\d{2})?)\s*/);
-				if (tm) { time = tm[1]; rest = rest.slice(tm[0].length); }
+				let time = "",
+					rest = m[3];
+				const tm = rest.match(
+					/^(\d{1,2}:\d{2}(?:\s*[—\-–]\s*\d{1,2}:\d{2})?)\s*/,
+				);
+				if (tm) {
+					time = tm[1];
+					rest = rest.slice(tm[0].length);
+				}
 
 				this.tasks.push({
-					file, line: i, rawLine: lines[i], time,
-					taskDate, dueDate,
+					file,
+					line: i,
+					rawLine: lines[i],
+					time,
+					taskDate,
+					dueDate,
 					rawText: rest.trim(),
 					cleanText: this._clean(rest),
 					status,
@@ -179,12 +195,20 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 		this.containerEl.empty();
 		this.rowData = [];
 		if (this.tasks.length === 0) {
-			const msgs = { overdue: "🎉 No overdue tasks!", dueweek: "🎉 No tasks due this week!", today: "📭 No tasks scheduled for today. Add ⏳ today to any task." };
-			this.containerEl.createEl("p", { text: msgs[this.mode] || msgs.today, cls: "task-planner-empty" });
+			const msgs = {
+				overdue: "🎉 No overdue tasks!",
+				dueweek: "🎉 No tasks due this week!",
+				today: "📭 No tasks scheduled for today. Add ⏳ today to any task.",
+			};
+			this.containerEl.createEl("p", {
+				text: msgs[this.mode] || msgs.today,
+				cls: "task-planner-empty",
+			});
 			return;
 		}
 		this.startOpts = this._timeOpts(START_H, START_END);
-		const od = this.mode === "overdue", dw = this.mode === "dueweek";
+		const od = this.mode === "overdue",
+			dw = this.mode === "dueweek";
 		const toolbar = this.containerEl.createEl("div", { cls: "tp-toolbar" });
 
 		const tdy = new Date().toISOString().split("T")[0];
@@ -192,17 +216,20 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 		if (od || dw) {
 			const mkBtn = (text, cls, fn) => {
 				const b = toolbar.createEl("button", { text, cls });
-				b.addEventListener("click", fn); return b;
+				b.addEventListener("click", fn);
+				return b;
 			};
 			mkBtn("📅 Assign All to Today", "tp-bulk-btn", async () => {
 				for (const t of this.tasks) await this.updateDate(t, tdy);
-				this.tasks = []; this.renderTable();
+				this.tasks = [];
+				this.renderTable();
 				new Notice("✅ All assigned to today");
 			});
 			if (od) {
 				mkBtn("🗑 Backlog All", "tp-bulk-btn tp-bulk-remove", async () => {
 					for (const t of this.tasks) await this.updateDate(t, "");
-					this.tasks = []; this.renderTable();
+					this.tasks = [];
+					this.renderTable();
 					new Notice("🗑 All sent to backlog");
 				});
 			}
@@ -268,7 +295,8 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 			.querySelectorAll(".tp-start-dd,.tp-date-popup")
 			.forEach((e) => e.remove());
 		const tdy = new Date().toISOString().split("T")[0];
-		const od = this.mode === "overdue", _dw = this.mode === "dueweek";
+		const od = this.mode === "overdue",
+			_dw = this.mode === "dueweek";
 
 		for (const task of this.tasks) {
 			const { start, dur } = this._parseStored(task.time);
@@ -358,8 +386,10 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 			const dc = row.createEl("td", { cls: "tp-date-cell" });
 			const dw = dc.createEl("div", { cls: "tp-date-wrap" });
 			const ds2 = dw.createEl("span", {
-				text: dw ? task.dueDate || "+" : task.taskDate || "+",
-				cls: "tp-date-badge" + ((dw ? task.dueDate : task.taskDate) ? "" : " tp-date-none"),
+				text: _dw ? task.dueDate || "+" : task.taskDate || "+",
+				cls:
+					"tp-date-badge" +
+					((_dw ? task.dueDate : task.taskDate) ? "" : " tp-date-none"),
 			});
 			const dp = document.createElement("div");
 			dp.className = "tp-date-popup";
@@ -375,7 +405,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 				bBkl = mkDpBtn("✕ Backlog", "tp-dp-btn tp-dp-remove");
 			const fmt = (d) => d.toISOString().split("T")[0];
 			const op = () => {
-				const r = dateWrap.getBoundingClientRect();
+				const r = dw.getBoundingClientRect();
 				dp.style.left = r.left + "px";
 				dp.style.top = r.bottom + 4 + "px";
 				dp.classList.add("tp-dp-open");
@@ -418,25 +448,37 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 			if (od || _dw) {
 				const ac = row.createEl("td", { cls: "tp-actions-cell" });
 				const aw = ac.createEl("div", { cls: "tp-actions-wrap" });
-				const abTdy = aw.createEl("button", { text: "📅 Today", cls: "tp-act-btn" });
+				const abTdy = aw.createEl("button", {
+					text: "📅 Today",
+					cls: "tp-act-btn",
+				});
 				abTdy.addEventListener("click", async () => {
 					await this.updateDate(task, tdy);
-					row.remove(); this.tasks = this.tasks.filter((t) => t !== task);
+					row.remove();
+					this.tasks = this.tasks.filter((t) => t !== task);
 					if (!this.tasks.length) this.renderTable();
 				});
 				if (od) {
-					const abBkl = aw.createEl("button", { text: "🗑 Backlog", cls: "tp-act-btn tp-act-remove" });
+					const abBkl = aw.createEl("button", {
+						text: "🗑 Backlog",
+						cls: "tp-act-btn tp-act-remove",
+					});
 					abBkl.addEventListener("click", async () => {
 						await this.updateDate(task, "");
-						row.remove(); this.tasks = this.tasks.filter((t) => t !== task);
+						row.remove();
+						this.tasks = this.tasks.filter((t) => t !== task);
 						if (!this.tasks.length) this.renderTable();
 					});
 				} else {
-					const abDue = aw.createEl("button", { text: "📅 On Due", cls: "tp-act-btn" });
+					const abDue = aw.createEl("button", {
+						text: "📅 On Due",
+						cls: "tp-act-btn",
+					});
 					abDue.addEventListener("click", async () => {
 						if (!task.dueDate) return;
 						await this.updateDate(task, task.dueDate);
-						row.remove(); this.tasks = this.tasks.filter((t) => t !== task);
+						row.remove();
+						this.tasks = this.tasks.filter((t) => t !== task);
 						if (!this.tasks.length) this.renderTable();
 					});
 				}

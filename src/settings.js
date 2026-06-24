@@ -212,53 +212,92 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 		// ── Templates ──
 		containerEl.createEl("h2", { text: "Templates" });
 
+		let dailyTaEl;
 		new Setting(containerEl)
 			.setName("Daily template")
 			.setDesc("Template used for the daily note dashboard")
-			.addTextArea((text) =>
+			.addTextArea((text) => {
+				dailyTaEl = text.inputEl;
 				text
 					.setPlaceholder("Enter daily template…")
 					.setValue(this.plugin.settings.dailyTemplate)
 					.onChange(async (value) => {
 						this.plugin.settings.dailyTemplate = value;
 						await this.plugin.saveData(this.plugin.settings);
-					}),
-			)
+					});
+			})
 			.then((setting) => {
 				setting.controlEl.querySelector("textarea").rows = 8;
-			});
+			})
+			.addExtraButton((btn) =>
+				btn
+					.setIcon("reset")
+					.setTooltip("Restore default")
+					.onClick(async () => {
+						this.plugin.settings.dailyTemplate =
+							DEFAULT_SETTINGS.dailyTemplate;
+						await this.plugin.saveData(this.plugin.settings);
+						dailyTaEl.value = DEFAULT_SETTINGS.dailyTemplate;
+					}),
+			);
 
+		let weeklyTaEl;
 		new Setting(containerEl)
 			.setName("Weekly template")
 			.setDesc("Template used for the weekly review note")
-			.addTextArea((text) =>
+			.addTextArea((text) => {
+				weeklyTaEl = text.inputEl;
 				text
 					.setPlaceholder("Enter weekly template…")
 					.setValue(this.plugin.settings.weeklyTemplate)
 					.onChange(async (value) => {
 						this.plugin.settings.weeklyTemplate = value;
 						await this.plugin.saveData(this.plugin.settings);
-					}),
-			)
+					});
+			})
 			.then((setting) => {
 				setting.controlEl.querySelector("textarea").rows = 6;
-			});
+			})
+			.addExtraButton((btn) =>
+				btn
+					.setIcon("reset")
+					.setTooltip("Restore default")
+					.onClick(async () => {
+						this.plugin.settings.weeklyTemplate =
+							DEFAULT_SETTINGS.weeklyTemplate;
+						await this.plugin.saveData(this.plugin.settings);
+						weeklyTaEl.value = DEFAULT_SETTINGS.weeklyTemplate;
+					}),
+			);
 
+		let projTaEl;
 		new Setting(containerEl)
 			.setName("Project template")
 			.setDesc("Template used when creating a new project folder note")
-			.addTextArea((text) =>
+			.addTextArea((text) => {
+				projTaEl = text.inputEl;
 				text
 					.setPlaceholder("Enter project template…")
 					.setValue(this.plugin.settings.projectTemplate)
 					.onChange(async (value) => {
 						this.plugin.settings.projectTemplate = value;
 						await this.plugin.saveData(this.plugin.settings);
-					}),
-			)
+					});
+			})
 			.then((setting) => {
 				setting.controlEl.querySelector("textarea").rows = 8;
-			});
+			})
+			.addExtraButton((btn) =>
+				btn
+					.setIcon("reset")
+					.setTooltip("Restore default")
+					.onClick(async () => {
+						this.plugin.settings.projectTemplate =
+							DEFAULT_SETTINGS.projectTemplate;
+						await this.plugin.saveData(this.plugin.settings);
+						projTaEl.value = DEFAULT_SETTINGS.projectTemplate;
+					}),
+			);
 	}
 }
 

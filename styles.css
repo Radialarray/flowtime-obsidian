@@ -743,3 +743,33 @@
 	color: var(--text-normal);
 	background: var(--background-modifier-hover);
 }
+
+/* ── Empty State CTAs ── */
+.ft-empty-state {
+	padding: 2em 1em;
+	text-align: center;
+}
+.ft-empty-text {
+	color: var(--text-muted);
+	font-size: var(--font-ui-medium);
+	margin-bottom: 1em;
+}
+.ft-empty-actions {
+	display: flex;
+	gap: 8px;
+	justify-content: center;
+	flex-wrap: wrap;
+}
+.ft-empty-btn {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border: none;
+	padding: 6px 14px;
+	border-radius: var(--radius-s);
+	cursor: pointer;
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-medium);
+}
+.ft-empty-btn:hover {
+	background: var(--interactive-accent-hover);
+}

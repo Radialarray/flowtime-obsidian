@@ -1,4 +1,5 @@
 const { MarkdownRenderChild, Notice } = require("obsidian");
+const { parseTaskLine, cleanTaskText, parseRecurrence, formatDuration, formatTimer } = require("./task-parser");
 
 const DUR_OPTS = [10, 15, 20, 25, 30, 45, 60, 90, 120, 150, 180, 210, 240];
 const START_H = 7;
@@ -57,37 +58,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		};
 	}
 
-	_fmtDur(m) {
-		return !m
-			? "--"
-			: m < 60
-				? m + "m"
-				: ((m / 60) % 1 === 0 ? m / 60 : (m / 60).toFixed(1)) + "h";
-	}
 	_calcEnd(s, d) {
 		if (!s || !d) return "";
 		const t = s.split(":").reduce((a, n) => +n + 60 * a, 0) + d;
 		return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(Math.round(t % 60)).padStart(2, "0")}`;
-	}
-	_fmtT(sec) {
-		if (sec <= 0) return "00:00";
-		const h = Math.floor(sec / 3600),
-			m = Math.floor((sec % 3600) / 60),
-			s = sec % 60;
-		return h > 0
-			? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
-			: `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-	}
-
-	_clean(t) {
-		return t
-			.replace(/[@⏳📅]\s*\d{4}-\d{2}-\d{2}/gu, "")
-			.replace(/🔺|⏫|🔼|🔽|⏬/g, "")
-			.replace(/🔁 every \d* (day|days|week|weeks|month|months)/g, "")
-			.replace(/🔁 [^\s]+( \d+[dwmy])?/g, "")
-			.replace(/#\S+/g, "")
-			.replace(/\s+/g, " ")
-			.trim();
 	}
 
 	_getMonday(d) {
@@ -102,14 +76,6 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		monday.setDate(monday.getDate() + 6);
 		return monday.toISOString().split("T")[0];
 	}
-	_parseRecurrence(text) {
-		const match = text.match(/🔁\s*every\s+(\d*)\s*(day|days|week|weeks|month|months)/);
-		if (!match) return null;
-		const n = parseInt(match[1] || "1", 10);
-		const unit = match[2].replace(/s$/, "");
-		return { interval: n, unit };
-	}
-
 	_beep() {
 		if (this.plugin?.settings?.timerSound === false) return;
 		try {
@@ -174,13 +140,11 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				continue;
 			const lines = (await this.app.vault.read(file)).split("\n");
 			for (let i = 0; i < lines.length; i++) {
-				const m = lines[i].match(/^(\s*[-*+]\s*\[([^\]]*)\]\s*)(.*)$/);
-				if (!m) continue;
-				const status = m[2].trim();
-				if (status === "x" || status === "-" || status === "X") continue;
+				const parsed = parseTaskLine(lines[i], file, i);
+				if (!parsed) continue;
+				if (parsed.status === "x" || parsed.status === "-" || parsed.status === "X") continue;
 
-				const dateMatch = m[3].match(/[@⏳📅]\s*(\d{4}-\d{2}-\d{2})/);
-				const taskDate = (dateMatch || [])[1] || "";
+				const { taskDate, rawText, time, status, priority, cleanText } = parsed;
 
 				if (this.mode === "today" && taskDate !== today) continue;
 				if (this.mode === "overdue" && (!taskDate || taskDate >= today))
@@ -192,21 +156,6 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 					if (!taskDate || taskDate < mon || taskDate > sun) continue;
 				}
 
-				let time = "",
-					rest = m[3];
-				const tm = rest.match(
-					/^(\d{1,2}:\d{2}(?:\s*[—\-–]\s*\d{1,2}:\d{2})?)\s*/,
-				);
-				if (tm) {
-					time = tm[1];
-					rest = rest.slice(tm[0].length);
-				}
-
-				// Extract priority before cleaning
-				let priority = null;
-				const prioMatch = rest.match(/[🔺⏫🔼🔽⏬]/);
-				if (prioMatch) priority = prioMatch[0];
-
 				const project = this.projectEngine
 					? await this.projectEngine.resolve(file.path)
 					: null;
@@ -215,9 +164,9 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				let projName = project?.name || null;
 				let projPath = project?.path || null;
 				let projSource = project?.source || null;
-				if (!projName && this.projectEngine && rest) {
+				if (!projName && this.projectEngine && rawText) {
 					const tagPrefix = this.plugin?.settings?.tagPrefix || "project/";
-					const tagProject = this.projectEngine.resolveFromTag(rest, tagPrefix);
+					const tagProject = this.projectEngine.resolveFromTag(rawText, tagPrefix);
 					if (tagProject) {
 						projName = tagProject;
 						projSource = "tag";
@@ -235,8 +184,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 					rawLine: lines[i],
 					time,
 					taskDate,
-					rawText: rest.trim(),
-					cleanText: this._clean(rest),
+					rawText,
+					cleanText,
 					status,
 					priority,
 					project: projName,
@@ -270,11 +219,19 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				dueweek: "🎉 No tasks due this week!",
 				weekly: "🎉 No tasks scheduled this week!",
 				project: "📭 No tasks for this project.",
-				today: "📭 No tasks scheduled for today. Add @today to any task.",
+				today: "📭 No tasks scheduled for today.",
 			};
-			this.containerEl.createEl("p", {
+			const emptyEl = this.containerEl.createEl("div", { cls: "ft-empty-state" });
+			emptyEl.createEl("p", {
 				text: msgs[this.mode] || msgs.today,
-				cls: "flowtime-empty",
+				cls: "flowtime-empty ft-empty-text",
+			});
+
+			const btnRow = emptyEl.createEl("div", { cls: "ft-empty-actions" });
+			const addBtn = btnRow.createEl("button", { text: "➕ Add a task", cls: "ft-empty-btn" });
+			addBtn.addEventListener("click", () => {
+				const { QuickEntryModal } = require("./quick-entry");
+				new QuickEntryModal(this.app, this.plugin).open();
 			});
 			return;
 		}
@@ -483,7 +440,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			ds.createEl("option", { attr: { value: "" }, text: "--" });
 			for (const d of DUR_OPTS) {
 				const o = ds.createEl("option", {
-					text: this._fmtDur(d),
+					text: formatDuration(d),
 					attr: { value: d },
 				});
 				if (d === dur) o.selected = true;
@@ -654,12 +611,12 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			const tr2 = tmr.createEl("div", { cls: "ft-timer-row" });
 			const pb = tr2.createEl("button", { text: "▶", cls: "ft-timer-play" });
 			const disp = tr2.createEl("span", {
-				text: this._fmtT(ts.remaining),
+				text: formatTimer(ts.remaining),
 				cls: "ft-timer-display",
 			});
 			const rb = tr2.createEl("button", { text: "↺", cls: "ft-timer-reset" });
 			const ud = () => {
-				disp.setText(this._fmtT(ts.remaining));
+				disp.setText(formatTimer(ts.remaining));
 				disp.toggleClass("ft-timer-expired", ts.remaining <= 0);
 			};
 			const stp = () => {
@@ -669,8 +626,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				}
 				ts.running = false;
 				pb.setText("▶");
-				if (this.plugin?.stopStatusTimer) {
-					this.plugin.stopStatusTimer();
+				if (this.plugin?.statusTimer?.stop) {
+					this.plugin.statusTimer.stop();
 				}
 			};
 			const sta = () => {
@@ -689,15 +646,15 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 						if (this.plugin?.settings?.timerSound !== false) {
 							this._beep();
 						}
-						if (this.plugin?.stopStatusTimer) {
-							this.plugin.stopStatusTimer();
+						if (this.plugin?.statusTimer?.stop) {
+							this.plugin.statusTimer.stop();
 						}
 					}
 				}, 1000);
 				// Sync with status bar
-				if (this.plugin?.startStatusTimer) {
+				if (this.plugin?.statusTimer?.start) {
 					const dm = parseInt(ds.value, 10);
-					this.plugin.startStatusTimer(task.cleanText, dm * 60);
+					this.plugin.statusTimer.start(task.cleanText, dm * 60);
 				}
 			};
 			pb.addEventListener("click", () => {
@@ -827,7 +784,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
 	/* ─── recurrence ─── */
 	async _handleRecurrence(task, completedLine) {
-		const rec = this._parseRecurrence(completedLine);
+		const rec = parseRecurrence(completedLine);
 		if (!rec) return;
 
 		let baseDate = task.taskDate

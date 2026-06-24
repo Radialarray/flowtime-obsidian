@@ -1,10 +1,50 @@
-const { Plugin, Notice, Modal } = require("obsidian");
+const { Plugin, Notice, Modal, EditorSuggest } = require("obsidian");
 const { FlowtimeRenderer } = require("./src/renderer");
 const { FlowtimeSettingsTab, DEFAULT_SETTINGS } = require("./src/settings");
 const { ProjectEngine } = require("./src/project-engine");
 const { TemplateEngine } = require("./src/template-engine");
 const { QuickEntryModal } = require("./src/quick-entry");
 const { runOnboard } = require("./src/onboard");
+const { StatusTimer } = require("./src/status-timer");
+
+class AddTaskSuggest extends EditorSuggest {
+	constructor(app, plugin) {
+		super(app);
+		this.plugin = plugin;
+	}
+
+	onTrigger(cursor, editor, file) {
+		const line = editor.getLine(cursor.line);
+		const before = line.slice(0, cursor.ch);
+		const match = before.match(/\/add-task\s*$/);
+		if (match) {
+			return {
+				start: { line: cursor.line, ch: cursor.ch - match[0].length },
+				end: cursor,
+				query: "",
+			};
+		}
+		return null;
+	}
+
+	getSuggestions(context) {
+		return [{ label: "Add a task", description: "Open the quick entry modal" }];
+	}
+
+	renderSuggestion(suggestion, el) {
+		el.createEl("div", { text: suggestion.label });
+		el.createEl("small", { text: suggestion.description });
+	}
+
+	selectSuggestion(suggestion, event) {
+		if (this.context) {
+			const editor = this.context.editor;
+			const { start, end } = this.context;
+			editor.replaceRange("", start, end);
+		}
+		new QuickEntryModal(this.app, this.plugin).open();
+	}
+}
 
 module.exports = class FlowtimePlugin extends Plugin {
 	async onload() {
@@ -26,6 +66,9 @@ module.exports = class FlowtimePlugin extends Plugin {
 		this.registerEvent(this.app.vault.on("delete", (file) => {
 			this.projectEngine.invalidate(file.path);
 		}));
+
+		// Register /add-task slash command suggester
+		this.registerEditorSuggest(new AddTaskSuggest(this.app, this));
 
 		// Quick entry command
 		this.addCommand({
@@ -52,100 +95,18 @@ module.exports = class FlowtimePlugin extends Plugin {
 		});
 
 		// ── Status bar timer ──
-		this.currentTimer = null;
-		this.statusBarItem = this.addStatusBarItem();
-		this.statusBarItem.addClass("flowtime-status-timer");
-
-		this.startStatusTimer = (taskName, totalSeconds) => {
-			this.stopStatusTimer();
-
-			this.currentTimer = {
-				taskName,
-				remaining: totalSeconds,
-				total: totalSeconds,
-				interval: null,
-			};
-
-			this.currentTimer.interval = setInterval(() => {
-				this.currentTimer.remaining--;
-				this.updateStatusBar();
-
-				if (this.currentTimer.remaining <= 0) {
-					this.stopStatusTimer();
-					this.notify("⏰ Time's up! " + taskName);
-				}
-			}, 1000);
-
-			this.updateStatusBar();
-		};
-
-		this.stopStatusTimer = () => {
-			if (this.currentTimer?.interval) {
-				clearInterval(this.currentTimer.interval);
-			}
-			this.currentTimer = null;
-			this.updateStatusBar();
-		};
-
-		this.toggleStatusTimer = () => {
-			if (!this.currentTimer) return;
-
-			if (this.currentTimer.interval) {
-				clearInterval(this.currentTimer.interval);
-				this.currentTimer.interval = null;
-			} else if (this.currentTimer.remaining > 0) {
-				this.currentTimer.interval = setInterval(() => {
-					this.currentTimer.remaining--;
-					this.updateStatusBar();
-
-					if (this.currentTimer.remaining <= 0) {
-						this.stopStatusTimer();
-						this.notify("⏰ Time's up! " + this.currentTimer.taskName);
-					}
-				}, 1000);
-			}
-
-			this.updateStatusBar();
-		};
-
-		this.updateStatusBar = () => {
-			if (!this.settings.statusBarTimer) {
-				this.statusBarItem.setText("");
-				return;
-			}
-
-			if (!this.currentTimer) {
-				this.statusBarItem.setText("⏱ --");
-				return;
-			}
-
-			const fmt = (sec) => {
-				if (sec <= 0) return "00:00";
-				const h = Math.floor(sec / 3600);
-				const m = Math.floor((sec % 3600) / 60);
-				const s = sec % 60;
-				if (h > 0)
-					return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-				return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-			};
-
-			const icon = this.currentTimer.interval ? "⏸" : "▶";
-			const name =
-				this.currentTimer.taskName.length > 30
-					? this.currentTimer.taskName.slice(0, 27) + "…"
-					: this.currentTimer.taskName;
-
-			this.statusBarItem.setText(`⏱ ${fmt(this.currentTimer.remaining)} — ${name}  ${icon}`);
-		};
-
-		this.updateStatusBar();
-
-		this.registerDomEvent(this.statusBarItem, "click", () => {
-			this.toggleStatusTimer();
+		this.statusTimer = new StatusTimer({
+			statusBarItem: this.addStatusBarItem(),
+			settings: this.settings,
+			notify: this.notify,
 		});
-		this.registerDomEvent(this.statusBarItem, "contextmenu", (e) => {
+
+		this.registerDomEvent(this.statusTimer.statusBarItem, "click", () => {
+			this.statusTimer.toggle();
+		});
+		this.registerDomEvent(this.statusTimer.statusBarItem, "contextmenu", (e) => {
 			e.preventDefault();
-			this.stopStatusTimer();
+			this.statusTimer.stop();
 		});
 
 		this.renderers = [];

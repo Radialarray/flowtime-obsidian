@@ -50,6 +50,11 @@ class QuickEntryModal extends Modal {
 			let line = "- [ ] " + (task || "task description");
 			if (project) line += " #" + this.plugin.settings.tagPrefix + project;
 			if (date) line += " @" + date;
+			const dur = parseInt(durSelect.value, 10);
+			if (dur && dur > 0) {
+				const durStr = dur < 60 ? dur + "m" : dur / 60 + "h";
+				line += " @" + durStr;
+			}
 			previewCode.setText(line);
 		};
 
@@ -184,12 +189,16 @@ class QuickEntryModal extends Modal {
 
 			const date = parseDate(dateInput.value);
 			const project = projInput.value.trim();
-			// Duration not added to line for now — user timeboxes in table
 
 			// Build task line
 			let line = "- [ ] " + task;
 			if (project) line += " #" + this.plugin.settings.tagPrefix + project;
 			if (date) line += " @" + date;
+			const dur = parseInt(durSelect.value, 10);
+			if (dur && dur > 0) {
+				const durStr = dur < 60 ? dur + "m" : dur / 60 + "h";
+				line += " @" + durStr;
+			}
 
 			// Determine target file
 			let targetFile = activeFile;

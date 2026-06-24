@@ -1317,7 +1317,6 @@ body.ft-wide .markdown-reading-view .markdown-preview-sizer {
 	margin-left: 4px;
 }
 
-<<<<<<< HEAD
 /* ═══════════════════════════════════════
    Weekplan — List View (v0.5.0)
    ═══════════════════════════════════════ */
@@ -1729,6 +1728,50 @@ body.ft-wide .markdown-reading-view .markdown-preview-sizer {
 .ft-tg-card:hover .ft-tg-time-label {
 	display: block;
 }
+/* ── Resize handle (v0.5.0) ── */
+
+.ft-tg-resize-handle {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	height: 6px;
+	cursor: ns-resize;
+	background: transparent;
+	z-index: 5;
+}
+
+.ft-tg-resize-handle:hover,
+.ft-tg-resize-handle:active {
+	background: rgba(255, 255, 255, 0.3);
+}
+
+.ft-tg-card:hover .ft-tg-resize-handle {
+	background: rgba(255, 255, 255, 0.15);
+}
+
+/* ── Resize drag indicator line (v0.5.0) ── */
+
+.ft-tg-resize-indicator {
+	position: absolute;
+	left: 60px;
+	right: 0;
+	height: 2px;
+	background: var(--interactive-accent);
+	z-index: 20;
+	pointer-events: none;
+	font-size: 10px;
+	color: var(--interactive-accent);
+	display: flex;
+	align-items: center;
+	padding-left: 8px;
+	line-height: 1;
+}
+
+.ft-tg-card {
+	position: relative;
+}
+
 
 /* Untimed task card */
 
@@ -1821,7 +1864,6 @@ body.ft-wide .markdown-reading-view .markdown-preview-sizer {
 	color: var(--text-on-accent);
 	border-color: transparent;
 	margin-left: auto;
-=======
 /* ── Inbox Processing Modal ── */
 .flowtime-inbox-progress {
 	font-size: var(--font-ui-smaller);
@@ -1877,5 +1919,4 @@ body.ft-wide .markdown-reading-view .markdown-preview-sizer {
 .flowtime-inbox-fields .flowtime-row .flowtime-input {
 	flex: 1;
 	margin-bottom: 0;
->>>>>>> main
 }

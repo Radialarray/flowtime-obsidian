@@ -110,21 +110,6 @@ class AtCompletionsSuggest extends EditorSuggest {
 					desc: "Tomorrow task skeleton",
 				},
 				{ label: "@tk", insert: "- [ ]  ", desc: "Task skeleton (no date)" },
-<<<<<<< HEAD
-				{ label: "@now", insert: "- [ ]  @today @15m ", desc: "Quick 15m task now" },
-				{ label: "@1h", insert: "- [ ]  @today @1h ", desc: "Quick 1h task today" },
-				{ label: "@rec", insert: "- [ ]  🔁 every day @today ", desc: "Recurring daily task" },
-				{ label: "@rep", insert: "- [ ]  🔁 every week @monday ", desc: "Recurring weekly task" },
-				{ label: "@today", insert: "```flowtime-today\n```", desc: "Today tasks code block" },
-				{ label: "@overdue", insert: "```flowtime-overdue\n```", desc: "Overdue tasks code block" },
-				{ label: "@soon", insert: "```flowtime-soon\n```", desc: "Up next tasks code block" },
-				{ label: "@weekly", insert: "```flowtime-weekly\n```", desc: "Weekly view code block" },
-				{ label: "@budget", insert: "```flowtime-buckets\n```", desc: "Budget overview code block" },
-				{ label: "@sessions", insert: "```flowtime-sessions\n```", desc: "Session history code block" },
-				{ label: "@proj", insert: "```flowtime-project\n```", desc: "Project tasks code block" },
-				{ label: "@dueweek", insert: "```flowtime-dueweek\n```", desc: "Due this week code block" },
-				{ label: "@weekplan", insert: "```flowtime-weekplan\n```", desc: "Week plan code block" },
-=======
 				{
 					label: "@now",
 					insert: "- [ ]  @today @15m ",
@@ -185,7 +170,11 @@ class AtCompletionsSuggest extends EditorSuggest {
 					insert: "```flowtime-dueweek\n```",
 					desc: "Due this week code block",
 				},
->>>>>>> main
+				{
+					label: "@weekplan",
+					insert: "```flowtime-weekplan\n```",
+					desc: "Week plan code block",
+				},
 			];
 			const matched = macros
 				.filter((m) => m.label.slice(1).includes(q))
@@ -491,7 +480,6 @@ module.exports = class FlowtimePlugin extends Plugin {
 		// v0.4.0: Check daily notes folder exists
 		await this._checkDailyNotesFolder();
 
-<<<<<<< HEAD
 		// v0.5.0: Ensure routines folder exists
 		await this.routineEngine.ensureRoutinesFolder();
 
@@ -503,10 +491,6 @@ module.exports = class FlowtimePlugin extends Plugin {
 				}
 			}).catch(e => console.warn("Flowtime: Routine generation error:", e.message));
 		}
-=======
-		// Ensure inbox file exists
-		await this._ensureInbox();
->>>>>>> main
 
 		// Track old projectsRoot to detect changes
 		this._previousProjectsRoot = this.settings.projectsRoot;
@@ -950,7 +934,6 @@ module.exports = class FlowtimePlugin extends Plugin {
 			},
 		});
 
-<<<<<<< HEAD
 		// ── v0.5.0: Routine Engine Commands ──
 
 		this.addCommand({
@@ -977,14 +960,6 @@ module.exports = class FlowtimePlugin extends Plugin {
 			callback: async () => {
 				await this.routineEngine.clearTracking();
 				this.notify("🗑 Routine tracking cleared. Regenerate to recreate instances.");
-=======
-		// ── Process Inbox Command ──
-		this.addCommand({
-			id: "process-inbox",
-			name: "Process Inbox",
-			callback: () => {
-				new ProcessInboxModal(this.app, this).open();
->>>>>>> main
 			},
 		});
 

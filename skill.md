@@ -598,7 +598,6 @@ await app.vault.modify(file, lines.join("\n"))
 
 ### Recurring Tasks (v0.5.0)
 
-<<<<<<< HEAD
 Tasks with `🔁` marker are no longer just decorative — the **Routine Engine** generates real task instances into daily notes. Place them in `flowtime/routines/*.md` files.
 
 #### Recurrence Syntax
@@ -632,11 +631,11 @@ Create `.md` files in `flowtime/routines/` with task lines using the markers abo
 ```
 
 The engine:
+
 1. Scans `flowtime/routines/*.md` on plugin load
 2. Checks if each task line is due for today/this week
 3. Writes a real task line to the daily note (`YYYY-MM-DD.md`)
 4. Records the generation in `flowtime/routines/.generated.json`
-=======
 Tasks with `🔁` directive auto-reschedule when completed. The pattern is:
 
 ```
@@ -647,9 +646,10 @@ When you mark such a task complete (change `[ ]` to `[x]`), you should also:
 
 1. Update the date to the next occurrence
 2. Change `[x]` back to `[ ]` (it stays open, just advances to next date)
->>>>>>> main
+
 
 **Critical rules for agents:**
+
 - **Do NOT edit `.generated.json`** — it's auto-managed. Editing it can cause duplicate tasks across synced devices.
 - Deleting a generated instance from a daily note is permanent — the engine won't re-create it for that date.
 - To force regeneration of a specific routine task, delete its `.generated.json` entry (not recommended) or ask the user to run "Generate Routines" command in Obsidian.
@@ -728,13 +728,11 @@ These are registered Obsidian commands. You can ask the user to run them via the
 | Command ID | Name | Shortcut | What it does |
 |-----------|------|----------|-------------|
 | `add-task` | Add Task | `Cmd+Shift+I` | Opens Quick Entry modal |
-<<<<<<< HEAD
-| `add-task-inline` | Add Task at Cursor | — | Inserts `- [ ] @today ` at cursor |
+| `add-task-inline` | Add Task at Cursor | — | Inserts `- [ ] @today` at cursor |
 | `@` completions | (built-in) | — | `@` in task lines → directives (@today, @b:, @p:, @soon). `@` at line start → command macros (@td, @now, @weekly, @weekplan) |
-=======
 | `add-task-inline` | Add Task at Cursor | — | Inserts `- [ ] @today` at cursor |
 | `@` completions | (built-in) | — | `@` in task lines → directives (@today, @b:, @p:, @soon). `@` at line start → command macros (@td, @now, @weekly) |
->>>>>>> main
+
 | `insert-daily-dashboard` | Insert daily dashboard | — | Inserts today/overdue/due-week blocks |
 | `insert-weekly-dashboard` | Insert weekly dashboard | — | Inserts weekly review blocks |
 | `new-project` | New Project | — | Creates project folder + all 3 files (folder note, Tasks.md, Wiki.md) |
@@ -742,11 +740,9 @@ These are registered Obsidian commands. You can ask the user to run them via the
 | `onboard` | Onboard / Migrate | — | Multi-step setup wizard: layout → dashboards → buckets → daily notes → first project (v0.4.0) |
 | `reset-settings` | Reset to Defaults | — | Clears settings + cache, resets to factory defaults (v0.4.0) |
 | `rebuild-cache` | Rebuild Task Cache | — | Clears task cache, rebuilds on next render (v0.4.0) |
-<<<<<<< HEAD
 | `generate-routines` | Generate Routines | — | Force-generates all due routine instances (v0.5.0) |
 | `generate-routines-today` | Generate Routines for Today | — | Force-generates routines for today only (v0.5.0) |
 | `clear-routine-tracking` | Clear Routine Generation Tracking | — | Clears `.generated.json` so all routines regenerate (v0.5.0) |
-=======
 | `process-inbox` | Process Inbox | — | Opens inbox processing modal (v0.4.0) |
 | `append-to-inbox` | Append to Inbox | — | Textarea prompt, appends to Inbox.md (v0.4.0) |
 
@@ -942,7 +938,7 @@ function cleanDescription(text) {
 | `@snooze YYYY-MM-DD` | Snooze until date | `@snooze 2026-07-01` → hidden from processing until July 1 |
 | `🟥` / `@high` | Priority | `🟥` → priority dropdown sets High |
 | `🔁 every week` | Recurrence | `🔁 every week` → recurrence dropdown sets Weekly |
->>>>>>> main
+
 
 ---
 
@@ -980,7 +976,6 @@ Key settings for agent use:
 | `fallbackToFolderName` | bool | true | Use folder name when no frontmatter |
 | `tagPrefix` | string | `project/` | Prefix for project tags |
 | `projectsRoot` | string | "" | Root folder for projects (empty = entire vault) |
-<<<<<<< HEAD
 | `quickEntryTargetFile` | string | `daily-note` | Default task target |
 | `routinesFolder` | string | `flowtime/routines/` | Folder for routine template files (v0.5.0) |
 | `vacationMode` | bool | false | Pause all routine generation (v0.5.0) |
@@ -989,13 +984,12 @@ Key settings for agent use:
 | `workdays` | array | [1,2,3,4,5] | Day indices for 🔁 every workday — 0=Sun, 6=Sat (v0.5.0) |
 | `weekStartDay` | number | 1 | First day of week for weekplan view — 0=Sun, 1=Mon (v0.5.0) |
 | `hideCompletedRoutines` | bool | false | Suppress checked-off routines in weekplan (v0.5.0) |
-=======
 | `quickEntryTargetFile` | string | `daily-note` | Default task target (`daily-note`, `active-file`, `project-file`, `inbox`) |
 | `inboxPath` | string | `"Inbox.md"` | Path to inbox file relative to vault root |
 | `inboxDefaultDuration` | number | `30` | Default duration in minutes for inbox task processing |
 | `inboxDefaultBucket` | string | `""` | Default bucket id for inbox task processing |
 | `inboxDefaultProject` | string | `""` | Default project name for inbox task processing |
->>>>>>> main
+
 
 To read/write settings:
 

@@ -470,6 +470,9 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			});
 			card.style.gridRow = `${rowStart} / ${rowEnd}`;
 			card.style.gridColumn = String(col);
+			card._tgRowStart = rowStart;
+			card._tgRowEnd = rowEnd;
+			card._tgTask = task;
 
 			// Priority dot
 			if (task.priority) {
@@ -487,12 +490,20 @@ class WeekplanRenderer extends MarkdownRenderChild {
 				card.createEl("span", { text: task.project, cls: "ft-tg-project" });
 			}
 
-			// Time tooltip
-			const timeStr = dur ? `${start}—${endTime}` : start;
-			card.createEl("span", { text: timeStr, cls: "ft-tg-time-label" });
+			// Time tooltip (updated live during resize)
+			const timeLabel = card.createEl("span", { text: start + (dur ? "—" + endTime : ""), cls: "ft-tg-time-label" });
+
+			// ── Resize handle (v0.5.0) ──
+			const resizeHandle = card.createEl("div", { cls: "ft-tg-resize-handle" });
+			resizeHandle.addEventListener("mousedown", (e) => {
+				e.preventDefault();
+				e.stopPropagation();
+				this._startCardResize(e, card, grid, timeLabel);
+			});
 
 			// Click to edit popup
 			card.addEventListener("click", (e) => {
+				if (e.target === resizeHandle) return;
 				e.stopPropagation();
 				this._openTaskEditPopup(card, task, start, dur);
 			});
@@ -514,6 +525,109 @@ class WeekplanRenderer extends MarkdownRenderChild {
 				this._openTaskEditPopup(card, task, "", 0);
 			});
 		}
+	}
+
+	/* ─── Drag-to-resize (v0.5.0) ─── */
+
+	/** Start dragging a card's resize handle */
+	_startCardResize(e, card, grid, timeLabel) {
+		const rowStart = card._tgRowStart;
+		if (rowStart < 2) return;
+
+		// Grid row height from CSS: header=36px, data rows=28px
+		const HEADER_H = 36;
+		const ROW_H = 28;
+
+		// Snap a mouse Y to the nearest grid row, clamped to valid range
+		const yToRow = (clientY) => {
+			const wrap = grid.closest(".ft-tg-wrap");
+			const scrollTop = wrap ? wrap.scrollTop : 0;
+			const rect = grid.getBoundingClientRect();
+			const relY = clientY - rect.top + scrollTop;
+			if (relY < HEADER_H) return rowStart + 1; // min = 30 min
+			const rawRow = 2 + Math.round((relY - HEADER_H) / ROW_H);
+			// Clamp: at least start+1, at most last data row
+			const maxRow = 2 + (parseInt(grid.style.getPropertyValue("--tg-rows"), 10) || 27) - 1;
+			return Math.max(rowStart + 1, Math.min(rawRow, maxRow));
+		};
+
+		// Live drag indicator
+		const dragIndicator = document.createElement("div");
+		dragIndicator.className = "ft-tg-resize-indicator";
+		grid.appendChild(dragIndicator);
+
+		const updateDrag = (_clientX, clientY) => {
+			const newRowEnd = yToRow(clientY);
+			card.style.gridRow = `${rowStart} / ${newRowEnd}`;
+			card._tgRowEnd = newRowEnd;
+
+			// Position indicator at the new bottom edge
+			const wrap = grid.closest(".ft-tg-wrap");
+			const scrollTop = wrap ? wrap.scrollTop : 0;
+			const rowIndex = newRowEnd - 2;
+			const yPos = HEADER_H + rowIndex * ROW_H - scrollTop;
+			dragIndicator.style.top = yPos + "px";
+			dragIndicator.style.left = "60px";
+			dragIndicator.style.width = "calc(100% - 60px)";
+			dragIndicator.style.display = "block";
+
+			// Show time label on indicator
+			const newEndTime = this._rowToTime(newRowEnd);
+			const startTime = this._rowToTime(rowStart);
+			if (startTime && newEndTime) {
+				dragIndicator.setText(`${startTime}—${newEndTime}`);
+			}
+		};
+
+		const onMove = (ev) => {
+			ev.preventDefault();
+			updateDrag(ev.clientX, ev.clientY);
+		};
+
+		const onUp = async (_ev) => {
+			document.removeEventListener("mousemove", onMove, true);
+			document.removeEventListener("mouseup", onUp, true);
+			dragIndicator.remove();
+
+			const newRowEnd = card._tgRowEnd;
+			const newEndTime = this._rowToTime(newRowEnd);
+			const startTime = this._rowToTime(rowStart);
+			if (!startTime || !newEndTime) return;
+
+			// Calculate duration in minutes
+			const sParts = startTime.split(":").map(Number);
+			const eParts = newEndTime.split(":").map(Number);
+			const durMinutes = (eParts[0] * 60 + eParts[1]) - (sParts[0] * 60 + sParts[1]);
+			if (durMinutes <= 0) return;
+
+			// Update the task data
+			const task = card._tgTask;
+			task.time = startTime + "—" + newEndTime;
+			task.durationMinutes = durMinutes;
+
+			// Update time label on card
+			timeLabel.setText(startTime + "—" + newEndTime);
+
+			// Persist to vault
+			await this._saveTaskInline(task, startTime, durMinutes < 60 ? durMinutes + "m" : (durMinutes / 60) + "h");
+		};
+
+		document.addEventListener("mousemove", onMove, true);
+		document.addEventListener("mouseup", onUp, true);
+
+		// Init position
+		updateDrag(e.clientX, e.clientY);
+	}
+
+	/** Convert a grid row number back to a time string (HH:MM) */
+	_rowToTime(rowNum) {
+		if (rowNum < 2) return "";
+		const slotIndex = rowNum - 2;
+		const totalMinutes = START_H * 60 + slotIndex * 30;
+		const h = Math.floor(totalMinutes / 60);
+		const m = totalMinutes % 60;
+		if (h > START_END) return "";
+		return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 	}
 
 	/** Open an edit popup for a grid task card */

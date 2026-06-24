@@ -64,6 +64,12 @@ module.exports = class FlowtimePlugin extends Plugin {
 
 		this.addSettingTab(new FlowtimeSettingsTab(this.app, this));
 
+		// Apply content width if set
+		if (this.settings.contentWidth > 0) {
+			document.body.classList.add("ft-wide");
+			document.body.style.setProperty("--ft-content-width", this.settings.contentWidth + "px");
+		}
+
 		this.projectEngine = new ProjectEngine(this.app, this.settings);
 		this.templateEngine = new TemplateEngine(this.app, this);
 		this.sessionStore = new SessionStore(this.app.vault);
@@ -346,6 +352,8 @@ module.exports = class FlowtimePlugin extends Plugin {
 				clearTimeout(this._cacheSaveTimer);
 				this._cacheSaveTimer = null;
 			}
+			// Clean up wide mode body class
+			document.body.classList.remove("ft-wide");
 		});
 	}
 };

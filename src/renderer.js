@@ -442,11 +442,16 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				project: false,
 				bucket: false,
 				source: false,
-				date: false,
-				actions: false,
+				date: true,
+				actions: true,
 				time: true,
 				timer: true,
 			};
+		}
+		// Today mode: hide date and actions (not needed when scheduling)
+		if (this.mode === "today") {
+			this._columnVisibility.date = false;
+			this._columnVisibility.actions = false;
 		}
 		if (this.mode === "sessions") {
 			this._renderSessionHistory();
@@ -761,9 +766,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			return s.direction === "asc" ? "▲" : "▼";
 		};
 
-		const makeSortableHeader = (label, field, cls) => {
+		const makeSortableHeader = (label, field, cls, width) => {
 			const th = hr.createEl("th", { cls });
 			th.classList.add("ft-sortable");
+			if (width) th.style.width = width;
 			th.createEl("span", { text: label });
 			if (field) {
 				th.createEl("span", { cls: "ft-sort-indicator", text: sortIndicator(field) });
@@ -772,45 +778,48 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			return th;
 		};
 
+		const makeHeader = (cls, width) => {
+			const th = hr.createEl("th", { cls });
+			if (width) th.style.width = width;
+			return th;
+		};
+
 		if (isCompact) {
 			if (this._columnVisibility.check !== false)
-				makeSortableHeader("✓", "status", "col-check");
+				makeSortableHeader("✓", "status", "col-check", "36px");
 			if (this._columnVisibility.task !== false)
-				makeSortableHeader("Task", "text", "col-task");
+				makeSortableHeader("Task", "text", "col-task", "auto");
 			if (this._columnVisibility.project !== false)
-				makeSortableHeader("Project", "project", "col-project");
+				makeSortableHeader("Project", "project", "col-project", "auto");
 			if (this._columnVisibility.bucket !== false)
-				makeSortableHeader("Bucket", "bucket", "col-bucket");
+				makeSortableHeader("Bucket", "bucket", "col-bucket", "auto");
 			if (this._columnVisibility.source !== false)
-				makeSortableHeader("Source", "source", "col-source");
+				makeSortableHeader("Source", "source", "col-source", "auto");
 			if (this._columnVisibility.date !== false)
-				makeSortableHeader(dw ? "Due" : "Date", "date", "col-date");
+				makeSortableHeader(dw ? "Due" : "Date", "date", "col-date", "auto");
 			if (this._columnVisibility.actions !== false)
-				hr.createEl("th", { cls: "col-actions" });
+				makeHeader("col-actions", "auto");
 		} else {
 			if (this._columnVisibility.time !== false)
-				makeSortableHeader("Time", "time", "col-time");
+				makeSortableHeader("Time", "time", "col-time", "22%");
 			if (this._columnVisibility.check !== false)
-				makeSortableHeader("✓", "status", "col-check");
+				makeSortableHeader("✓", "status", "col-check", "36px");
 			if (this._columnVisibility.task !== false)
-				makeSortableHeader("Task", "text", "col-task");
+				makeSortableHeader("Task", "text", "col-task", "auto");
 			if (this._columnVisibility.project !== false)
-				makeSortableHeader("Project", "project", "col-project");
+				makeSortableHeader("Project", "project", "col-project", "auto");
 			if (this._columnVisibility.bucket !== false)
-				makeSortableHeader("Bucket", "bucket", "col-bucket");
+				makeSortableHeader("Bucket", "bucket", "col-bucket", "auto");
 			if (this._columnVisibility.source !== false)
-				makeSortableHeader("Source", "source", "col-source");
+				makeSortableHeader("Source", "source", "col-source", "auto");
 			if (this._columnVisibility.date !== false)
-				makeSortableHeader("Date", "date", "col-date");
+				makeSortableHeader("Date", "date", "col-date", "auto");
 			if (this._columnVisibility.timer !== false)
-				hr.createEl("th", { cls: "col-timer" });
+				makeHeader("col-timer", "22%");
 		}
 		const tbody = table.createEl("tbody");
 		this.bucketTotals = this._computeBucketTotals();
 		this.buildRows(tbody);
-
-		// Force fixed table layout for narrow columns (checkbox, timer)
-		table.style.tableLayout = "fixed";
 
 		// Daily cap summary (today mode only)
 		if (this.mode === "today" && this.plugin?.settings?.dailyCap > 0) {

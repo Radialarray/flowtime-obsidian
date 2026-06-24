@@ -24,6 +24,7 @@ const DEFAULT_SETTINGS = {
 	// Display
 	dateFormat: "YYYY-MM-DD",
 	statusBarTimer: true,
+	contentWidth: 0,
 
 	// Notifications
 	timerSound: true,
@@ -46,6 +47,16 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 	constructor(app, plugin) {
 		super(app, plugin);
 		this.plugin = plugin;
+	}
+
+	_applyContentWidth(px) {
+		if (px > 0) {
+			document.body.classList.add("ft-wide");
+			document.body.style.setProperty("--ft-content-width", px + "px");
+		} else {
+			document.body.classList.remove("ft-wide");
+			document.body.style.removeProperty("--ft-content-width");
+		}
 	}
 
 	display() {
@@ -286,6 +297,34 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.statusBarTimer = value;
 						await this.plugin.saveData(this.plugin.settings);
+					}),
+			);
+
+		let cwSlider;
+		new Setting(containerEl)
+			.setName("Content width")
+			.setDesc("Max width of the content area in pixels — 0 uses Obsidian's default width")
+			.addSlider((slider) => {
+				cwSlider = slider;
+				slider
+					.setLimits(0, 1920, 20)
+					.setValue(this.plugin.settings.contentWidth)
+					.setDynamicTooltip()
+					.onChange(async (value) => {
+						this.plugin.settings.contentWidth = value;
+						await this.plugin.saveData(this.plugin.settings);
+						this._applyContentWidth(value);
+					});
+			})
+			.addExtraButton((btn) =>
+				btn
+					.setIcon("reset")
+					.setTooltip("Reset to default")
+					.onClick(async () => {
+						this.plugin.settings.contentWidth = 0;
+						await this.plugin.saveData(this.plugin.settings);
+						cwSlider.setValue(0);
+						this._applyContentWidth(0);
 					}),
 			);
 

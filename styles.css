@@ -1317,6 +1317,7 @@ body.ft-wide .markdown-reading-view .markdown-preview-sizer {
 	margin-left: 4px;
 }
 
+<<<<<<< HEAD
 /* ═══════════════════════════════════════
    Weekplan — List View (v0.5.0)
    ═══════════════════════════════════════ */
@@ -1820,4 +1821,61 @@ body.ft-wide .markdown-reading-view .markdown-preview-sizer {
 	color: var(--text-on-accent);
 	border-color: transparent;
 	margin-left: auto;
+=======
+/* ── Inbox Processing Modal ── */
+.flowtime-inbox-progress {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	margin: 0 0 12px 0;
+}
+
+.flowtime-inbox-text {
+	width: 100%;
+	min-height: 50px;
+	margin-bottom: 8px;
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-small);
+}
+
+.flowtime-inbox-fields {
+	margin: 12px 0;
+	padding: 12px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	background: var(--background-secondary);
+}
+
+.flowtime-inbox-fields h4 {
+	margin: 0 0 8px 0;
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	font-weight: var(--font-semibold);
+}
+
+.flowtime-inbox-fields .flowtime-label {
+	display: block;
+	margin-top: 8px;
+	margin-bottom: 2px;
+}
+
+.flowtime-inbox-fields .flowtime-label:first-child {
+	margin-top: 0;
+}
+
+.flowtime-inbox-fields .flowtime-input,
+.flowtime-inbox-fields .flowtime-select {
+	width: 100%;
+	margin-bottom: 4px;
+}
+
+.flowtime-inbox-fields .flowtime-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.flowtime-inbox-fields .flowtime-row .flowtime-input {
+	flex: 1;
+	margin-bottom: 0;
+>>>>>>> main
 }

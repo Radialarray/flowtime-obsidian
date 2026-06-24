@@ -237,6 +237,16 @@ class QuickEntryModal extends Modal {
 					const f = this.app.vault.getAbstractFileByPath(cached.path);
 					if (f) targetFile = f;
 				}
+			} else if (target === "inbox") {
+				// Write to inbox file
+				const inboxPath = this.plugin.settings.inboxPath || "Inbox.md";
+				const f = this.app.vault.getAbstractFileByPath(inboxPath);
+				if (f) {
+					targetFile = f;
+				} else {
+					this.plugin.notify("Inbox not found. Run Flowtime: Process Inbox to create it.", true);
+					return;
+				}
 			} // "active-file" → targetFile stays as activeFile
 
 			if (!targetFile) {

@@ -1,6 +1,7 @@
 const { Plugin, Notice, Modal, EditorSuggest } = require("obsidian");
 const { FlowtimeRenderer } = require("./src/renderer");
 const { FlowtimeSettingsTab, DEFAULT_SETTINGS } = require("./src/settings");
+const { ProcessInboxModal } = require("./src/inbox-processor");
 const { ProjectEngine } = require("./src/project-engine");
 const { TemplateEngine } = require("./src/template-engine");
 const { QuickEntryModal } = require("./src/quick-entry");
@@ -100,6 +101,7 @@ class AtCompletionsSuggest extends EditorSuggest {
 			const macros = [
 				{ label: "@td", insert: "- [ ]  @today ", desc: "Today task skeleton" },
 				{ label: "@tm", insert: "- [ ]  @tomorrow ", desc: "Tomorrow task skeleton" },
+				{ label: "@inbox", insert: "- [ ]  ", desc: "Inbox task skeleton (no date)" },
 				{ label: "@tk", insert: "- [ ]  ", desc: "Task skeleton (no date)" },
 				{ label: "@now", insert: "- [ ]  @today @15m ", desc: "Quick 15m task now" },
 				{ label: "@1h", insert: "- [ ]  @today @1h ", desc: "Quick 1h task today" },
@@ -312,6 +314,9 @@ module.exports = class FlowtimePlugin extends Plugin {
 		// v0.4.0: Check daily notes folder exists
 		await this._checkDailyNotesFolder();
 
+		// Ensure inbox file exists
+		await this._ensureInbox();
+
 		// Track old projectsRoot to detect changes
 		this._previousProjectsRoot = this.settings.projectsRoot;
 
@@ -351,6 +356,78 @@ module.exports = class FlowtimePlugin extends Plugin {
 				editor.replaceRange(line, cursor);
 				// Move cursor to after "- [ ] " so user can type task text immediately
 				editor.setCursor({ line: cursor.line, ch: cursor.ch + 6 });
+			},
+		});
+
+		// ── Append to Inbox command ──
+		this.addCommand({
+			id: "append-to-inbox",
+			name: "Append to Inbox",
+			callback: () => {
+				const { Modal } = require("obsidian");
+				class AppendToInboxModal extends Modal {
+					constructor(app, plugin) {
+						super(app);
+						this.plugin = plugin;
+					}
+					onOpen() {
+						const { contentEl } = this;
+						contentEl.createEl("h2", { text: "\u{1F4E5} Append to Inbox" });
+						const textarea = contentEl.createEl("textarea", {
+							placeholder: "What's on your mind?",
+							cls: "flowtime-input",
+						});
+						textarea.style.width = "100%";
+						textarea.style.minHeight = "80px";
+						textarea.focus();
+
+						const btnRow = contentEl.createEl("div", { cls: "flowtime-btn-row" });
+						const cancelBtn = btnRow.createEl("button", { text: "Cancel", cls: "flowtime-btn-cancel" });
+						const submitBtn = btnRow.createEl("button", { text: "Append", cls: "flowtime-btn-submit" });
+
+						cancelBtn.addEventListener("click", () => this.close());
+						submitBtn.addEventListener("click", async () => {
+							const text = textarea.value.trim();
+							if (!text) {
+								this.plugin.notify("Nothing to append", true);
+								return;
+							}
+							const path = this.plugin.settings.inboxPath || "Inbox.md";
+							try {
+								let content = "";
+								if (await this.plugin.app.vault.adapter.exists(path)) {
+									content = await this.plugin.app.vault.read(
+										this.plugin.app.vault.getAbstractFileByPath(path)
+									);
+								}
+								// Split into lines, add the new text, write back
+								const lines = text.split("\n").filter(l => l.trim());
+								const newContent = content.trimEnd() + "\n" + lines.join("\n") + "\n";
+								if (await this.plugin.app.vault.adapter.exists(path)) {
+									await this.plugin.app.vault.modify(
+										this.plugin.app.vault.getAbstractFileByPath(path),
+										newContent
+									);
+								} else {
+									await this.plugin.app.vault.create(path, newContent);
+								}
+								this.plugin.notify(`\u{1F4E5} ${lines.length} line(s) added to inbox`);
+								this.close();
+							} catch (e) {
+								this.plugin.notify("Failed to append: " + e.message, true);
+							}
+						});
+
+						// Ctrl+Enter or Cmd+Enter to submit
+						textarea.addEventListener("keydown", (e) => {
+							if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+								submitBtn.click();
+							}
+						});
+					}
+					onClose() { this.contentEl.empty(); }
+				}
+				new AppendToInboxModal(this.app, this).open();
 			},
 		});
 
@@ -575,6 +652,15 @@ module.exports = class FlowtimePlugin extends Plugin {
 			},
 		});
 
+		// ── Process Inbox Command ──
+		this.addCommand({
+			id: "process-inbox",
+			name: "Process Inbox",
+			callback: () => {
+				new ProcessInboxModal(this.app, this).open();
+			},
+		});
+
 		// ── Onboard / Migrate Command ──
 		this.addCommand({
 			id: "onboard",
@@ -701,5 +787,25 @@ module.exports = class FlowtimePlugin extends Plugin {
 				this.notify("⚠️ Daily notes folder '" + folder + "' not found. Check Settings → Daily Notes.", true);
 			}
 		} catch (_) {}
+	}
+
+	/**
+	 * Ensure the inbox file exists, creating it with a default template if not.
+	 */
+	async _ensureInbox() {
+		const path = this.settings.inboxPath || "Inbox.md";
+		try {
+			if (!(await this.app.vault.adapter.exists(path))) {
+				const template = `# \u{1F4E5} Inbox
+
+Capture tasks, ideas, and notes here. One line per item.
+Process them with **Flowtime: Process Inbox**.
+`;
+				await this.app.vault.create(path, template);
+				this.notify("\u{1F4E5} Created inbox: " + path);
+			}
+		} catch (e) {
+			console.warn("Flowtime: Could not create inbox:", e.message);
+		}
 	}
 };

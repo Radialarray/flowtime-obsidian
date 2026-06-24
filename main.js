@@ -255,8 +255,8 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 	buildRows(tbody) {
 		tbody.empty();
 		this.rowData = [];
-		// Clean up orphaned dropdowns from previous renders
-		document.querySelectorAll(".tp-start-dd").forEach((el) => el.remove());
+		// Clean up orphaned dropdowns and date popups
+		document.querySelectorAll(".tp-start-dd, .tp-date-popup").forEach((el) => el.remove());
 
 		for (const task of this.tasks) {
 			const { start, duration } = this._parseStoredTime(task.time);
@@ -361,6 +361,71 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 					line: task.line + 1,
 				});
 			});
+
+			// --- Date cell ---
+			const dateCell = row.createEl("td", { cls: "tp-date-cell" });
+			const dateWrap = dateCell.createEl("div", { cls: "tp-date-wrap" });
+			const dateSpan = dateWrap.createEl("span", {
+				text: task.taskDate || "+",
+				cls: "tp-date-badge" + (task.taskDate ? "" : " tp-date-none"),
+			});
+
+			const datePopup = document.createElement("div");
+			datePopup.className = "tp-date-popup";
+			const dpInput = datePopup.createEl("input", {
+				type: "date",
+				value: task.taskDate || "",
+				cls: "tp-dp-input",
+			});
+			const dpToday = datePopup.createEl("button", {
+				text: "Today",
+				cls: "tp-dp-btn",
+			});
+			const dpTomorrow = datePopup.createEl("button", {
+				text: "Tomorrow",
+				cls: "tp-dp-btn",
+			});
+			const dpNextWeek = datePopup.createEl("button", {
+				text: "Next Week",
+				cls: "tp-dp-btn",
+			});
+			const dpBacklog = datePopup.createEl("button", {
+				text: "✕ Backlog",
+				cls: "tp-dp-btn tp-dp-remove",
+			});
+
+			const fmt = (d) => d.toISOString().split("T")[0];
+
+			const openDatePopup = () => {
+				const r = dateWrap.getBoundingClientRect();
+				datePopup.style.left = r.left + "px";
+				datePopup.style.top = r.bottom + 4 + "px";
+				datePopup.classList.add("tp-dp-open");
+				document.body.appendChild(datePopup);
+			};
+			const closeDatePopup = () => {
+				datePopup.classList.remove("tp-dp-open");
+				if (datePopup.parentNode) datePopup.parentNode.removeChild(datePopup);
+			};
+
+			dateSpan.addEventListener("click", (e) => {
+				e.stopPropagation();
+				datePopup.classList.contains("tp-dp-open") ? closeDatePopup() : openDatePopup();
+			});
+
+			const applyDate = async (nd) => {
+				closeDatePopup();
+				await this.updateTaskDate(task, nd);
+				task.taskDate = nd;
+				dateSpan.setText(nd || "+");
+				if (nd) { dateSpan.removeClass("tp-date-none"); } else { dateSpan.addClass("tp-date-none"); }
+			};
+
+			dpInput.addEventListener("change", () => applyDate(dpInput.value));
+			dpToday.addEventListener("click", () => applyDate(fmt(new Date())));
+			dpTomorrow.addEventListener("click", () => applyDate(fmt(new Date(Date.now() + 86400000))));
+			dpNextWeek.addEventListener("click", () => applyDate(fmt(new Date(Date.now() + 7 * 86400000))));
+			dpBacklog.addEventListener("click", () => applyDate(""));
 
 			// --- Countdown timer ---
 			const timerState = {
@@ -477,6 +542,28 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 		let rest = match[2];
 		rest = rest.replace(/^\d{1,2}:\d{2}(\s*[—\-–]\s*\d{1,2}:\d{2})?\s*/, "");
 		lines[task.line] = time ? `${prefix}${time} ${rest}` : `${prefix}${rest}`;
+
+		await this.app.vault.modify(task.file, lines.join("\n"));
+	}
+
+	async updateTaskDate(task, newDate) {
+		const content = await this.app.vault.read(task.file);
+		const lines = content.split("\n");
+		const line = lines[task.line];
+		if (!line) return;
+
+		if (newDate) {
+			// Replace or add ⏳ date
+			if (/⏳\s*\d{4}-\d{2}-\d{2}/.test(line)) {
+				lines[task.line] = line.replace(/⏳\s*\d{4}-\d{2}-\d{2}/, "⏳ " + newDate);
+			} else {
+				const m = line.match(/^(\s*[-*+]\s*\[[^\]]*\]\s*)(.*)$/);
+				if (m) lines[task.line] = m[1] + m[2] + " ⏳ " + newDate;
+			}
+		} else {
+			// Remove ⏳ date entirely
+			lines[task.line] = line.replace(/\s*⏳\s*\d{4}-\d{2}-\d{2}/, "");
+		}
 
 		await this.app.vault.modify(task.file, lines.join("\n"));
 	}

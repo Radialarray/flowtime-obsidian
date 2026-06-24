@@ -31,16 +31,20 @@
 }
 
 .col-time {
-	width: 28%;
+	width: 24%;
 }
 .col-task {
-	width: 32%;
+	width: 28%;
 }
 .col-source {
-	width: 15%;
+	width: 12%;
+}
+.col-date {
+	width: 14%;
+	text-align: center;
 }
 .col-timer {
-	width: 25%;
+	width: 22%;
 	text-align: center;
 }
 
@@ -216,6 +220,98 @@
 
 .tp-source-link:hover {
 	text-decoration: underline;
+}
+
+/* --- Date cell --- */
+.tp-date-cell {
+	text-align: center;
+}
+
+.tp-date-wrap {
+	display: inline-flex;
+	align-items: center;
+	cursor: pointer;
+}
+
+.tp-date-badge {
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	padding: 2px 6px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	color: var(--text-normal);
+	background: var(--background-primary-alt);
+	user-select: none;
+}
+
+.tp-date-badge:hover {
+	border-color: var(--interactive-accent);
+}
+
+.tp-date-none {
+	color: var(--text-muted);
+	font-size: 14px;
+	padding: 2px 8px;
+	border-style: dashed;
+}
+
+/* --- Date popup --- */
+.tp-date-popup {
+	display: none;
+	position: fixed;
+	z-index: 1000;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+	padding: 8px;
+	min-width: 180px;
+}
+
+.tp-date-popup.tp-dp-open {
+	display: block;
+}
+
+.tp-dp-input {
+	width: 100%;
+	padding: 5px 6px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	margin-bottom: 6px;
+	box-sizing: border-box;
+}
+
+.tp-dp-input:focus {
+	border-color: var(--interactive-accent);
+	outline: none;
+}
+
+.tp-dp-btn {
+	display: block;
+	width: 100%;
+	padding: 5px 8px;
+	border: none;
+	border-radius: 3px;
+	background: transparent;
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	cursor: pointer;
+	text-align: left;
+	margin-top: 2px;
+}
+
+.tp-dp-btn:hover {
+	background: var(--background-modifier-hover);
+}
+
+.tp-dp-remove {
+	border-top: 1px solid var(--background-modifier-border);
+	margin-top: 4px;
+	padding-top: 6px;
+	color: var(--text-error);
 }
 
 /* --- Timer cell --- */

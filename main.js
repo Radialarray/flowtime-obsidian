@@ -1,4 +1,4 @@
-const { Plugin, Notice } = require("obsidian");
+const { Plugin, Notice, Modal } = require("obsidian");
 const { TaskPlannerRenderer } = require("./src/renderer");
 const { FlowtimeSettingsTab, DEFAULT_SETTINGS } = require("./src/settings");
 const { ProjectEngine } = require("./src/project-engine");
@@ -40,15 +40,6 @@ module.exports = class FlowtimePlugin extends Plugin {
 		this.currentTimer = null;
 		this.statusBarItem = this.addStatusBarItem();
 		this.statusBarItem.addClass("flowtime-status-timer");
-		this.updateStatusBar();
-
-		this.registerDomEvent(this.statusBarItem, "click", () => {
-			this.toggleStatusTimer();
-		});
-		this.registerDomEvent(this.statusBarItem, "contextmenu", (e) => {
-			e.preventDefault();
-			this.stopStatusTimer();
-		});
 
 		this.startStatusTimer = (taskName, totalSeconds) => {
 			this.stopStatusTimer();
@@ -132,6 +123,16 @@ module.exports = class FlowtimePlugin extends Plugin {
 			this.statusBarItem.setText(`⏱ ${fmt(this.currentTimer.remaining)} — ${name}  ${icon}`);
 		};
 
+		this.updateStatusBar();
+
+		this.registerDomEvent(this.statusBarItem, "click", () => {
+			this.toggleStatusTimer();
+		});
+		this.registerDomEvent(this.statusBarItem, "contextmenu", (e) => {
+			e.preventDefault();
+			this.stopStatusTimer();
+		});
+
 		this.renderers = [];
 		for (const [name, mode] of [
 			["task-planner", "today"],
@@ -170,7 +171,6 @@ module.exports = class FlowtimePlugin extends Plugin {
 			id: "new-project",
 			name: "New Project",
 			callback: () => {
-				const { Modal } = require("obsidian");
 				class ProjectNameModal extends Modal {
 					constructor(app, onSubmit) {
 						super(app);

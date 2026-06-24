@@ -47,6 +47,15 @@ const DEFAULT_SETTINGS = {
 
 	// Saved Views
 	savedViews: {},
+
+	// Routines (v0.5.0)
+	routinesFolder: "flowtime/routines/",
+	vacationMode: false,
+	autoGenerateOnStartup: true,
+	autoGenerateOnOpenDaily: true,
+	workdays: [1, 2, 3, 4, 5], // Mon-Fri
+	weekStartDay: 1, // Monday
+	hideCompletedRoutines: false,
 };
 
 class FlowtimeSettingsTab extends PluginSettingTab {
@@ -521,6 +530,100 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 							DEFAULT_SETTINGS.projectTemplate;
 						await this.plugin.saveData(this.plugin.settings);
 						projTaEl.value = DEFAULT_SETTINGS.projectTemplate;
+					}),
+			);
+
+		// ── Routines (v0.5.0) ──
+		containerEl.createEl("h2", { text: "Routines" });
+
+		new Setting(containerEl)
+			.setName("Routines folder")
+			.setDesc("Folder where routine template markdown files live. Each task line with 🔁 becomes a routine.")
+			.addText((text) =>
+				text
+					.setPlaceholder("flowtime/routines/")
+					.setValue(this.plugin.settings.routinesFolder)
+					.onChange(async (value) => {
+						this.plugin.settings.routinesFolder = value;
+						await this.plugin.saveData(this.plugin.settings);
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName("Vacation mode")
+			.setDesc("Pause all routine generation. No new routine tasks will be created until this is turned off.")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.vacationMode)
+					.onChange(async (value) => {
+						this.plugin.settings.vacationMode = value;
+						await this.plugin.saveData(this.plugin.settings);
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName("Auto-generate on startup")
+			.setDesc("Run routine engine when the plugin loads.")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.autoGenerateOnStartup)
+					.onChange(async (value) => {
+						this.plugin.settings.autoGenerateOnStartup = value;
+						await this.plugin.saveData(this.plugin.settings);
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName("Auto-generate on open daily note")
+			.setDesc("Generate routines when today's daily note is opened.")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.autoGenerateOnOpenDaily)
+					.onChange(async (value) => {
+						this.plugin.settings.autoGenerateOnOpenDaily = value;
+						await this.plugin.saveData(this.plugin.settings);
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName("Workdays")
+			.setDesc("Which days are considered workdays for the 🔁 every workday recurrence. Comma-separated numbers (0=Sun, 1=Mon, ... 6=Sat). Default: 1,2,3,4,5")
+			.addText((text) =>
+				text
+					.setPlaceholder("1,2,3,4,5")
+					.setValue((this.plugin.settings.workdays || [1,2,3,4,5]).join(","))
+					.onChange(async (value) => {
+						const nums = value.split(",").map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n) && n >= 0 && n <= 6);
+						if (nums.length > 0) {
+							this.plugin.settings.workdays = nums;
+							await this.plugin.saveData(this.plugin.settings);
+						}
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName("Week start day")
+			.setDesc("First day of the week for the weekplan view. 0=Sunday, 1=Monday.")
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("0", "Sunday")
+					.addOption("1", "Monday")
+					.setValue(String(this.plugin.settings.weekStartDay ?? 1))
+					.onChange(async (value) => {
+						this.plugin.settings.weekStartDay = parseInt(value, 10);
+						await this.plugin.saveData(this.plugin.settings);
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName("Hide completed routines")
+			.setDesc("Don't show checked-off routine tasks in the weekplan view.")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.hideCompletedRoutines)
+					.onChange(async (value) => {
+						this.plugin.settings.hideCompletedRoutines = value;
+						await this.plugin.saveData(this.plugin.settings);
 					}),
 			);
 	}

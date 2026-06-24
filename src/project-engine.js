@@ -151,16 +151,9 @@ class ProjectEngine {
 				const content = await this.app.vault.read(file);
 				const fm = this._parseFrontmatter(content);
 				if (fm.found) {
-					const key = this.settings.projectFrontmatterKey;
-					const val = this.settings.projectFrontmatterValue;
-					if (fm.data[key] === val || fm.data[key] === true) {
-						const name = fm.data[this.settings.projectNameKey]
-							|| fm.data["title"]
-							|| fm.data["alias"]
-							|| folder;
-						if (!projects.has(name)) {
-							projects.set(name, file.path);
-						}
+					const name = fm.name || folder;
+					if (!projects.has(name)) {
+						projects.set(name, file.path);
 					}
 				}
 			} catch (_) {}

@@ -72,11 +72,113 @@ class TemplateEngine {
 		return true;
 	}
 
-	// Create a new project folder + folder note
-	async createProject(name) {
+	// ── v0.4.0: Dashboard creation methods ──
+
+	/** Dashboard.md (daily overview) content */
+	getDashboardDailyTemplate() {
+		return `# Dashboard — Today
+
+## 🔄 Carry Over
+\`\`\`flowtime-overdue
+\`\`\`
+
+## 🎯 Today
+\`\`\`flowtime-today
+\`\`\`
+
+## ⚠️ Due This Week
+\`\`\`flowtime-dueweek
+\`\`\`
+`;
+	}
+
+	/** Dashboard Weekly.md (full overview) content */
+	getDashboardWeeklyTemplate() {
+		return `# Dashboard — Weekly
+
+## 🔄 Carry Over
+\`\`\`flowtime-overdue
+\`\`\`
+
+## 🎯 Today
+\`\`\`flowtime-today
+\`\`\`
+
+## ⚠️ Due This Week
+\`\`\`flowtime-dueweek
+\`\`\`
+
+## 📊 This Week (by project)
+\`\`\`flowtime-weekly
+\`\`\`
+
+## 📊 Budget Overview
+\`\`\`flowtime-buckets
+\`\`\`
+
+## 📋 Session History
+\`\`\`flowtime-sessions
+\`\`\`
+`;
+	}
+
+	/**
+	 * Create a dashboard file at vault root.
+	 * @param {"daily"|"weekly"} mode
+	 * @returns {string|null} path of created file, or null if already exists
+	 */
+	async createDashboard(mode) {
+		const path = mode === "weekly" ? "Dashboard Weekly.md" : "Dashboard.md";
+		const exists = this.app.vault.getAbstractFileByPath(path);
+		if (exists) return null;
+
+		const content = mode === "weekly"
+			? this.getDashboardWeeklyTemplate()
+			: this.getDashboardDailyTemplate();
+
+		await this.app.vault.create(path, content);
+		return path;
+	}
+
+	// v0.4.0: Tasks.md template (no placeholder/fake tasks — just structure)
+	getProjectTasksTemplate(name) {
+		return `# ${name} — Tasks
+
+## 🎯 Active Sprint
+
+\`\`\`flowtime-project
+\`\`\`
+
+## 📋 Backlog
+`;
+	}
+
+	// v0.4.0: Wiki.md template
+	getProjectWikiTemplate(name) {
+		return `# ${name} — Wiki
+
+## Overview
+
+## Architecture
+
+## Decisions
+
+## Reference Links
+
+## Meeting Notes
+`;
+	}
+
+	// Create a new project folder + all 3 standard files
+	async createProject(name, opts = {}) {
+		const scaffoldTasks = opts.scaffoldTasks !== false;
+		const scaffoldWiki = opts.scaffoldWiki !== false;
+
 		const root = this.plugin.settings.projectsRoot || "";
 		const basePath = root ? root + "/" + name : name;
 		const notePath = basePath + "/" + name + ".md";
+		const tasksPath = basePath + "/" + name + " Tasks.md";
+		const wikiPath = basePath + "/" + name + " Wiki.md";
 
 		// Create folder if it doesn't exist
 		const folderExists = this.app.vault.getAbstractFileByPath(basePath);
@@ -95,13 +197,29 @@ class TemplateEngine {
 			await this.app.vault.create(notePath, content);
 		}
 
-		// Open the new note
+		// Scaffold Tasks.md
+		if (scaffoldTasks) {
+			const tasksExists = this.app.vault.getAbstractFileByPath(tasksPath);
+			if (!tasksExists) {
+				await this.app.vault.create(tasksPath, this.getProjectTasksTemplate(name));
+			}
+		}
+
+		// Scaffold Wiki.md
+		if (scaffoldWiki) {
+			const wikiExists = this.app.vault.getAbstractFileByPath(wikiPath);
+			if (!wikiExists) {
+				await this.app.vault.create(wikiPath, this.getProjectWikiTemplate(name));
+			}
+		}
+
+		// Open the folder note
 		const file = this.app.vault.getAbstractFileByPath(notePath);
 		if (file) {
 			await this.app.workspace.getLeaf().openFile(file);
 		}
 
-		return notePath;
+		return { notePath, tasksPath, wikiPath };
 	}
 }
 

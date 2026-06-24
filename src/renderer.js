@@ -98,11 +98,24 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		return totals;
 	}
 
+	/**
+	 * v0.4.0: Check if a file path is within the plugin's scan scope.
+	 * Respects projectsRoot setting — if set, only files under that root are scanned.
+	 * Always excludes .obsidian/ and .git/
+	 */
+	_isFileInScope(filePath) {
+		if (filePath.startsWith(".obsidian") || filePath.startsWith(".git")) return false;
+		const root = this.plugin?.settings?.projectsRoot || "";
+		if (!root) return true; // No root filter — scan everything
+		const normalizedRoot = root.endsWith("/") ? root : root + "/";
+		return filePath.startsWith(normalizedRoot);
+	}
+
 	async _computeDailyTotal() {
 		const today = new Date().toISOString().split("T")[0];
 		let total = 0;
 		for (const file of this.app.vault.getMarkdownFiles()) {
-			if (file.path.startsWith(".obsidian") || file.path.startsWith(".git")) continue;
+			if (!this._isFileInScope(file.path)) continue;
 			const fileTasks = await this._getFileTasks(file);
 			for (const parsed of fileTasks) {
 				if (parsed.taskDate === today && parsed.durationMinutes) {
@@ -305,7 +318,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
 			const weeklyTotals = {};
 			for (const file of this.app.vault.getMarkdownFiles()) {
-				if (file.path.startsWith(".obsidian") || file.path.startsWith(".git")) continue;
+				if (!this._isFileInScope(file.path)) continue;
 				const fileTasks = await this._getFileTasks(file);
 				for (const parsed of fileTasks) {
 					if (!parsed.bucket) continue;
@@ -340,8 +353,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
 		this.tasks = [];
 		for (const file of this.app.vault.getMarkdownFiles()) {
-			if (file.path.startsWith(".obsidian") || file.path.startsWith(".git"))
-				continue;
+			if (!this._isFileInScope(file.path)) continue;
 			const fileTasks = await this._getFileTasks(file);
 			for (const parsed of fileTasks) {
 				if (parsed.status === "x" || parsed.status === "-" || parsed.status === "X") continue;

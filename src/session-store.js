@@ -34,21 +34,44 @@ class SessionStore {
 	}
 
 	/**
+	 * v0.4.0: Validate a session record before writing.
+	 * Returns null if valid, or an error message string if invalid.
+	 */
+	_validateRecord(record) {
+		if (!record || typeof record !== "object") return "Record must be an object";
+		if (!record.type || !["session", "completion"].includes(record.type)) return "Record must have type 'session' or 'completion'";
+		if (record.type === "session") {
+			if (!record.start_time || typeof record.start_time !== "string") return "Session must have start_time (ISO string)";
+			if (!record.end_time || typeof record.end_time !== "string") return "Session must have end_time (ISO string)";
+			if (typeof record.duration_minutes !== "number" || record.duration_minutes < 0) return "Session must have duration_minutes (number >= 0)";
+		}
+		if (record.type === "completion") {
+			if (!record.completed_at || typeof record.completed_at !== "string") return "Completion must have completed_at (ISO string)";
+		}
+		return null; // valid
+	}
+
+	/**
 	 * Write a session record on timer stop/expiry.
 	 */
 	async writeSession({ startTime, endTime, durationMinutes, bucket, taskText, notes }) {
 		await this._ensureDir();
-		const date = startTime.split("T")[0];
+		const date = startTime ? startTime.split("T")[0] : new Date().toISOString().split("T")[0];
 		const record = {
 			type: "session",
 			date,
-			start_time: startTime,
-			end_time: endTime,
-			duration_minutes: durationMinutes,
+			start_time: startTime || new Date().toISOString(),
+			end_time: endTime || new Date().toISOString(),
+			duration_minutes: typeof durationMinutes === "number" ? durationMinutes : 0,
 			bucket: bucket || "",
 			task_text: taskText || "",
 			notes: notes || "",
 		};
+		const err = this._validateRecord(record);
+		if (err) {
+			console.warn("Flowtime: Invalid session record —", err, record);
+			return;
+		}
 		await this._append(this._filePath(date), JSON.stringify(record) + "\n");
 	}
 
@@ -59,11 +82,16 @@ class SessionStore {
 		await this._ensureDir();
 		const record = {
 			type: "completion",
-			date,
+			date: date || new Date().toISOString().split("T")[0],
 			bucket: bucket || "",
 			task_text: taskText || "",
-			completed_at: completedAt,
+			completed_at: completedAt || new Date().toISOString(),
 		};
+		const err = this._validateRecord(record);
+		if (err) {
+			console.warn("Flowtime: Invalid completion record —", err, record);
+			return;
+		}
 		await this._append(this._filePath(date), JSON.stringify(record) + "\n");
 	}
 

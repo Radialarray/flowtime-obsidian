@@ -9,31 +9,60 @@ Use this skill when helping a user manage their Obsidian vault using the Flowtim
 
 ---
 
-## Vault Structure
+## Canonical Workspace Layout
 
-The vault follows a **project-centric layout** with a high-level overview document for daily and weekly planning.
+The recommended Flowtime vault structure keeps the root clean — **2-3 user-facing files + 2 folders**:
 
 ```
 vault/
-├── Dashboard.md              ← High-level overview (daily/weekly planning)
-├── YYYY-MM-DD.md             ← Daily notes
-├── ProjectA/                 ← Each project is a folder
-│   ├── ProjectA.md           ← Folder note / project home (type: project)
-│   ├── ProjectA Tasks.md     ← Task management, flowtime blocks, task lines
-│   └── ProjectA Wiki.md      ← Knowledge base / reference wiki
-├── ProjectB/
-│   ├── ProjectB.md
-│   ├── ProjectB Tasks.md
-│   └── ProjectB Wiki.md
-└── flowtime/
-    └── sessions/             ← Session NDJSON files
+├── Dashboard.md              ← Daily overview (overdue + today + dueweek)
+├── Dashboard Weekly.md       ← Weekly overview (+ weekly + budget + sessions)
+├── Daily/                    ← Daily notes (YYYY-MM-DD.md)
+├── Projects/                 ← All projects (if nested layout)
+│   ├── ProjectA/
+│   │   ├── ProjectA.md       ← Folder note (type: project) — has `flowtime-project` block
+│   │   ├── ProjectA Tasks.md ← Task management — raw markdown task lines
+│   │   └── ProjectA Wiki.md  ← Knowledge base — specs, decisions, reference
+│   ├── ProjectB/
+│   │   ├── ProjectB.md
+│   │   ├── ProjectB Tasks.md
+│   │   └── ProjectB Wiki.md
+│   └── ...
+├── flowtime/
+│   └── sessions/             ← Session NDJSON files (auto-managed)
+├── Craft/                    ← Other content (not Flowtime-managed)
+├── Notion/                   ← Other content (not Flowtime-managed)
+└── .obsidian/                ← Core config
 ```
+
+**Key rules:**
+- **Vault root** should have only dashboards, `Daily/`, and `Projects/` — everything else is infrastructure
+- **`flowtime-project` code block** goes ONLY on the folder note (`ProjectA.md`), NOT on the Tasks page — that avoids duplicate task rendering
+- **Projects** can be at vault root (flat) or nested under `Projects/` — set `projectsRoot` accordingly in settings
+- **Project scaffolding** = 3 files: folder note (frontmatter + `flowtime-project` block) + Tasks doc + Wiki doc
+- **Do NOT** put placeholder/fake tasks in project templates — they clutter Flowtime tables with noise
+
+### Two Dashboard Files
+
+| File | Blocks | Purpose |
+|------|--------|---------|
+| `Dashboard.md` | `flowtime-overdue` + `flowtime-today` + `flowtime-dueweek` | Quick daily check |
+| `Dashboard Weekly.md` | Above + `flowtime-weekly` + `flowtime-buckets` + `flowtime-sessions` | Weekly planning & review |
+
+### Flat vs Nested Layout
+
+| | Flat (default) | Nested |
+|--|---------------|--------|
+| Layout | Projects at vault root | Projects under `Projects/` |
+| `projectsRoot` | `""` | `"Projects"` |
+| Root clutter | Higher — projects are top-level | Cleaner — only 2-3 files |
+| Best for | Few projects (<5) or simple vaults | Many projects or mixed vaults |
 
 ### Decision Gate
 
 | If the information is... | Put it in... | Format |
 |--------------------------|-------------|--------|
-| Something to DO with a deadline | **Project Management / Tasks doc** (or any task line) | `- [ ] description @date @bucket:name` |
+| Something to DO with a deadline | **Project Tasks doc** (or any task line) | `- [ ] description @date @bucket:name` |
 | Reference / knowledge / spec / decision | **Project Wiki** | Regular markdown in the project folder |
 | Daily/weekly overview and cross-project view | **Dashboard.md** | Flowtime code blocks at vault root |
 
@@ -350,6 +379,15 @@ Tasks are markdown list items with checkbox status and annotation tags.
 - [ ] 09:00—11:30 Code review @2026-06-24 🔼 @1.5h @b:deep-work #project/backend
 ```
 
+### `@due:` Syntax
+
+In addition to `@date`, tasks can use `@due:YYYY-MM-DD` or `@due:tomorrow` to mark a due date. The `due:` prefix is preserved in the raw task line and is displayed in the `taskDate` field. Both `@YYYY-MM-DD` and `@due:YYYY-MM-DD` are treated identically by the parser.
+
+```markdown
+- [ ] Submit report @due:2026-06-30 @1h @b:admin
+- [ ] Pay invoice @due:tomorrow
+```
+
 ### Parsing a Task Line (for agent code)
 
 Pattern: `/^(\s*[-*+]\s*\[([^\]]*)\]\s*)(.*)$/`
@@ -366,11 +404,13 @@ The parsed task object has these fields:
   durationMinutes,   // number (0 if none)
   rawText,           // text after checkbox minus time block
   cleanText,         // rawText with all directives stripped
-  status,            // " " (open) or "x" / "X" (done)
+  status,            // "" (empty string = open) or "x" / "X" (done)
   priority,          // emoji or null
   bucket,            // bucket id string or null
 }
 ```
+
+> **Note on status field:** In the `_taskCache` and the runtime parser, an open task has `status: ""` (empty string), not `" "` (space). Completed tasks have `status: "x"` or `"X"`. Always use `status === "x" || status === "X"` to check completion, and `!status || status.trim() === ""` for open tasks.
 
 ### Date Parsing Available Keywords
 
@@ -589,9 +629,11 @@ These are registered Obsidian commands. You can ask the user to run them via the
 | `add-task-inline` | Add Task at Cursor | — | Inserts `- [ ] @today ` at cursor |
 | `insert-daily-dashboard` | Insert daily dashboard | — | Inserts today/overdue/due-week blocks |
 | `insert-weekly-dashboard` | Insert weekly dashboard | — | Inserts weekly review blocks |
-| `new-project` | New Project | — | Creates project folder + folder note |
+| `new-project` | New Project | — | Creates project folder + all 3 files (folder note, Tasks.md, Wiki.md) |
 | `add-bucket` | Add Bucket | — | Opens bucket creation modal |
-| `onboard` | Onboard / Migrate | — | Migrates old date format + code blocks |
+| `onboard` | Onboard / Migrate | — | Multi-step setup wizard: layout → dashboards → buckets → daily notes → first project (v0.4.0) |
+| `reset-settings` | Reset to Defaults | — | Clears settings + cache, resets to factory defaults (v0.4.0) |
+| `rebuild-cache` | Rebuild Task Cache | — | Clears task cache, rebuilds on next render (v0.4.0) |
 
 ---
 
@@ -738,6 +780,112 @@ const exists = await app.vault.adapter.exists(path)
 
 ---
 
+## 9.5 Operating from Outside Obsidian (CLI / Agent Context)
+
+When an agent manages Flowtime without access to `app.vault` APIs (e.g., CLI-based agents, scripted setup), all operations must be done via direct file system access.
+
+### Key Differences vs Inside-Obsidian
+
+| Operation | Inside Obsidian | Outside Obsidian |
+|-----------|---------------|------------------|
+| Read file | `app.vault.read(file)` | Read file via filesystem |
+| Write file | `app.vault.modify(file, content)` | Write file via filesystem |
+| Create file | `app.vault.create(path, content)` | Write new file |
+| Delete folder | `app.vault.delete(folder, true)` | `rm -rf` |
+| Plugin settings | `plugin.loadData()` / `plugin.saveData()` | Edit `.obsidian/plugins/flowtime/data.json` directly |
+| Daily notes config | Core Obsidian settings API | Edit `.obsidian/daily-notes.json` directly |
+| Task re-index | Triggered automatically by plugin events | ❌ NOT available — must ask user to reopen Obsidian or trigger re-index manually |
+
+### Files You Can Safely Edit from Outside Obsidian
+
+| File | Purpose | Notes |
+|------|---------|-------|
+| `ProjectName/ProjectName.md` | Folder note | Standard markdown + frontmatter |
+| `ProjectName/ProjectName Tasks.md` | Task management | Markdown with task lines |
+| `ProjectName/ProjectName Wiki.md` | Knowledge base | Standard markdown |
+| `Dashboard.md` | Overview | Flowtime code blocks |
+| `Daily/YYYY-MM-DD.md` | Daily notes | Tasks + flowtime blocks |
+| `.obsidian/daily-notes.json` | Daily notes folder config | Update `folder` key when moving daily notes |
+| `flowtime/sessions/YYYY-MM-DD.ndjson` | Session data | NDJSON format, one JSON object per line |
+
+### Plugin Settings (`data.json`) — Cautions
+
+The file `.obsidian/plugins/flowtime/data.json` can be edited directly, but:
+
+1. **Cache is now separate (v0.4.0+)**: The `_taskCache` has been moved to `.obsidian/plugins/flowtime/task-cache.json` so `data.json` stays lean. You can safely delete `task-cache.json` — it will rebuild on next render.
+2. **Always valid JSON**: Use `jq` or a JSON validator before writing. Invalid JSON will crash the plugin on load.
+3. **Restart required**: Changes to `data.json` only take effect when Obsidian reloads the plugin (restart or `Cmd+P` → "Reload app without saving").
+4. **Watch for stale paths**: If you change `projectsRoot`, the old cache paths will be invalid. Run `Cmd+P` → "Flowtime: Rebuild Task Cache" after changing this setting.
+5. **Empty `_taskCache` entries (legacy)**: In older versions, every file without tasks stored an empty array `[]` in the cache. v0.4.0+ only stores entries for files that actually have tasks, and cleans empty entries on load.
+
+### Recommended Post-CLI Setup Steps
+
+After making changes from the CLI, tell the user to do this in Obsidian:
+
+1. **`Cmd+P` → "Flowtime: Rebuild Task Cache"** (clears + rebuilds cache on next render)
+2. **`Cmd+P` → "Flowtime: Onboard / Migrate"** if migrating old date formats
+3. **`Cmd+P` → "Flowtime: Reset to Defaults"** if settings are corrupted
+4. **Verify** dashboards render correctly
+
+### Editing `daily-notes.json`
+
+The core Obsidian setting at `.obsidian/daily-notes.json` controls where daily notes are created:
+
+```json
+{
+  "folder": "Daily",
+  "template": "Daily/Template.md",
+  "format": "YYYY-MM-DD"
+}
+```
+
+If you move daily notes to a new folder, update this file AND the `_taskCache` will have stale entries for old daily note paths.
+
+### Handling Session Directory
+
+In v0.4.0+, the plugin auto-creates `flowtime/sessions/` on load if it's missing. In earlier versions, warn the user that the plugin may not auto-create it.
+
+---
+
+## 9.6 Troubleshooting
+
+### Stale Task Cache
+
+If the task cache shows stale/incorrect data (e.g., deleted files still appearing, wrong dates):
+
+1. **Clear and rebuild:** In Obsidian, run `Cmd+P` → "Flowtime: Rebuild Task Cache". Cache clears on next render.
+2. **From CLI:** Edit `.obsidian/plugins/flowtime/task-cache.json` and set its content to `{}` (empty JSON object). The plugin will rebuild on next render.
+3. **After changing `projectsRoot`:** The old cache paths become invalid. The plugin does NOT auto-clear in this case — run the rebuild command manually.
+
+### Cache File Location (v0.4.0+)
+
+The task cache is stored separately from `data.json` at:
+```
+.obsidian/plugins/flowtime/task-cache.json
+```
+
+This keeps `data.json` lean. If you delete this file, the plugin rebuilds it automatically on next render.
+
+### Session Data Not Appearing
+
+1. Check that `flowtime/sessions/` directory exists (v0.4.0+ creates it on load).
+2. Session NDJSON files are named `YYYY-MM-DD.ndjson`. Each line must be valid JSON.
+3. If a session file is corrupted, delete it or fix the JSON — the plugin silently skips unparseable lines.
+4. Restart Obsidian after editing session files from outside.
+
+### `_taskCache` in data.json (Legacy)
+
+If you see `_taskCache` in `data.json` while running v0.4.0+, the plugin migrates it to the separate `task-cache.json` file automatically and strips it from `data.json` on next save. No action needed.
+
+### Plugin Config Not Taking Effect
+
+Changes to `.obsidian/plugins/flowtime/data.json` from outside Obsidian require one of:
+- Reload the plugin: `Cmd+P` → "Reload app without saving"
+- Restart Obsidian entirely
+- Run `Cmd+P` → "Flowtime: Reset to Defaults" if settings are corrupted
+
+---
+
 ## 10. AGENT CONTRACT
 
 Guidelines for agent behavior when managing Flowtime data:
@@ -752,10 +900,12 @@ Guidelines for agent behavior when managing Flowtime data:
 
 ### DON'T
 - Don't create duplicate projects — check existing projects first
-- Don't modify files in `.obsidian/` or `.git/`
+- Don't modify files in `.obsidian/` **except** `plugins/flowtime/data.json`, `plugins/flowtime/task-cache.json`, and `daily-notes.json` — these are safe to edit
+- Don't modify `.git/` or any git-internal files
 - Don't use `$` or other non-standard list markers — Obsidian uses `- [ ]` syntax
 - Don't remove completed tasks from files unless explicitly asked — they serve as history
 - Don't create empty tasks (must have at least a description)
+- Don't delete `task-cache.json` without warning the user — it will be rebuilt but may cause a temporary performance hit on next render
 
 ### Error Handling
 - If a file read/write fails, report the error to the user

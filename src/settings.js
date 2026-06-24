@@ -37,7 +37,7 @@ const DEFAULT_SETTINGS = {
 	weeklyTemplate:
 		"## 📊 This Week\n```flowtime-weekly\n```\n\n## ⚠️ Due Next Week\n```flowtime-dueweek\n```\n\n## 📝 Review\n- [ ] Plan next week 🔁 every week @{{WEEK_END}}\n- [ ] Review goals 🔺 @{{WEEK_END}}\n",
 	projectTemplate:
-		"---\ntype: project\nname: {{NAME}}\nstatus: active\ntags: [project]\n---\n\n# {{NAME}}\n\n## 🎯 Goal\n\n## 📋 Tasks\n\n```flowtime-project\n```\n\n- [ ] Define scope 🔺 @{{DATE}}\n- [ ] First milestone @{{DATE}}\n- [ ] Daily check-in 🔁 every day @{{DATE}}\n\n## 📝 Notes\n",
+		"---\ntype: project\nname: {{NAME}}\nstatus: active\ntags: [project]\n---\n\n# {{NAME}}\n\n## 🎯 Goal\n\n## 📋 Tasks\n\n```flowtime-project\n```\n\n## 📝 Notes\n",
 
 	// Saved Views
 	savedViews: {},
@@ -138,8 +138,14 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 					.setPlaceholder("")
 					.setValue(this.plugin.settings.projectsRoot)
 					.onChange(async (value) => {
+						const oldRoot = this.plugin.settings.projectsRoot;
 						this.plugin.settings.projectsRoot = value;
 						await this.plugin.saveData(this.plugin.settings);
+						// Detect change and offer to rebuild cache
+						if (oldRoot !== value) {
+							this.plugin.taskCache?.clear();
+							new Notice("🔄 Projects root changed — task cache cleared. It will rebuild on next render.", 5000);
+						}
 					}),
 			);
 

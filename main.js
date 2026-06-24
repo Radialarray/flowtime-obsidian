@@ -74,10 +74,58 @@ module.exports = class FlowtimePlugin extends Plugin {
 		this.templateEngine = new TemplateEngine(this.app, this);
 		this.sessionStore = new SessionStore(this.app.vault);
 		this.taskCache = new TaskCache();
-		// Load persisted cache from saved data
-		if (savedData && savedData._taskCache) {
-			this.taskCache.fromJSON(savedData._taskCache);
+
+		// ── v0.4.0: Cache persistence in separate file ──
+		this._cacheSaveTimer = null;
+		this._cacheFilePath = () => this.app.vault.configDir + "/plugins/flowtime/task-cache.json";
+
+		this._loadTaskCache = async () => {
+			try {
+				const cachePath = this._cacheFilePath();
+				if (await this.app.vault.adapter.exists(cachePath)) {
+					const content = await this.app.vault.adapter.read(cachePath);
+					this.taskCache.fromJSON(JSON.parse(content));
+				} else if (savedData && savedData._taskCache) {
+					this.taskCache.fromJSON(savedData._taskCache);
+					delete savedData._taskCache;
+				}
+			} catch (_) {}
+		};
+
+		this._saveTaskCache = async () => {
+			try {
+				await this.app.vault.adapter.write(
+					this._cacheFilePath(),
+					JSON.stringify(this.taskCache.toJSON(), null, 2),
+				);
+			} catch (_) {}
+		};
+
+		// Load cache from separate file (with legacy fallback)
+		await this._loadTaskCache();
+
+		// v0.4.0: Auto-evict stale cache entries (files that no longer exist)
+		const evicted = await this.taskCache.autoEvict(async (path) => {
+			return !!(this.app.vault.getAbstractFileByPath(path));
+		});
+		if (evicted > 0) {
+			this.notify(`🧹 Task cache cleaned: ${evicted} stale entries removed`);
 		}
+
+		// v0.4.0: Check safety limits
+		const { warnings } = this.taskCache.checkSafetyLimits();
+		for (const w of warnings) {
+			this.notify("⚠️ " + w, true);
+		}
+
+		// v0.4.0: Ensure session directory exists
+		await this._ensureSessionDir();
+
+		// v0.4.0: Check daily notes folder exists
+		await this._checkDailyNotesFolder();
+
+		// Track old projectsRoot to detect changes
+		this._previousProjectsRoot = this.settings.projectsRoot;
 
 		const onFileChanged = (file) => {
 			this.projectEngine.invalidate(file.path);
@@ -191,12 +239,14 @@ module.exports = class FlowtimePlugin extends Plugin {
 					constructor(app, onSubmit) {
 						super(app);
 						this.onSubmit = onSubmit;
+						this.scaffoldTasks = true;
+						this.scaffoldWiki = true;
 					}
 					onOpen() {
 						const { contentEl } = this;
 						contentEl.createEl("h2", { text: "New Project" });
 						contentEl.createEl("p", {
-							text: "Creates a project folder note with frontmatter marker.",
+							text: "Creates a new project folder with notes.",
 							cls: "flowtime-label",
 						});
 
@@ -207,6 +257,22 @@ module.exports = class FlowtimePlugin extends Plugin {
 						});
 						input.style.marginTop = "8px";
 						input.focus();
+
+						// Scaffold options
+						contentEl.createEl("hr", { style: "margin: 12px 0" });
+						const tasksCb = contentEl.createEl("label", { cls: "flowtime-label" });
+						const tasksCheck = tasksCb.createEl("input", { type: "checkbox" });
+						tasksCheck.checked = this.scaffoldTasks;
+						tasksCheck.style.marginRight = "6px";
+						tasksCheck.addEventListener("change", () => { this.scaffoldTasks = tasksCheck.checked; });
+						tasksCb.append(" Create Tasks.md (with flowtime-project block + starter tasks)");
+
+						const wikiCb = contentEl.createEl("label", { cls: "flowtime-label" });
+						const wikiCheck = wikiCb.createEl("input", { type: "checkbox" });
+						wikiCheck.checked = this.scaffoldWiki;
+						wikiCheck.style.marginRight = "6px";
+						wikiCheck.addEventListener("change", () => { this.scaffoldWiki = wikiCheck.checked; });
+						wikiCb.append(" Create Wiki.md (with template sections)");
 
 						const btnRow = contentEl.createEl("div", { cls: "flowtime-btn-row" });
 						const cancelBtn = btnRow.createEl("button", {
@@ -222,7 +288,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 						createBtn.addEventListener("click", () => {
 							const name = input.value.trim();
 							if (name) {
-								this.onSubmit(name);
+								this.onSubmit(name, { scaffoldTasks: this.scaffoldTasks, scaffoldWiki: this.scaffoldWiki });
 								this.close();
 							}
 						});
@@ -230,7 +296,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 							if (e.key === "Enter") {
 								const name = input.value.trim();
 								if (name) {
-									this.onSubmit(name);
+									this.onSubmit(name, { scaffoldTasks: this.scaffoldTasks, scaffoldWiki: this.scaffoldWiki });
 									this.close();
 								}
 							}
@@ -241,10 +307,13 @@ module.exports = class FlowtimePlugin extends Plugin {
 					}
 				}
 
-				new ProjectNameModal(this.app, async (name) => {
+				new ProjectNameModal(this.app, async (name, opts) => {
 					try {
-						await this.templateEngine.createProject(name);
-						this.notify("✅ Project created: " + name);
+						const result = await this.templateEngine.createProject(name, opts);
+						const parts = [result.notePath];
+						if (result.tasksPath) parts.push(result.tasksPath);
+						if (result.wikiPath) parts.push(result.wikiPath);
+						this.notify("✅ Project created: " + name + " (" + parts.length + " files)");
 					} catch (e) {
 						this.notify("❌ Failed to create project: " + e.message, true);
 					}
@@ -323,9 +392,57 @@ module.exports = class FlowtimePlugin extends Plugin {
 			},
 		});
 
-		// ── Cache persistence ──
-		this._cacheSaveTimer = null;
-		this._cacheInitialSaveDone = false;
+		// ── v0.4.0: Flowtime: Reset to Defaults ──
+		this.addCommand({
+			id: "reset-settings",
+			name: "Reset to Defaults",
+			callback: async () => {
+				class ConfirmModal extends Modal {
+					constructor(app, onConfirm) {
+						super(app);
+						this.onConfirm = onConfirm;
+					}
+					onOpen() {
+						const { contentEl } = this;
+						contentEl.createEl("h2", { text: "Reset Flowtime to Defaults?" });
+						contentEl.createEl("p", {
+							text: "This will clear all settings, buckets, and the task cache. Project files and session data will NOT be affected.",
+							cls: "flowtime-label",
+						});
+						const btnRow = contentEl.createEl("div", { cls: "flowtime-btn-row" });
+						const cancelBtn = btnRow.createEl("button", { text: "Cancel", cls: "flowtime-btn-cancel" });
+						const confirmBtn = btnRow.createEl("button", { text: "Reset", cls: "flowtime-btn-submit" });
+						confirmBtn.style.background = "var(--text-error)";
+						cancelBtn.addEventListener("click", () => this.close());
+						confirmBtn.addEventListener("click", () => { this.onConfirm(); this.close(); });
+					}
+					onClose() { this.contentEl.empty(); }
+				}
+				new ConfirmModal(this.app, async () => {
+					this.settings = Object.assign({}, DEFAULT_SETTINGS);
+					this.taskCache.clear();
+					await this.saveData(this.settings);
+					// Remove separate cache file if it exists
+					try {
+						const cachePath = this._cacheFilePath();
+						if (await this.app.vault.adapter.exists(cachePath)) {
+							await this.app.vault.adapter.remove(cachePath);
+						}
+					} catch (_) {}
+					this.notify("✅ Flowtime reset to defaults. Reload for full effect.");
+				}).open();
+			},
+		});
+
+		// ── v0.4.0: Rebuild Cache Command ──
+		this.addCommand({
+			id: "rebuild-cache",
+			name: "Rebuild Task Cache",
+			callback: async () => {
+				this.taskCache.clear();
+				this.notify("🔄 Cache cleared. It will rebuild on next render.");
+			},
+		});
 
 		/**
 		 * Debounced cache save — writes 2s after last change.
@@ -339,9 +456,13 @@ module.exports = class FlowtimePlugin extends Plugin {
 			this._cacheSaveTimer = setTimeout(async () => {
 				this._cacheSaveTimer = null;
 				try {
+					await this._saveTaskCache();
+					// Also strip legacy _taskCache from data.json if present
 					const data = (await this.loadData()) || {};
-					data._taskCache = this.taskCache.toJSON();
-					await this.saveData(data);
+					if (data._taskCache) {
+						delete data._taskCache;
+						await this.saveData(data);
+					}
 				} catch (_) {}
 			}, force ? 0 : 2000);
 		};
@@ -355,5 +476,38 @@ module.exports = class FlowtimePlugin extends Plugin {
 			// Clean up wide mode body class
 			document.body.classList.remove("ft-wide");
 		});
+	}
+
+	/**
+	 * v0.4.0: Ensure the sessions directory exists on plugin load.
+	 */
+	async _ensureSessionDir() {
+		try {
+			const exists = await this.app.vault.adapter.exists("flowtime/sessions");
+			if (!exists) {
+				await this.app.vault.createFolder("flowtime/sessions");
+				this.notify("📁 Created flowtime/sessions/ directory");
+			}
+		} catch (e) {
+			console.warn("Flowtime: Could not create sessions directory:", e.message);
+		}
+	}
+
+	/**
+	 * v0.4.0: Check that the daily notes folder from .obsidian/daily-notes.json exists.
+	 * If missing, warn the user so they can fix or create it.
+	 */
+	async _checkDailyNotesFolder() {
+		try {
+			const dailyNotesPath = this.app.vault.configDir + "/daily-notes.json";
+			if (!(await this.app.vault.adapter.exists(dailyNotesPath))) return;
+			const content = await this.app.vault.adapter.read(dailyNotesPath);
+			const config = JSON.parse(content);
+			const folder = config.folder;
+			if (!folder) return;
+			if (!(await this.app.vault.adapter.exists(folder))) {
+				this.notify("⚠️ Daily notes folder '" + folder + "' not found. Check Settings → Daily Notes.", true);
+			}
+		} catch (_) {}
 	}
 };

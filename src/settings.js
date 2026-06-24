@@ -27,7 +27,7 @@ const DEFAULT_SETTINGS = {
 	weeklyTemplate:
 		"## 📊 This Week (by project)\n```task-planner-weekly\n```\n\n## ⚠️ Due Next Week\n```task-planner-dueweek\n```\n\n## 📝 Review\n",
 	projectTemplate:
-		"---\ntype: project\nname: {{NAME}}\nstatus: active\ntags: [project]\n---\n\n# {{NAME}}\n\n## 🎯 Goal\n\n## 📋 Tasks\n",
+		"---\ntype: project\nname: {{NAME}}\nstatus: active\ntags: [project]\n---\n\n# {{NAME}}\n\n## 🎯 Goal\n\n## 📋 Tasks\n\n```task-planner-project\n```\n\n## 📝 Notes\n",
 };
 
 class FlowtimeSettingsTab extends PluginSettingTab {

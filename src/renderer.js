@@ -277,6 +277,21 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 			wk = this.mode === "weekly",
 			pj = this.mode === "project";
 		const isCompact = od || dw || wk;
+
+		// Inline heading with mode-specific hint
+		const headings = {
+			today: "💡 Set times and durations — edits save to source files",
+			overdue: "📋 Tasks past their scheduled date — reassign or backlog",
+			dueweek: "⚠️ Tasks due this week — schedule or defer",
+			weekly: "📊 This week's tasks grouped by project",
+			project: "📁 Tasks for this project",
+		};
+		const heading = headings[this.mode];
+		if (heading) {
+			const hdr = this.containerEl.createEl("div", { cls: "tp-heading" });
+			hdr.createEl("span", { text: heading, cls: "tp-heading-text" });
+		}
+
 		const toolbar = this.containerEl.createEl("div", { cls: "tp-toolbar" });
 
 		const tdy = new Date().toISOString().split("T")[0];

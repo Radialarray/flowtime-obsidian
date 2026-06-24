@@ -21,9 +21,13 @@
 }
 
 .flowtime td {
-	padding: 4px 8px;
+	padding: 6px 8px;
 	border-bottom: 1px solid var(--background-modifier-border);
 	vertical-align: middle;
+}
+
+.flowtime tr {
+	height: 42px;
 }
 
 .flowtime tr:hover td {
@@ -62,6 +66,24 @@
 	margin-bottom: 4px;
 }
 
+/* --- Inline heading --- */
+.tp-heading {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 10px;
+	margin-bottom: 6px;
+	background: var(--background-primary-alt);
+	border-left: 3px solid var(--interactive-accent);
+	border-radius: 0 4px 4px 0;
+}
+
+.tp-heading-text {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	line-height: 1.4;
+}
+
 .tp-save-all-btn,
 .tp-bulk-btn {
 	padding: 4px 12px;
@@ -95,6 +117,7 @@
 	position: relative;
 	display: inline-flex;
 	align-items: center;
+	white-space: nowrap;
 }
 
 .tp-start-input {
@@ -363,6 +386,7 @@
 .tp-actions-wrap {
 	display: inline-flex;
 	gap: 4px;
+	white-space: nowrap;
 }
 
 .tp-act-btn {
@@ -401,6 +425,7 @@
 	display: inline-flex;
 	align-items: center;
 	gap: 4px;
+	white-space: nowrap;
 }
 
 .tp-timer-play,

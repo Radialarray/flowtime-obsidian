@@ -8,6 +8,7 @@ const { runOnboard } = require("./src/onboard");
 const { StatusTimer } = require("./src/status-timer");
 const { SessionStore } = require("./src/session-store");
 const { TaskCache } = require("./src/cache");
+const { RoutineEngine } = require("./src/routine-engine");
 
 class AddTaskSuggest extends EditorSuggest {
 	constructor(app, plugin) {
@@ -113,6 +114,7 @@ class AtCompletionsSuggest extends EditorSuggest {
 				{ label: "@sessions", insert: "```flowtime-sessions\n```", desc: "Session history code block" },
 				{ label: "@proj", insert: "```flowtime-project\n```", desc: "Project tasks code block" },
 				{ label: "@dueweek", insert: "```flowtime-dueweek\n```", desc: "Due this week code block" },
+				{ label: "@weekplan", insert: "```flowtime-weekplan\n```", desc: "Week plan code block" },
 			];
 			return macros
 				.filter(m => m.label.slice(1).includes(q)) // match after @
@@ -262,6 +264,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 		this.templateEngine = new TemplateEngine(this.app, this);
 		this.sessionStore = new SessionStore(this.app.vault);
 		this.taskCache = new TaskCache();
+		this.routineEngine = new RoutineEngine(this.app, this);
 
 		// ── v0.4.0: Cache persistence in separate file ──
 		this._cacheSaveTimer = null;
@@ -312,6 +315,18 @@ module.exports = class FlowtimePlugin extends Plugin {
 		// v0.4.0: Check daily notes folder exists
 		await this._checkDailyNotesFolder();
 
+		// v0.5.0: Ensure routines folder exists
+		await this.routineEngine.ensureRoutinesFolder();
+
+		// v0.5.0: Auto-generate routine instances
+		if (this.settings.autoGenerateOnStartup !== false) {
+			this.routineEngine.generateAllDue().then(count => {
+				if (count > 0 && !this.settings.quietMode) {
+					this.notify("🔁 Generated " + count + " routine task" + (count === 1 ? "" : "s"));
+				}
+			}).catch(e => console.warn("Flowtime: Routine generation error:", e.message));
+		}
+
 		// Track old projectsRoot to detect changes
 		this._previousProjectsRoot = this.settings.projectsRoot;
 
@@ -323,6 +338,21 @@ module.exports = class FlowtimePlugin extends Plugin {
 		this.registerEvent(this.app.vault.on("modify", onFileChanged));
 		this.registerEvent(this.app.vault.on("delete", onFileChanged));
 		// Also invalidate on rename (create+delete fires separately)
+
+		// v0.5.0: Watch routines folder for changes → re-generate (debounced)
+		const routinesFolder = this.settings.routinesFolder || "flowtime/routines/";
+		this._routineWatchTimer = null;
+		this.registerEvent(this.app.vault.on("modify", (file) => {
+			if (file.path.startsWith(routinesFolder) && !file.path.endsWith(".generated.json")) {
+				if (this._routineWatchTimer) clearTimeout(this._routineWatchTimer);
+				this._routineWatchTimer = setTimeout(() => {
+					this._routineWatchTimer = null;
+					this.routineEngine.generateAllDue().catch(e =>
+						console.warn("Flowtime: Routine auto-gen error:", e.message)
+					);
+				}, 5000);
+			}
+		}));
 
 		// Register /add-task slash command suggester
 		this.registerEditorSuggest(new AddTaskSuggest(this.app, this));
@@ -396,6 +426,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 			["flowtime-project", "project"],
 			["flowtime-buckets", "budget"],
 			["flowtime-sessions", "sessions"],
+			["flowtime-weekplan", "weekplan"],
 		]) {
 			this.registerMarkdownCodeBlockProcessor(name, (_src, el, ctx) => {
 				const r = new FlowtimeRenderer(this.app, el, mode, this.projectEngine, ctx.sourcePath);
@@ -572,6 +603,35 @@ module.exports = class FlowtimePlugin extends Plugin {
 					onClose() { this.contentEl.empty(); }
 				}
 				new BucketModal(this.app, this).open();
+			},
+		});
+
+		// ── v0.5.0: Routine Engine Commands ──
+
+		this.addCommand({
+			id: "generate-routines",
+			name: "Generate Routines",
+			callback: async () => {
+				const count = await this.routineEngine.generateAllDue({ force: true });
+				this.notify("🔁 Generated " + count + " routine task" + (count === 1 ? "" : "s"));
+			},
+		});
+
+		this.addCommand({
+			id: "generate-routines-today",
+			name: "Generate Routines for Today",
+			callback: async () => {
+				const count = await this.routineEngine.generateToday({ force: true });
+				this.notify("🔁 Generated " + count + " routine task" + (count === 1 ? "" : "s") + " for today");
+			},
+		});
+
+		this.addCommand({
+			id: "clear-routine-tracking",
+			name: "Clear Routine Generation Tracking",
+			callback: async () => {
+				await this.routineEngine.clearTracking();
+				this.notify("🗑 Routine tracking cleared. Regenerate to recreate instances.");
 			},
 		});
 

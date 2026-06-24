@@ -1,6 +1,10 @@
 const { Plugin, MarkdownRenderChild, Notice } = require("obsidian");
 
 module.exports = class TaskPlannerTablePlugin extends Plugin {
+	constructor() {
+		super();
+		this.renderers = [];
+	}
 	async onload() {
 		for (const [name, mode] of [
 			["task-planner", "today"],
@@ -8,7 +12,10 @@ module.exports = class TaskPlannerTablePlugin extends Plugin {
 			["task-planner-dueweek", "dueweek"],
 		]) {
 			this.registerMarkdownCodeBlockProcessor(name, (_src, el, ctx) => {
-				ctx.addChild(new TaskPlannerRenderer(this.app, el, mode));
+				const r = new TaskPlannerRenderer(this.app, el, mode);
+				r.plugin = this;
+				this.renderers.push(r);
+				ctx.addChild(r);
 			});
 		}
 	}
@@ -22,6 +29,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 	constructor(app, containerEl, mode) {
 		super(containerEl);
 		this.app = app;
+		this.plugin = null;
 		this.mode = mode || "today";
 		this.tasks = [];
 		this.rowData = [];
@@ -221,6 +229,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 			};
 			mkBtn("📅 Assign All to Today", "tp-bulk-btn", async () => {
 				for (const t of this.tasks) await this.updateDate(t, tdy);
+				await this._refreshSiblings();
 				this.tasks = [];
 				this.renderTable();
 				new Notice("✅ All assigned to today");
@@ -228,6 +237,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 			if (od) {
 				mkBtn("🗑 Backlog All", "tp-bulk-btn tp-bulk-remove", async () => {
 					for (const t of this.tasks) await this.updateDate(t, "");
+					await this._refreshSiblings();
 					this.tasks = [];
 					this.renderTable();
 					new Notice("🗑 All sent to backlog");
@@ -414,11 +424,17 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 			// Register one document capture handler for all popups
 			if (!this._closePopups) {
 				this._closePopups = (ev) => {
-					document.querySelectorAll(".tp-date-popup.tp-dp-open").forEach((p) => {
-						if (p.contains(ev.target) || (p._badge && p._badge.contains(ev.target))) return;
-						p.classList.remove("tp-dp-open");
-						if (p.parentNode) p.parentNode.removeChild(p);
-					});
+					document
+						.querySelectorAll(".tp-date-popup.tp-dp-open")
+						.forEach((p) => {
+							if (
+								p.contains(ev.target) ||
+								(p._badge && p._badge.contains(ev.target))
+							)
+								return;
+							p.classList.remove("tp-dp-open");
+							if (p.parentNode) p.parentNode.removeChild(p);
+						});
 				};
 				document.addEventListener("click", this._closePopups, true);
 			}
@@ -452,6 +468,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 						this.tasks = this.tasks.filter((t) => t !== task);
 						this.rowData = this.rowData.filter((r) => r.task !== task);
 						if (!this.tasks.length) this.renderTable();
+						if (nd && nd !== tdy) await this._refreshSiblings();
 					}
 				} catch (e) {
 					new Notice("❌ " + e.message);
@@ -477,6 +494,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 				});
 				abTdy.addEventListener("click", async () => {
 					await this.updateDate(task, tdy);
+					await this._refreshSiblings();
 					row.remove();
 					this.tasks = this.tasks.filter((t) => t !== task);
 					if (!this.tasks.length) this.renderTable();
@@ -488,6 +506,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 					});
 					abBkl.addEventListener("click", async () => {
 						await this.updateDate(task, "");
+						await this._refreshSiblings();
 						row.remove();
 						this.tasks = this.tasks.filter((t) => t !== task);
 						if (!this.tasks.length) this.renderTable();
@@ -500,6 +519,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 					abDue.addEventListener("click", async () => {
 						if (!task.dueDate) return;
 						await this.updateDate(task, task.dueDate);
+						await this._refreshSiblings();
 						row.remove();
 						this.tasks = this.tasks.filter((t) => t !== task);
 						if (!this.tasks.length) this.renderTable();
@@ -610,5 +630,14 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 			lines[task.line] = line.replace(/\s*⏳\s*\d{4}-\d{2}-\d{2}/, "");
 		}
 		await this.app.vault.modify(task.file, lines.join("\n"));
+	}
+
+	async _refreshSiblings() {
+		if (!this.plugin) return;
+		for (const r of this.plugin.renderers) {
+			if (r === this) continue;
+			await r.loadTasks();
+			r.renderTable();
+		}
 	}
 }

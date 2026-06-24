@@ -61,28 +61,35 @@ class QuickEntryModal extends Modal {
 			updateLivePreview();
 		});
 
-		// ── Project ──
+		// ── Project (with datalist from vault projects) ──
 		contentEl.createEl("label", { text: "Project", cls: "flowtime-label" });
 		const projInput = contentEl.createEl("input", {
 			type: "text",
 			placeholder: "e.g. website, personal",
 			cls: "flowtime-input",
+			attr: { list: "flowtime-project-list" },
+		});
+		const projDatalist = contentEl.createEl("datalist", {
+			attr: { id: "flowtime-project-list" },
 		});
 
-		// Auto-detect project from active file
+		// Populate datalist from vault projects
 		const activeFile = this.app.workspace.getActiveFile();
-		if (activeFile && this.plugin.projectEngine) {
-			this.plugin.projectEngine
-				.resolve(activeFile.path)
-				.then((result) => {
+		if (this.plugin.projectEngine) {
+			this.plugin.projectEngine.getAllProjects().then((projects) => {
+				for (const proj of projects) {
+					projDatalist.createEl("option", { attr: { value: proj.name } });
+				}
+			});
+			// Auto-detect project from active file
+			if (activeFile) {
+				this.plugin.projectEngine.resolve(activeFile.path).then((result) => {
 					if (result?.name && !projInput.value) {
 						projInput.value = result.name;
 						projInput.setAttribute("data-auto", "true");
 					}
-				})
-				.catch(() => {
-					// projectEngine resolve failed silently
-				});
+				}).catch(() => {});
+			}
 		}
 
 		// ── Duration ──

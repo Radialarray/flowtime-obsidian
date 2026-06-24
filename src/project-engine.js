@@ -134,6 +134,43 @@ class ProjectEngine {
 		return match ? match[1] : null;
 	}
 
+	/**
+	 * Scan vault for all known projects (folder notes with frontmatter marker).
+	 * Returns sorted array of unique project names.
+	 */
+	async getAllProjects() {
+		const projects = new Map(); // name → path
+		const files = this.app.vault.getMarkdownFiles();
+		for (const file of files) {
+			// Only check files that could be folder notes (name matches parent dir)
+			const parts = file.path.split("/");
+			const folder = parts.length > 1 ? parts[parts.length - 2] : null;
+			if (!folder || file.basename !== folder) continue;
+
+			try {
+				const content = await this.app.vault.read(file);
+				const fm = this._parseFrontmatter(content);
+				if (fm.found) {
+					const key = this.settings.projectFrontmatterKey;
+					const val = this.settings.projectFrontmatterValue;
+					if (fm.data[key] === val || fm.data[key] === true) {
+						const name = fm.data[this.settings.projectNameKey]
+							|| fm.data["title"]
+							|| fm.data["alias"]
+							|| folder;
+						if (!projects.has(name)) {
+							projects.set(name, file.path);
+						}
+					}
+				}
+			} catch (_) {}
+		}
+		// Sort alphabetically
+		return [...projects.entries()]
+			.sort((a, b) => a[0].localeCompare(b[0]))
+			.map(([name, path]) => ({ name, path }));
+	}
+
 	/* ─── cache management ─── */
 
 	/**

@@ -30,7 +30,6 @@ module.exports = class FlowtimePlugin extends Plugin {
 		this.addCommand({
 			id: "add-task",
 			name: "Add Task",
-			hotkeys: [{ modifiers: ["Mod", "Alt"], key: "T" }],
 			callback: () => {
 				new QuickEntryModal(this.app, this).open();
 			},

@@ -16,7 +16,7 @@ The recommended Flowtime vault structure keeps the root clean — **2-3 user-fac
 ```
 vault/
 ├── Dashboard.md              ← Daily overview (overdue + today + dueweek)
-├── Dashboard Weekly.md       ← Weekly overview (+ weekly + budget + sessions)
+├── Dashboard Weekly.md       ← Weekly overview (+ weekly + budget + sessions + weekplan)
 ├── Daily/                    ← Daily notes (YYYY-MM-DD.md)
 ├── Projects/                 ← All projects (if nested layout)
 │   ├── ProjectA/
@@ -29,7 +29,11 @@ vault/
 │   │   └── ProjectB Wiki.md
 │   └── ...
 ├── flowtime/
-│   └── sessions/             ← Session NDJSON files (auto-managed)
+│   ├── sessions/             ← Session NDJSON files (auto-managed)
+│   └── routines/             ← Routine template files (v0.5.0) — .md files with task lines + 🔁 markers
+│       ├── Daily.md
+│       ├── Weekly.md
+│       └── .generated.json   ← Auto-managed generation tracking — do NOT edit
 ├── Craft/                    ← Other content (not Flowtime-managed)
 ├── Notion/                   ← Other content (not Flowtime-managed)
 └── .obsidian/                ← Core config
@@ -373,7 +377,7 @@ Tasks are markdown list items with checkbox status and annotation tags.
 | Priority (color dot) | `🟥` / `🟨` / `🟩` | `🟥` | 🟥=high, 🟨=med, 🟩=low |
 | Priority text | `@high` / `@med` / `@low` | `@high` | Aliases for 🟥/🟨/🟩 (v0.4.0) |
 | Status tag | `@soon` | `@soon` | Marks as backlog/up-next. Shows in "📋 Up Next" section (v0.4.0) |
-| Recurrence | `🔁 every <period>` | `🔁 every day` | Auto-reschedules on completion |
+| Recurrence | `🔁 every <interval>` | `🔁 every workday`, `🔁 every Mon Wed Fri`, `🔁 every 2nd Sun` | Generates task instances into daily notes (v0.5.0) |
 
 ### Full Examples
 
@@ -453,6 +457,7 @@ Type `@` at the **start of a line** (no task marker) to open command macros. Sel
 | `@budget` | ``flowtime-buckets`` code block |
 | `@proj` | ``flowtime-project`` code block |
 | `@sessions` | ``flowtime-sessions`` code block |
+| `@weekplan` | ``flowtime-weekplan`` code block (v0.5.0) |
 
 ### READ Tasks (List All)
 
@@ -569,18 +574,55 @@ lines.splice(task.line, 1)  // remove the line
 await app.vault.modify(file, lines.join("\n"))
 ```
 
-### Recurring Tasks
+### Recurring Tasks (v0.5.0)
 
-Tasks with `🔁` directive auto-reschedule when completed. The pattern is:
+Tasks with `🔁` marker are no longer just decorative — the **Routine Engine** generates real task instances into daily notes. Place them in `flowtime/routines/*.md` files.
+
+#### Recurrence Syntax
+
+| Marker | Meaning |
+|--------|---------|
+| `🔁 every day` | Every day |
+| `🔁 every workday` | Monday–Friday (configurable workdays) |
+| `🔁 every week` | Every Monday |
+| `🔁 every month` | 1st of every month |
+| `🔁 every Mon` | Every Monday |
+| `🔁 every Mon Wed Fri` | Monday, Wednesday, Friday |
+| `🔁 every 2nd Sun` | 2nd Sunday of each month |
+| `🔁 every last Fri` | Last Friday of each month |
+| `🔁 every month on 15th` | 15th of every month |
+| `🔁 every 3 days` | Every 3 days from last generation |
+
+#### Routines Folder
+
+Create `.md` files in `flowtime/routines/` with task lines using the markers above:
+
+```markdown
+# flowtime/routines/Daily.md
+
+- [ ] Morning pages @06:00—06:30 @b:deep-work 🔁 every workday
+- [ ] Review goals @06:30—06:45 🔁 every workday
+- [ ] Sprint planning @09:00—10:00 🔁 every Mon
+- [ ] Weekly review @15:00—16:00 🔁 every Fri
+- [ ] Team standup @09:00—09:15 🔁 every Mon Wed Fri
+- [ ] Pay rent 🔁 every month on 1st
 ```
-- [ ] Morning review 🔁 every day @2026-06-24
-```
 
-When you mark such a task complete (change `[ ]` to `[x]`), you should also:
-1. Update the date to the next occurrence
-2. Change `[x]` back to `[ ]` (it stays open, just advances to next date)
+The engine:
+1. Scans `flowtime/routines/*.md` on plugin load
+2. Checks if each task line is due for today/this week
+3. Writes a real task line to the daily note (`YYYY-MM-DD.md`)
+4. Records the generation in `flowtime/routines/.generated.json`
 
-**Supported periods:** `every day`, `every week`, `every month`, `every 2 weeks`, etc.
+**Critical rules for agents:**
+- **Do NOT edit `.generated.json`** — it's auto-managed. Editing it can cause duplicate tasks across synced devices.
+- Deleting a generated instance from a daily note is permanent — the engine won't re-create it for that date.
+- To force regeneration of a specific routine task, delete its `.generated.json` entry (not recommended) or ask the user to run "Generate Routines" command in Obsidian.
+- Routine files can contain non-task content (headers, notes, separators) — only lines starting with `- [ ]` that contain `🔁` are treated as routines.
+
+#### Vacation Mode
+
+Set `vacationMode: true` in settings to pause all routine generation. The engine skips all evaluation and writes nothing. Accessible from settings and the weekplan toolbar toggle.
 
 ---
 
@@ -651,7 +693,7 @@ These are registered Obsidian commands. You can ask the user to run them via the
 |-----------|------|----------|-------------|
 | `add-task` | Add Task | `Cmd+Shift+I` | Opens Quick Entry modal |
 | `add-task-inline` | Add Task at Cursor | — | Inserts `- [ ] @today ` at cursor |
-| `@` completions | (built-in) | — | `@` in task lines → directives (@today, @b:, @p:, @soon). `@` at line start → command macros (@td, @now, @weekly) |
+| `@` completions | (built-in) | — | `@` in task lines → directives (@today, @b:, @p:, @soon). `@` at line start → command macros (@td, @now, @weekly, @weekplan) |
 | `insert-daily-dashboard` | Insert daily dashboard | — | Inserts today/overdue/due-week blocks |
 | `insert-weekly-dashboard` | Insert weekly dashboard | — | Inserts weekly review blocks |
 | `new-project` | New Project | — | Creates project folder + all 3 files (folder note, Tasks.md, Wiki.md) |
@@ -659,6 +701,9 @@ These are registered Obsidian commands. You can ask the user to run them via the
 | `onboard` | Onboard / Migrate | — | Multi-step setup wizard: layout → dashboards → buckets → daily notes → first project (v0.4.0) |
 | `reset-settings` | Reset to Defaults | — | Clears settings + cache, resets to factory defaults (v0.4.0) |
 | `rebuild-cache` | Rebuild Task Cache | — | Clears task cache, rebuilds on next render (v0.4.0) |
+| `generate-routines` | Generate Routines | — | Force-generates all due routine instances (v0.5.0) |
+| `generate-routines-today` | Generate Routines for Today | — | Force-generates routines for today only (v0.5.0) |
+| `clear-routine-tracking` | Clear Routine Generation Tracking | — | Clears `.generated.json` so all routines regenerate (v0.5.0) |
 
 ---
 
@@ -675,6 +720,7 @@ These are Obsidian code blocks the plugin renders. Add them to any markdown note
 ```flowtime-project     # Tasks for the note's containing project
 ```flowtime-buckets     # Budget overview with progress bars
 ```flowtime-sessions    # Session history + analytics
+```flowtime-weekplan    # Week-at-a-glance with list/grid toggle (v0.5.0)
 ````
 
 ---
@@ -696,6 +742,13 @@ Key settings for agent use:
 | `tagPrefix` | string | `project/` | Prefix for project tags |
 | `projectsRoot` | string | "" | Root folder for projects (empty = entire vault) |
 | `quickEntryTargetFile` | string | `daily-note` | Default task target |
+| `routinesFolder` | string | `flowtime/routines/` | Folder for routine template files (v0.5.0) |
+| `vacationMode` | bool | false | Pause all routine generation (v0.5.0) |
+| `autoGenerateOnStartup` | bool | true | Generate routines on plugin load (v0.5.0) |
+| `autoGenerateOnOpenDaily` | bool | true | Generate when daily note opens (v0.5.0) |
+| `workdays` | array | [1,2,3,4,5] | Day indices for 🔁 every workday — 0=Sun, 6=Sat (v0.5.0) |
+| `weekStartDay` | number | 1 | First day of week for weekplan view — 0=Sun, 1=Mon (v0.5.0) |
+| `hideCompletedRoutines` | bool | false | Suppress checked-off routines in weekplan (v0.5.0) |
 
 To read/write settings:
 
@@ -956,7 +1009,7 @@ Guidelines for agent behavior when managing Flowtime data:
 .replace(/@p:[^\s]+/g, "")              // project directive
 .replace(/@(?:high|med|low|soon)\b/gi, "") // status/priority tags
 .replace(/[🟥🟨🟩]/g, "")                   // priority color dots
-.replace(/🔁 every \d* (day|days|week|weeks|month|months)/g, "")
+.replace(/🔁 every .+$/gm, "")   // v0.5.0: all recurrence markers
 .replace(/#\S+/g, "")
 ```
 

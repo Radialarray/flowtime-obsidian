@@ -1,6 +1,6 @@
-# Flowtime v0.4.0
+# Flowtime v0.5.0
 
-An Obsidian plugin that turns task management into **interactive tables** with code blocks, inline countdown timers, time budgets, session tracking, and a status bar timer. Zero external dependencies.
+An Obsidian plugin that turns task management into **interactive tables** with code blocks, inline countdown timers, time budgets, session tracking, a status bar timer, **automatic routine generation**, and a **week planning view** with list and timeline grid modes. Zero external dependencies.
 
 ---
 
@@ -8,7 +8,7 @@ An Obsidian plugin that turns task management into **interactive tables** with c
 
 ### Code Block Views
 
-Six code block types give you different perspectives on your tasks:
+Eight code block types give you different perspectives on your tasks:
 
 | Block | Mode | Scope |
 |-------|------|-------|
@@ -19,6 +19,7 @@ Six code block types give you different perspectives on your tasks:
 | ` ```flowtime-project` | project | Tasks for the project containing this code block |
 | ` ```flowtime-buckets` | budget | Weekly time-budget overview per bucket |
 | ` ```flowtime-sessions` | sessions | Time-tracking session history and analytics |
+| ` ```flowtime-weekplan` | weekplan | Week-at-a-glance with list/grid toggle (v0.5.0) |
 
 ### Quick Entry (Cmd+Shift+I)
 
@@ -160,13 +161,59 @@ Click any task text to open a floating detail panel:
 - View the source file (click to open)
 - Close saves pending changes
 
-### Recurrence
+### Recurrence (v0.5.0)
 
-Mark recurring tasks with `🔁`:
+Mark recurring tasks with `🔁` — the plugin generates real task instances into your daily notes:
 
-- `🔁 every day` / `🔁 every week` / `🔁 every month`
-- When marked complete, auto-reschedules to the next occurrence
-- Recurrence directive is cleaned from displayed task text
+| Syntax | Meaning |
+|--------|---------|
+| `🔁 every day` | Every day |
+| `🔁 every workday` | Monday–Friday |
+| `🔁 every week` | Every Monday |
+| `🔁 every month` | 1st of every month |
+| `🔁 every Mon` | Every Monday |
+| `🔁 every Mon Wed Fri` | Monday, Wednesday, Friday |
+| `🔁 every 2nd Sun` | 2nd Sunday of each month |
+| `🔁 every last Fri` | Last Friday of each month |
+| `🔁 every month on 15th` | 15th of every month |
+| `🔁 every 3 days` | Every 3 days from last generation |
+
+### Routines Folder (v0.5.0)
+
+Create `.md` files in `flowtime/routines/` with task lines using the recurrence markers above. The plugin scans the folder, evaluates what's due, and writes task instances into your daily notes. Generation history is tracked in `flowtime/routines/.generated.json` to prevent duplication across synced devices.
+
+**How it works:**
+1. Create `flowtime/routines/Daily.md` (or any name) with tasks + recurrence markers
+2. On plugin load, the engine generates instances for today + rest of the week
+3. Each instance becomes a real task line in `2026-06-24.md` — editable, deletable, checkable
+4. Deleting an instance removes it permanently — the engine won't re-create it
+5. **Vacation mode** (settings or weekplan toolbar) pauses all generation
+
+### Weekplan View (v0.5.0)
+
+````markdown
+```flowtime-weekplan
+```
+````
+
+Renders Monday–Friday with all your week's tasks. Two view modes toggled via the toolbar:
+
+**List view** — day-by-day sections with inline editing:
+- Per-day budget bars showing scheduled hours vs daily cap
+- Inline time/duration inputs with auto-save
+- Checkbox, timer, delete per task
+- Routines marked with 🔁 badge
+
+**Grid view** — horizontal timeline grid:
+| | Mon 24 | Tue 25 | Wed 26 | Thu 27 | Fri 28 |
+|---|--------|--------|--------|--------|--------|
+| 09:00 | Deep Work | Meeting | Writing | Deep Work | Standup |
+| 10:00 | (spans) | | | | |
+
+- Tasks positioned by their time range (30min slot rows)
+- Today column and current time slot highlighted
+- Click any task card → edit popup with time, duration, checkbox, delete
+- Untimed tasks listed at bottom of each day column
 
 ### Templates
 
@@ -204,7 +251,7 @@ Flowtime parses task lines from any markdown file in your vault:
 | `@b:name` or `@bucket:name` | Time bucket | `@b:deep-work` |
 | `🔺⏫🔼🔽⏬` | Priority | |
 | `#tag` | Project tag (with prefix) | `#project/website` |
-| `🔁 every <period>` | Recurrence | `🔁 every week` |
+| `🔁 every <interval>` | Recurrence | `🔁 every workday`, `🔁 every Mon Wed Fri`, `🔁 every 2nd Sun` |
 
 A complete task example:
 
@@ -290,6 +337,14 @@ All settings in **Settings → Flowtime**.
 | Date format | YYYY-MM-DD | Moment.js format for dates |
 | Show timer in status bar | on | Show/hide the persistent countdown |
 | Content width | 0 | Slider (0–1920px). 0 = use Obsidian default width |
+| **Routines (v0.5.0)** | | |
+| Routines folder | `flowtime/routines/` | Folder for routine template `.md` files |
+| Vacation mode | off | Pause all routine generation |
+| Auto-generate on startup | on | Run routine engine when plugin loads |
+| Auto-generate on open daily note | on | Generate when today's daily note is opened |
+| Workdays | 1,2,3,4,5 | Day indices for 🔁 every workday (0=Sun, 6=Sat) |
+| Week start day | Monday | First day of the week for weekplan view |
+| Hide completed routines | off | Don't show checked-off routines in weekplan |
 | **Templates** | | |
 | Daily template | (built-in) | Template for the daily dashboard command |
 | Weekly template | (built-in) | Template for the weekly dashboard command |

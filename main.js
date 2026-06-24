@@ -116,6 +116,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 			["flowtime-dueweek", "dueweek"],
 			["flowtime-weekly", "weekly"],
 			["flowtime-project", "project"],
+			["flowtime-buckets", "budget"],
 		]) {
 			this.registerMarkdownCodeBlockProcessor(name, (_src, el, ctx) => {
 				const r = new FlowtimeRenderer(this.app, el, mode, this.projectEngine, ctx.sourcePath);

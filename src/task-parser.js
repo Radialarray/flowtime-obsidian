@@ -35,16 +35,41 @@ function parseTaskLine(line, file, lineIndex) {
 	const prioMatch = rest.match(/[🔺⏫🔼🔽⏬]/);
 	if (prioMatch) priority = prioMatch[0];
 
+	// Extract bucket: @bucket:<name> or @b:<name>
+	let bucket = null;
+	const bucketMatch = rest.match(/@(?:bucket|b):([^\s]+)/);
+	if (bucketMatch) bucket = bucketMatch[1];
+
+	// Extract duration: @<number>h or @<number>m
+	let durationMinutes = 0;
+	const durMatch = rest.match(/@(\d+(?:\.\d+)?)([hm])/);
+	if (durMatch) {
+		const val = parseFloat(durMatch[1]);
+		durationMinutes = durMatch[2] === "h" ? Math.round(val * 60) : Math.round(val);
+	}
+
+	// Fallback: compute duration from time block (e.g. 09:00—11:30)
+	if (!durationMinutes && time) {
+		const tbMatch = time.match(/^(\d{1,2}:\d{2})\s*[—\-–]\s*(\d{1,2}:\d{2})$/);
+		if (tbMatch) {
+			const start = tbMatch[1].split(":").reduce((a, n) => +n + 60 * a, 0);
+			const end = tbMatch[2].split(":").reduce((a, n) => +n + 60 * a, 0);
+			durationMinutes = Math.max(0, end - start);
+		}
+	}
+
 	return {
 		file,
 		line: lineIndex,
 		rawLine: line,
 		time,
 		taskDate,
+		durationMinutes,
 		rawText: rest.trim(),
 		cleanText: cleanTaskText(rest),
 		status,
 		priority,
+		bucket,
 	};
 }
 
@@ -54,6 +79,8 @@ function parseTaskLine(line, file, lineIndex) {
 function cleanTaskText(text) {
 	return text
 		.replace(/[@⏳📅]\s*\d{4}-\d{2}-\d{2}/gu, "")
+		.replace(/@\d+(?:\.\d+)?[hm]/g, "")  // duration: @1.5h @30m
+		.replace(/@(?:bucket|b):[^\s]+/g, "") // bucket directive
 		.replace(/🔺|⏫|🔼|🔽|⏬/g, "")
 		.replace(/🔁 every \d* (day|days|week|weeks|month|months)/g, "")
 		.replace(/🔁 [^\s]+( \d+[dwmy])?/g, "")

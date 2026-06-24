@@ -55,6 +55,8 @@ class QuickEntryModal extends Modal {
 				const durStr = dur < 60 ? dur + "m" : dur / 60 + "h";
 				line += " @" + durStr;
 			}
+			const bucket = bucketSelect.value;
+			if (bucket) line += " @b:" + bucket;
 			previewCode.setText(line);
 		};
 
@@ -160,10 +162,24 @@ class QuickEntryModal extends Modal {
 			});
 		}
 
+		// ── Bucket ──
+		contentEl.createEl("label", { text: "Bucket", cls: "flowtime-label" });
+		const bucketSelect = contentEl.createEl("select", { cls: "flowtime-select" });
+		const buckets = this.plugin.settings.buckets || [];
+		bucketSelect.createEl("option", { text: "None", value: "" });
+		for (const b of buckets) {
+			bucketSelect.createEl("option", {
+				text: b.name,
+				value: b.id,
+				attr: { "data-color": b.color },
+			});
+		}
+
 		// Update preview on any input change
 		taskInput.addEventListener("input", updateLivePreview);
 		projInput.addEventListener("input", updateLivePreview);
 		durSelect.addEventListener("change", updateLivePreview);
+		bucketSelect.addEventListener("change", updateLivePreview);
 		updateLivePreview();
 
 		// ── Buttons ──
@@ -199,6 +215,8 @@ class QuickEntryModal extends Modal {
 				const durStr = dur < 60 ? dur + "m" : dur / 60 + "h";
 				line += " @" + durStr;
 			}
+			const bucket = bucketSelect.value;
+			if (bucket) line += " @b:" + bucket;
 
 			// Determine target file
 			let targetFile = activeFile;

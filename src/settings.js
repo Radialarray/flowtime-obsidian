@@ -1,4 +1,4 @@
-const { PluginSettingTab, Setting } = require("obsidian");
+const { PluginSettingTab, Setting, createFragment } = require("obsidian");
 
 const DEFAULT_SETTINGS = {
 	// Project Detection
@@ -11,6 +11,15 @@ const DEFAULT_SETTINGS = {
 
 	// Quick Entry
 	quickEntryTargetFile: "daily-note",
+
+	// Buckets
+	buckets: [
+		{ id: "deep-work", name: "Deep Work", color: "#4a9eff", weeklyLimit: 20, sortOrder: 0 },
+		{ id: "admin", name: "Admin", color: "#a8a8a8", weeklyLimit: 5, sortOrder: 1 },
+		{ id: "meetings", name: "Meetings", color: "#e6a700", weeklyLimit: 5, sortOrder: 2 },
+	],
+	bucketPrefix: "budget/",
+	dailyCap: 12,
 
 	// Display
 	dateFormat: "YYYY-MM-DD",
@@ -137,6 +146,125 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 						await this.plugin.saveData(this.plugin.settings);
 					}),
 			);
+
+		// ── Buckets ──
+		containerEl.createEl("h2", { text: "Buckets" });
+
+		new Setting(containerEl)
+			.setName("Bucket tag prefix")
+			.setDesc("Prefix used for bucket tags (e.g. @budget:deep-work)")
+			.addText((text) =>
+				text
+					.setPlaceholder("budget/")
+					.setValue(this.plugin.settings.bucketPrefix)
+					.onChange(async (value) => {
+						this.plugin.settings.bucketPrefix = value;
+						await this.plugin.saveData(this.plugin.settings);
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName("Daily budget cap (hours)")
+			.setDesc("Maximum scheduled hours per day before warning")
+			.addText((text) =>
+				text
+					.setPlaceholder("12")
+					.setValue(String(this.plugin.settings.dailyCap))
+					.onChange(async (value) => {
+						const num = parseFloat(value);
+						if (!isNaN(num) && num > 0) {
+							this.plugin.settings.dailyCap = num;
+							await this.plugin.saveData(this.plugin.settings);
+						}
+					}),
+			);
+
+		containerEl.createEl("h3", { text: "Configure Buckets" });
+
+		// Render each bucket
+		const buckets = this.plugin.settings.buckets || [];
+		for (const bucket of buckets) {
+			new Setting(containerEl)
+				.setName(bucket.name)
+				.setDesc(
+					createFragment((frag) => {
+						const swatch = frag.createEl("span", {
+							cls: "ft-bucket-swatch",
+						});
+						swatch.style.backgroundColor = bucket.color;
+						frag.appendText(`Weekly limit: ${bucket.weeklyLimit}h`);
+					}),
+				)
+				.addText((text) =>
+					text
+						.setPlaceholder("Name")
+						.setValue(bucket.name)
+						.onChange(async (value) => {
+							bucket.name = value;
+							bucket.id = value
+								.toLowerCase()
+								.replace(/\s+/g, "-")
+								.replace(/[^a-z0-9-]/g, "");
+							await this.plugin.saveData(this.plugin.settings);
+						}),
+				)
+				.addText((text) =>
+					text
+						.setPlaceholder("Weekly limit (h)")
+						.setValue(String(bucket.weeklyLimit))
+						.onChange(async (value) => {
+							const num = parseFloat(value);
+							if (!isNaN(num) && num > 0) {
+								bucket.weeklyLimit = num;
+								await this.plugin.saveData(this.plugin.settings);
+							}
+						}),
+				)
+				.addColorPicker((picker) =>
+					picker
+						.setValue(bucket.color)
+						.onChange(async (value) => {
+							bucket.color = value;
+							// Update the swatch in the description
+							await this.plugin.saveData(this.plugin.settings);
+							this.display();
+						}),
+				)
+				.addExtraButton((btn) =>
+					btn
+						.setIcon("trash")
+						.setTooltip("Delete bucket")
+						.onClick(async () => {
+							this.plugin.settings.buckets =
+								this.plugin.settings.buckets.filter(
+									(b) => b.id !== bucket.id,
+								);
+							await this.plugin.saveData(this.plugin.settings);
+							this.display(); // Re-render
+						}),
+				);
+		}
+
+		// Add Bucket button
+		new Setting(containerEl).setName("Add new bucket").addButton((btn) =>
+			btn
+				.setButtonText("+ Add Bucket")
+				.setCta()
+				.onClick(async () => {
+					const buckets = this.plugin.settings.buckets || [];
+					const newBucket = {
+						id: "bucket-" + (buckets.length + 1),
+						name: "New Bucket",
+						color: "#4a9eff",
+						weeklyLimit: 10,
+						sortOrder: buckets.length,
+					};
+					buckets.push(newBucket);
+					this.plugin.settings.buckets = buckets;
+					await this.plugin.saveData(this.plugin.settings);
+					this.display(); // Re-render
+				}),
+		);
 
 		// ── Display ──
 		containerEl.createEl("h2", { text: "Display" });

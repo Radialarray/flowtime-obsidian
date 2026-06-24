@@ -1,5 +1,6 @@
 const { MarkdownRenderChild, Notice } = require("obsidian");
 const { parseTaskLine, cleanTaskText, parseRecurrence, formatDuration, formatTimer } = require("./task-parser");
+const { renderProgressBar, formatHours } = require("./budget-state");
 
 const DUR_OPTS = [10, 15, 20, 25, 30, 45, 60, 90, 120, 150, 180, 210, 240];
 const START_H = 7;
@@ -76,6 +77,36 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		monday.setDate(monday.getDate() + 6);
 		return monday.toISOString().split("T")[0];
 	}
+	_computeBucketTotals() {
+		const totals = {};
+		const mon = this._getMonday(new Date().toISOString().split("T")[0]);
+		const sun = this._getSunday(new Date().toISOString().split("T")[0]);
+		for (const task of this.tasks) {
+			if (!task.bucket) continue;
+			if (task.taskDate && task.taskDate >= mon && task.taskDate <= sun) {
+				totals[task.bucket] = (totals[task.bucket] || 0) + (task.durationMinutes || 0);
+			}
+		}
+		return totals;
+	}
+
+	async _computeDailyTotal() {
+		const today = new Date().toISOString().split("T")[0];
+		let total = 0;
+		for (const file of this.app.vault.getMarkdownFiles()) {
+			if (file.path.startsWith(".obsidian") || file.path.startsWith(".git")) continue;
+			const lines = (await this.app.vault.read(file)).split("\n");
+			for (let i = 0; i < lines.length; i++) {
+				const parsed = parseTaskLine(lines[i], file, i);
+				if (!parsed) continue;
+				if (parsed.taskDate === today && parsed.durationMinutes) {
+					total += parsed.durationMinutes;
+				}
+			}
+		}
+		return total / 60; // return hours
+	}
+
 	_beep() {
 		if (this.plugin?.settings?.timerSound === false) return;
 		try {
@@ -134,6 +165,49 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			}
 		}
 
+		// Budget mode: compute weekly totals and build from bucket definitions
+		if (this.mode === "budget") {
+			this._budgetDailyCap = this.plugin?.settings?.dailyCap || 12;
+			this._budgetDailyCapUsed = await this._computeDailyTotal();
+
+			const weeklyTotals = {};
+			for (const file of this.app.vault.getMarkdownFiles()) {
+				if (file.path.startsWith(".obsidian") || file.path.startsWith(".git")) continue;
+				const content = await this.app.vault.read(file);
+				const lines = content.split("\n");
+				for (let i = 0; i < lines.length; i++) {
+					const parsed = parseTaskLine(lines[i], file, i);
+					if (!parsed) continue;
+					if (!parsed.bucket) continue;
+					if (parsed.taskDate && parsed.taskDate >= mon && parsed.taskDate <= sun) {
+						weeklyTotals[parsed.bucket] = (weeklyTotals[parsed.bucket] || 0) + (parsed.durationMinutes || 0);
+					}
+				}
+			}
+
+			this.tasks = [];
+			const buckets = this.plugin?.settings?.buckets || [];
+			for (const b of buckets) {
+				const usedMinutes = weeklyTotals[b.id] || 0;
+				this.tasks.push({
+					file: null,
+					line: 0,
+					rawLine: "",
+					time: "",
+					taskDate: "",
+					durationMinutes: usedMinutes,
+					rawText: "",
+					cleanText: b.name,
+					status: " ",
+					priority: null,
+					bucket: b.id,
+					project: null,
+					_bucketDef: b,
+				});
+			}
+			return;
+		}
+
 		this.tasks = [];
 		for (const file of this.app.vault.getMarkdownFiles()) {
 			if (file.path.startsWith(".obsidian") || file.path.startsWith(".git"))
@@ -144,7 +218,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				if (!parsed) continue;
 				if (parsed.status === "x" || parsed.status === "-" || parsed.status === "X") continue;
 
-				const { taskDate, rawText, time, status, priority, cleanText } = parsed;
+				const { taskDate, rawText, time, status, priority, cleanText, bucket, durationMinutes } = parsed;
 
 				if (this.mode === "today" && taskDate !== today) continue;
 				if (this.mode === "overdue" && (!taskDate || taskDate >= today))
@@ -188,6 +262,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 					cleanText,
 					status,
 					priority,
+					bucket,
+					durationMinutes,
 					project: projName,
 					projectPath: projPath,
 					projectSource: projSource,
@@ -213,6 +289,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 	renderTable() {
 		this.containerEl.empty();
 		this.rowData = [];
+		if (this.mode === "budget") {
+			this._renderBudgetView();
+			return;
+		}
 		if (this.tasks.length === 0) {
 			const msgs = {
 				overdue: "🎉 No overdue tasks!",
@@ -323,6 +403,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			hr.createEl("th", { text: "✓", cls: "col-check" });
 			hr.createEl("th", { text: "Task", cls: "col-task" });
 			hr.createEl("th", { text: "Project", cls: "col-project" });
+			hr.createEl("th", { text: "Bucket", cls: "col-bucket" });
 			hr.createEl("th", { text: "Source", cls: "col-source" });
 			hr.createEl("th", { text: dw ? "Due" : "Date", cls: "col-date" });
 			hr.createEl("th", { cls: "col-actions" });
@@ -331,12 +412,78 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			hr.createEl("th", { text: "✓", cls: "col-check" });
 			hr.createEl("th", { text: "Task", cls: "col-task" });
 			hr.createEl("th", { text: "Project", cls: "col-project" });
+			hr.createEl("th", { text: "Bucket", cls: "col-bucket" });
 			hr.createEl("th", { text: "Source", cls: "col-source" });
 			hr.createEl("th", { text: "Date", cls: "col-date" });
 			hr.createEl("th", { text: "⏱", cls: "col-timer" });
 		}
 		const tbody = table.createEl("tbody");
+		this.bucketTotals = this._computeBucketTotals();
 		this.buildRows(tbody);
+
+		// Daily cap summary (today mode only)
+		if (this.mode === "today" && this.plugin?.settings?.dailyCap > 0) {
+			const dailyCap = this.plugin.settings.dailyCap;
+			const totalToday = this.tasks.reduce((sum, t) => {
+				if (t.taskDate === new Date().toISOString().split("T")[0]) {
+					return sum + (t.durationMinutes || 0);
+				}
+				return sum;
+			}, 0) / 60;
+			const capRow = this.containerEl.createEl("div", { cls: "ft-daily-cap" });
+			capRow.createEl("span", { text: "Daily Budget: ", cls: "ft-cap-label" });
+			const bar = renderProgressBar(totalToday, dailyCap, `${formatHours(totalToday)}h / ${dailyCap}h`);
+			bar.style.minWidth = "200px";
+			capRow.appendChild(bar);
+		}
+	}
+
+	_renderBudgetView() {
+		this.containerEl.empty();
+
+		// Title
+		this.containerEl.createEl("h3", { text: "Budget Overview", cls: "ft-budget-title" });
+
+		// Daily cap summary
+		if (this._budgetDailyCap > 0) {
+			const capSection = this.containerEl.createEl("div", { cls: "ft-budget-section" });
+			capSection.createEl("div", { text: "Daily Budget", cls: "ft-budget-section-title" });
+			const capRow = capSection.createEl("div", { cls: "ft-budget-row" });
+			const bar = renderProgressBar(this._budgetDailyCapUsed, this._budgetDailyCap, `${formatHours(this._budgetDailyCapUsed)}h / ${this._budgetDailyCap}h`);
+			bar.style.minWidth = "250px";
+			capRow.appendChild(bar);
+		}
+
+		// Bucket budget summary
+		const section = this.containerEl.createEl("div", { cls: "ft-budget-section" });
+		section.createEl("div", { text: "Weekly Bucket Budgets", cls: "ft-budget-section-title" });
+
+		// Sort buckets by sortOrder
+		const sorted = [...this.tasks].sort((a, b) => (a._bucketDef?.sortOrder || 0) - (b._bucketDef?.sortOrder || 0));
+
+		for (const task of sorted) {
+			const def = task._bucketDef;
+			if (!def) continue;
+
+			const row = section.createEl("div", { cls: "ft-budget-row" });
+
+			// Color swatch + name
+			const info = row.createEl("div", { cls: "ft-budget-info" });
+			const swatch = info.createEl("span", { cls: "ft-bucket-swatch" });
+			swatch.style.backgroundColor = def.color;
+			info.createEl("span", { text: def.name, cls: "ft-budget-name" });
+
+			// Progress bar
+			const usedHours = task.durationMinutes / 60;
+			const bar = renderProgressBar(usedHours, def.weeklyLimit, `${formatHours(usedHours)}h / ${def.weeklyLimit}h`);
+			bar.style.minWidth = "200px";
+			row.appendChild(bar);
+		}
+
+		// Empty state
+		if (sorted.length === 0) {
+			section.createEl("p", { text: "No buckets configured. Add buckets in Settings.", cls: "ft-budget-empty" });
+		}
 	}
 
 	buildRows(tbody) {
@@ -369,7 +516,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				const gr = tbody.createEl("tr", { cls: "ft-project-group" });
 				gr.createEl("td", {
 					text: proj === "__none__" ? "Other" : proj,
-					attr: { colspan: "6" },
+					attr: { colspan: "7" },
 				});
 				for (const task of projTasks) {
 					this._renderTaskRow(tbody, task, tdy, od, _dw, wk, pj, isCompact);
@@ -476,6 +623,33 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		} else {
 			pc.createEl("span", { text: "—", cls: "ft-project-none" });
 		}
+
+		// Bucket cell
+		const bc = row.createEl("td", { cls: "ft-bucket-cell" });
+		const bucketId = task.bucket;
+		if (bucketId) {
+			const buckets = this.plugin?.settings?.buckets || [];
+			const bucketDef = buckets.find(b => b.id === bucketId);
+			if (bucketDef) {
+				if (bucketDef.weeklyLimit > 0) {
+					const used = (this.bucketTotals?.[bucketId] || 0) / 60;
+					const bar = renderProgressBar(used, bucketDef.weeklyLimit, `${formatHours(used)}h / ${bucketDef.weeklyLimit}h`);
+					bar.style.minWidth = "100px";
+					bc.appendChild(bar);
+				} else {
+					const badge = bc.createEl("span", {
+						text: bucketDef.name,
+						cls: "ft-bucket-badge",
+					});
+					badge.style.borderLeftColor = bucketDef.color;
+				}
+			} else {
+				bc.createEl("span", { text: bucketId, cls: "ft-bucket-missing" });
+			}
+		} else {
+			bc.createEl("span", { text: "—", cls: "ft-bucket-none" });
+		}
+
 		const sc = row.createEl("td", { cls: "ft-source" });
 		const lnk = sc.createEl("a", {
 			text: task.file.basename,
@@ -610,6 +784,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			const tmr = row.createEl("td", { cls: "ft-timer-cell" });
 			const tr2 = tmr.createEl("div", { cls: "ft-timer-row" });
 			const pb = tr2.createEl("button", { text: "▶", cls: "ft-timer-play" });
+			const tmrBar = tr2.createEl("div", { cls: "ft-timer-progress ft-state-normal" });
+			const tmrFill = tmrBar.createEl("div", { cls: "ft-timer-progress-fill" });
 			const disp = tr2.createEl("span", {
 				text: formatTimer(ts.remaining),
 				cls: "ft-timer-display",
@@ -618,6 +794,15 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			const ud = () => {
 				disp.setText(formatTimer(ts.remaining));
 				disp.toggleClass("ft-timer-expired", ts.remaining <= 0);
+				const pct = ts.total > 0 ? ((ts.total - ts.remaining) / ts.total) * 100 : 0;
+				tmrFill.style.width = Math.min(pct, 100) + "%";
+				if (pct >= 100) {
+					tmrBar.className = "ft-timer-progress ft-state-over";
+				} else if (pct >= 80) {
+					tmrBar.className = "ft-timer-progress ft-state-warning";
+				} else {
+					tmrBar.className = "ft-timer-progress ft-state-normal";
+				}
 			};
 			const stp = () => {
 				if (ts.interval) {

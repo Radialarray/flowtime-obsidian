@@ -59,6 +59,9 @@
 	width: 22%;
 	text-align: center;
 }
+.col-bucket {
+	width: 100px;
+}
 .col-actions {
 	width: 22%;
 }
@@ -772,4 +775,175 @@
 }
 .ft-empty-btn:hover {
 	background: var(--interactive-accent-hover);
+}
+
+/* ── 3-State Budget Colors ── */
+.ft-state-normal {
+	--ft-state-color: var(--text-muted);
+}
+.ft-state-warning {
+	--ft-state-color: #e6a700; /* amber */
+}
+.ft-state-over {
+	--ft-state-color: #e03131; /* red */
+}
+
+/* ── Bucket Settings ── */
+.ft-bucket-swatch {
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	display: inline-block;
+	margin-right: 6px;
+	vertical-align: middle;
+}
+
+/* ── Progress Bars ── */
+.ft-progress-bar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	height: 20px;
+	border-radius: var(--radius-s);
+	background: var(--background-modifier-border);
+	overflow: hidden;
+	position: relative;
+	min-width: 120px;
+}
+.ft-progress-fill {
+	height: 100%;
+	border-radius: var(--radius-s);
+	transition: width 0.3s ease;
+	background: var(--ft-state-color, var(--text-muted));
+	flex-shrink: 0;
+}
+.ft-progress-label {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	white-space: nowrap;
+	position: absolute;
+	left: 50%;
+	transform: translateX(-50%);
+}
+.ft-state-normal .ft-progress-fill {
+	background: var(--interactive-accent);
+}
+.ft-state-warning .ft-progress-fill {
+	background: #e6a700;
+}
+.ft-state-over .ft-progress-fill {
+	background: #e03131;
+}
+.ft-state-normal .ft-progress-label {
+	color: var(--text-on-accent);
+}
+.ft-state-warning .ft-progress-label,
+.ft-state-over .ft-progress-label {
+	color: #fff;
+}
+
+/* ── Bucket Column ── */
+.ft-bucket-cell {
+	vertical-align: middle;
+}
+.ft-bucket-badge {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: var(--radius-s);
+	font-size: var(--font-ui-small);
+	background: var(--background-modifier-hover);
+	border-left: 3px solid var(--interactive-accent);
+}
+.ft-bucket-missing {
+	color: var(--text-error);
+	font-size: var(--font-ui-small);
+}
+.ft-bucket-none {
+	color: var(--text-faint);
+	font-size: var(--font-ui-small);
+}
+
+/* ── Daily Cap Summary ── */
+.ft-daily-cap {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-top: 12px;
+	padding: 8px 12px;
+	background: var(--background-primary-alt);
+	border-radius: var(--radius-s);
+}
+.ft-cap-label {
+	font-weight: var(--font-semibold);
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	white-space: nowrap;
+}
+
+/* ── Timer Progress Bar ── */
+.ft-timer-progress {
+	height: 6px;
+	border-radius: 3px;
+	background: var(--background-modifier-border);
+	flex: 1;
+	min-width: 60px;
+	overflow: hidden;
+}
+.ft-timer-progress-fill {
+	height: 100%;
+	border-radius: 3px;
+	background: var(--interactive-accent);
+	transition: width 0.5s linear;
+}
+.ft-timer-progress.ft-state-warning .ft-timer-progress-fill {
+	background: #e6a700;
+}
+.ft-timer-progress.ft-state-over .ft-timer-progress-fill {
+	background: #e03131;
+}
+
+/* ── Budget Overview ── */
+.ft-budget-title {
+	margin: 0 0 12px 0;
+	font-size: var(--font-ui-medium);
+}
+.ft-budget-section {
+	margin-bottom: 16px;
+	padding: 12px;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+}
+.ft-budget-section-title {
+	font-weight: var(--font-semibold);
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	margin-bottom: 8px;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+}
+.ft-budget-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 6px 0;
+}
+.ft-budget-row + .ft-budget-row {
+	border-top: 1px solid var(--background-modifier-border);
+}
+.ft-budget-info {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 140px;
+}
+.ft-budget-name {
+	font-weight: var(--font-medium);
+	font-size: var(--font-ui-small);
+}
+.ft-budget-empty {
+	color: var(--text-faint);
+	font-size: var(--font-ui-small);
+	text-align: center;
+	padding: 1em 0;
 }

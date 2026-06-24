@@ -278,7 +278,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 			pj = this.mode === "project";
 		const isCompact = od || dw || wk;
 
-		// Inline heading with mode-specific hint
+		// Heading + toolbar on same row
 		const headings = {
 			today: "💡 Set times and durations — edits save to source files",
 			overdue: "📋 Tasks past their scheduled date — reassign or backlog",
@@ -287,14 +287,13 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 			project: "📁 Tasks for this project",
 		};
 		const heading = headings[this.mode];
-		if (heading) {
-			const hdr = this.containerEl.createEl("div", { cls: "tp-heading" });
-			hdr.createEl("span", { text: heading, cls: "tp-heading-text" });
-		}
-
-		const toolbar = this.containerEl.createEl("div", { cls: "tp-toolbar" });
-
 		const tdy = new Date().toISOString().split("T")[0];
+
+		const bar = this.containerEl.createEl("div", { cls: "tp-topbar" });
+		if (heading) {
+			bar.createEl("span", { text: heading, cls: "tp-heading-text" });
+		}
+		const toolbar = bar.createEl("div", { cls: "tp-toolbar" });
 
 		if (isCompact) {
 			const mkBtn = (text, cls, fn) => {
@@ -325,9 +324,9 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 			});
 			sv.addEventListener("click", async () => {
 				sv.setText("⏳ Saving...");
-				let ok = 0,
-					err = 0;
+				let ok = 0, err = 0;
 				for (const rd of this.rowData) {
+					if (!rd.si || !rd.ds) continue;
 					const s = rd.si.value,
 						d = parseInt(rd.ds.value, 10);
 					if (!s || !d || d <= 0) continue;
@@ -337,13 +336,12 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 						await this.saveTime(rd.task, nt);
 						rd.task.time = nt;
 						ok++;
-					} catch (_) {
-						err++;
-					}
+					} catch (_) { err++; }
 				}
 				if (ok + err > 0) {
 					this._sort();
-					this.buildRows(tbody);
+					const tbody = this.containerEl.querySelector("tbody");
+					if (tbody) this.buildRows(tbody);
 				}
 				const p = [];
 				if (ok) p.push(`✅ ${ok} saved`);
@@ -358,6 +356,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 		});
 		const hr = table.createEl("thead").createEl("tr");
 		if (isCompact) {
+			hr.createEl("th", { text: "✓", cls: "col-check" });
 			hr.createEl("th", { text: "Task", cls: "col-task" });
 			hr.createEl("th", { text: "Project", cls: "col-project" });
 			hr.createEl("th", { text: "Source", cls: "col-source" });
@@ -365,6 +364,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 			hr.createEl("th", { cls: "col-actions" });
 		} else {
 			hr.createEl("th", { text: "Time", cls: "col-time" });
+			hr.createEl("th", { text: "✓", cls: "col-check" });
 			hr.createEl("th", { text: "Task", cls: "col-task" });
 			hr.createEl("th", { text: "Project", cls: "col-project" });
 			hr.createEl("th", { text: "Source", cls: "col-source" });
@@ -405,7 +405,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 				const gr = tbody.createEl("tr", { cls: "tp-project-group" });
 				gr.createEl("td", {
 					text: proj === "__none__" ? "Other" : proj,
-					attr: { colspan: "5" },
+					attr: { colspan: "6" },
 				});
 				for (const task of projTasks) {
 					this._renderTaskRow(tbody, task, tdy, od, _dw, wk, pj, isCompact);
@@ -492,7 +492,10 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 			up();
 		}
 
-		// Task cell: checkbox + priority + text
+		// Checkbox column
+		this._buildCheckCell(row, task);
+
+		// Task cell: priority + text
 		this._buildTaskCell(row, task);
 
 		const pc = row.createEl("td", { cls: "tp-project-cell" });
@@ -738,17 +741,9 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 		if (!isCompact) this.rowData.push({ task, si, ds });
 	}
 
-	/* Build task cell with checkbox toggle + priority + text */
+	/* Build task cell with priority + text (checkbox is separate column) */
 	_buildTaskCell(row, task) {
 		const tc = row.createEl("td", { cls: "tp-task-cell" });
-		const chk = tc.createEl("span", {
-			text: task.status === "x" || task.status === "X" ? "☑" : "☐",
-			cls: "tp-checkbox",
-		});
-		chk.addEventListener("click", async (e) => {
-			e.stopPropagation();
-			await this.toggleTaskComplete(task);
-		});
 		if (task.priority) {
 			tc.createEl("span", { text: task.priority, cls: "tp-priority" });
 		}
@@ -757,6 +752,19 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 			row.addClass("tp-task-done");
 			textEl.addClass("tp-task-done-text");
 		}
+	}
+
+	/* Build checkbox cell as dedicated column */
+	_buildCheckCell(row, task) {
+		const cc = row.createEl("td", { cls: "tp-check-cell" });
+		const chk = cc.createEl("span", {
+			text: task.status === "x" || task.status === "X" ? "☑" : "☐",
+			cls: "tp-checkbox",
+		});
+		chk.addEventListener("click", async (e) => {
+			e.stopPropagation();
+			await this.toggleTaskComplete(task);
+		});
 	}
 
 	async saveTime(task, time) {

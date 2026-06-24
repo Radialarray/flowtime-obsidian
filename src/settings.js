@@ -23,11 +23,11 @@ const DEFAULT_SETTINGS = {
 
 	// Templates
 	dailyTemplate:
-		"## 🔄 Carry Over\n```flowtime-overdue\n```\n\n## 🎯 Today\n```flowtime-today\n```\n\n## ⚠️ Due This Week\n```flowtime-dueweek\n```\n\n## 📝 Notes\n",
+		"## 🔄 Carry Over\n```flowtime-overdue\n```\n\n## 🎯 Today\n```flowtime-today\n```\n\n## ⚠️ Due This Week\n```flowtime-dueweek\n```\n\n## 📝 Notes\n- [ ] Morning review 🔺 🔁 every day @{{DATE}}\n- [ ] Quick note @{{DATE}}\n",
 	weeklyTemplate:
-		"## 📊 This Week\n```flowtime-weekly\n```\n\n## ⚠️ Due Next Week\n```flowtime-dueweek\n```\n\n## 📝 Review\n",
+		"## 📊 This Week\n```flowtime-weekly\n```\n\n## ⚠️ Due Next Week\n```flowtime-dueweek\n```\n\n## 📝 Review\n- [ ] Plan next week 🔁 every week @{{WEEK_END}}\n- [ ] Review goals 🔺 @{{WEEK_END}}\n",
 	projectTemplate:
-		"---\ntype: project\nname: {{NAME}}\nstatus: active\ntags: [project]\n---\n\n# {{NAME}}\n\n## 🎯 Goal\n\n## 📋 Tasks\n\n```flowtime-project\n```\n\n## 📝 Notes\n",
+		"---\ntype: project\nname: {{NAME}}\nstatus: active\ntags: [project]\n---\n\n# {{NAME}}\n\n## 🎯 Goal\n\n## 📋 Tasks\n\n```flowtime-project\n```\n\n- [ ] Define scope 🔺 @{{DATE}}\n- [ ] First milestone @{{DATE}}\n- [ ] Daily check-in 🔁 every day @{{DATE}}\n\n## 📝 Notes\n",
 };
 
 class FlowtimeSettingsTab extends PluginSettingTab {

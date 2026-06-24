@@ -35,8 +35,26 @@
 }
 
 .col-check {
-	width: 36px;
+	width: 32px !important;
+	max-width: 32px !important;
 	text-align: center;
+}
+
+.ft-check-cell {
+	width: 32px !important;
+	max-width: 32px !important;
+	padding: 0 !important;
+	text-align: center;
+	overflow: visible;
+}
+
+.ft-check-cell .ft-checkbox {
+	cursor: pointer;
+	accent-color: var(--interactive-accent);
+	width: 14px;
+	height: 14px;
+	display: block;
+	margin: 4px auto;
 }
 
 .col-time {
@@ -659,23 +677,6 @@
 }
 
 /* --- Checkbox in table --- */
-/* --- Checkbox column --- */
-.ft-check-cell {
-	width: 24px;
-	min-width: 24px;
-	padding: 0 !important;
-	text-align: center;
-	overflow: visible;
-}
-
-.ft-check-cell .ft-checkbox {
-	cursor: pointer;
-	accent-color: var(--interactive-accent);
-	width: 14px;
-	height: 14px;
-	display: block;
-	margin: 0 auto;
-}
 
 .ft-task-text {
 	cursor: pointer;

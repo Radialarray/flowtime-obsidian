@@ -730,6 +730,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		const table = this.containerEl.createEl("table", {
 			cls: "flowtime-table",
 		});
+		// Force fixed table layout for reliable column widths
+		this._tableEl = table;
 		const hr = table.createEl("thead").createEl("tr");
 
 		const sortByColumn = (field) => (e) => {
@@ -800,12 +802,17 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				makeSortableHeader("Source", "source", "col-source");
 			if (this._columnVisibility.date !== false)
 				makeSortableHeader("Date", "date", "col-date");
-			if (this._columnVisibility.timer !== false)
-				hr.createEl("th", { cls: "col-timer" });
+			if (this._columnVisibility.timer !== false) {
+				const th = hr.createEl("th", { cls: "col-timer" });
+				th.style.width = "60px";
+			}
 		}
 		const tbody = table.createEl("tbody");
 		this.bucketTotals = this._computeBucketTotals();
 		this.buildRows(tbody);
+
+		// Force fixed table layout for narrow columns (checkbox, timer)
+		table.style.tableLayout = "fixed";
 
 		// Daily cap summary (today mode only)
 		if (this.mode === "today" && this.plugin?.settings?.dailyCap > 0) {
@@ -1445,13 +1452,43 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		const taskRow = popup.createEl("div", { cls: "ft-detail-row" });
 		taskRow.createEl("span", { text: task.cleanText, cls: "ft-detail-task-text" });
 
-		// Refresh helper: invalidate cache, re-render, keep popup open
-		const saveAndRefresh = async () => {
-			if (this.plugin?.taskCache && task.file) {
-				this.plugin.taskCache.invalid(task.file.path);
+		// Track pending changes
+		let pendingDate = null;
+		let pendingBucket = null;
+
+		// Save pending changes and refresh
+		const saveAndClose = async () => {
+			let changed = false;
+			if (pendingDate !== null && pendingDate !== task.taskDate) {
+				await this.updateDate(task, pendingDate);
+				task.taskDate = pendingDate;
+				changed = true;
 			}
-			await this.loadTasks();
-			this.renderTable();
+			if (pendingBucket !== null && pendingBucket !== task.bucket) {
+				if (task.file) {
+					const content = await this.app.vault.read(task.file);
+					const lines = content.split("\n");
+					const line = lines[task.line];
+					if (line) {
+						const hasBucketDir = /@(?:bucket|b):[^\s]+/.test(line);
+						if (hasBucketDir) {
+							lines[task.line] = line.replace(/@(?:bucket|b):[^\s]+/g, pendingBucket ? `@b:${pendingBucket}` : "");
+						} else if (pendingBucket) {
+							lines[task.line] = line + ` @b:${pendingBucket}`;
+						}
+						await this.app.vault.modify(task.file, lines.join("\n"));
+					}
+				}
+				task.bucket = pendingBucket || null;
+				changed = true;
+			}
+			if (changed && this.plugin?.taskCache && task.file) {
+				this.plugin.taskCache.invalid(task.file.path);
+				await this.loadTasks();
+				this.renderTable();
+			}
+			popup.remove();
+			document.removeEventListener("click", closeOnOutside, true);
 		};
 
 		// Date
@@ -1460,10 +1497,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		const dateInput = dateRow.createEl("input", {
 			type: "date", value: task.taskDate || "", cls: "ft-detail-input",
 		});
-		dateInput.addEventListener("change", async () => {
-			await this.updateDate(task, dateInput.value || "");
-			task.taskDate = dateInput.value || "";
-			await saveAndRefresh();
+		dateInput.addEventListener("change", () => {
+			pendingDate = dateInput.value || "";
 		});
 
 		// Bucket
@@ -1476,24 +1511,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			const opt = bucketSel.createEl("option", { text: b.name, value: b.id });
 			if (b.id === task.bucket) opt.selected = true;
 		}
-		bucketSel.addEventListener("change", async () => {
-			const newBucket = bucketSel.value || "";
-			if (!task.file) return;
-			const content = await this.app.vault.read(task.file);
-			const lines = content.split("\n");
-			const line = lines[task.line];
-			if (!line) return;
-			// Replace existing @bucket:/@b: directive, or add new one
-			const hasBucketDir = /@(?:bucket|b):[^\s]+/.test(line);
-			if (hasBucketDir) {
-				lines[task.line] = line.replace(/@(?:bucket|b):[^\s]+/g, newBucket ? `@b:${newBucket}` : "");
-			} else if (newBucket) {
-				// Append at end of line
-				lines[task.line] = line + ` @b:${newBucket}`;
-			}
-			await this.app.vault.modify(task.file, lines.join("\n"));
-			task.bucket = newBucket || null;
-			await saveAndRefresh();
+		bucketSel.addEventListener("change", () => {
+			pendingBucket = bucketSel.value || "";
 		});
 
 		// Project
@@ -1525,17 +1544,17 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			);
 		}
 
-		// Close button
+		// Close button — save pending changes, then remove
 		const closeBtn = popup.createEl("button", { text: "✕", cls: "ft-detail-close" });
-		closeBtn.addEventListener("click", () => popup.remove());
+		closeBtn.addEventListener("click", async () => await saveAndClose());
 
-		// Close on outside click — delayed registration to avoid self-close
+		// Close on outside click — save pending changes, then remove
 		const closeOnOutside = (e) => {
-			// Don't close for clicks inside popup or date picker calendar
 			if (popup.contains(e.target)) return;
 			if (e.target.tagName === "INPUT" && e.target.type === "date") return;
-			popup.remove();
+			// Remove listener first to prevent double-fire
 			document.removeEventListener("click", closeOnOutside, true);
+			saveAndClose();
 		};
 		setTimeout(() => document.addEventListener("click", closeOnOutside, true), 200);
 

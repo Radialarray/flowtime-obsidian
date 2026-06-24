@@ -4,7 +4,7 @@ const DUR_OPTS = [10, 15, 20, 25, 30, 45, 60, 90, 120, 150, 180, 210, 240];
 const START_H = 7;
 const START_END = 20;
 
-class TaskPlannerRenderer extends MarkdownRenderChild {
+class FlowtimeRenderer extends MarkdownRenderChild {
 	constructor(app, containerEl, mode, projectEngine, sourcePath) {
 		super(containerEl);
 		this.app = app;
@@ -296,11 +296,11 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 		const heading = headings[this.mode];
 		const tdy = new Date().toISOString().split("T")[0];
 
-		const bar = this.containerEl.createEl("div", { cls: "tp-topbar" });
+		const bar = this.containerEl.createEl("div", { cls: "ft-topbar" });
 		if (heading) {
-			bar.createEl("span", { text: heading, cls: "tp-heading-text" });
+			bar.createEl("span", { text: heading, cls: "ft-heading-text" });
 		}
-		const toolbar = bar.createEl("div", { cls: "tp-toolbar" });
+		const toolbar = bar.createEl("div", { cls: "ft-toolbar" });
 
 		if (isCompact) {
 			const mkBtn = (text, cls, fn) => {
@@ -308,7 +308,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 				b.addEventListener("click", fn);
 				return b;
 			};
-			mkBtn("📅 Assign All to Today", "tp-bulk-btn", async () => {
+			mkBtn("📅 Assign All to Today", "ft-bulk-btn", async () => {
 				for (const t of this.tasks) await this.updateDate(t, tdy);
 				await this._refreshSiblings();
 				this.tasks = [];
@@ -316,7 +316,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 				this.plugin?.notify?.("✅ All assigned to today");
 			});
 			if (od) {
-				mkBtn("🗑 Backlog All", "tp-bulk-btn tp-bulk-remove", async () => {
+				mkBtn("🗑 Backlog All", "ft-bulk-btn ft-bulk-remove", async () => {
 					for (const t of this.tasks) await this.updateDate(t, "");
 					await this._refreshSiblings();
 					this.tasks = [];
@@ -327,7 +327,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 		} else {
 			const sv = toolbar.createEl("button", {
 				text: "💾 Save All",
-				cls: "tp-save-all-btn",
+				cls: "ft-save-all-btn",
 			});
 			sv.addEventListener("click", async () => {
 				sv.setText("⏳ Saving...");
@@ -386,7 +386,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 		tbody.empty();
 		this.rowData = [];
 		document
-			.querySelectorAll(".tp-start-dd,.tp-date-popup")
+			.querySelectorAll(".ft-start-dd,.ft-date-popup")
 			.forEach((e) => e.remove());
 		// Remove stale outside-click handler
 		if (this._closePopups) {
@@ -409,7 +409,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 				groups[key].push(task);
 			}
 			for (const [proj, projTasks] of Object.entries(groups)) {
-				const gr = tbody.createEl("tr", { cls: "tp-project-group" });
+				const gr = tbody.createEl("tr", { cls: "ft-project-group" });
 				gr.createEl("td", {
 					text: proj === "__none__" ? "Other" : proj,
 					attr: { colspan: "6" },
@@ -434,19 +434,19 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 
 		if (!isCompact) {
 			const tc = row.createEl("td");
-			const wr = tc.createEl("div", { cls: "tp-start-wrap" });
+			const wr = tc.createEl("div", { cls: "ft-start-wrap" });
 			si = wr.createEl("input", {
 				type: "text",
 				value: start || "",
 				placeholder: "09:00",
-				cls: "tp-start-input",
+				cls: "ft-start-input",
 			});
-			const tb = wr.createEl("button", { text: "▾", cls: "tp-start-toggle" });
+			const tb = wr.createEl("button", { text: "▾", cls: "ft-start-toggle" });
 			const dd = document.createElement("div");
-			dd.className = "tp-start-dd";
+			dd.className = "ft-start-dd";
 			for (const t of this.startOpts) {
-				const it = dd.createEl("button", { text: t, cls: "tp-dd-item" });
-				if (t === start) it.addClass("tp-dd-sel");
+				const it = dd.createEl("button", { text: t, cls: "ft-dd-item" });
+				if (t === start) it.addClass("ft-dd-sel");
 				it.addEventListener("click", () => {
 					si.value = t;
 					cd();
@@ -463,23 +463,23 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 							"px"),
 				);
 				dd.style.width = Math.max(r.width, 80) + "px";
-				dd.classList.add("tp-dd-open");
+				dd.classList.add("ft-dd-open");
 				document.body.appendChild(dd);
 			};
 			const cd = () => {
-				dd.classList.remove("tp-dd-open");
+				dd.classList.remove("ft-dd-open");
 				if (dd.parentNode) dd.parentNode.removeChild(dd);
 			};
 			tb.addEventListener("click", (e) => {
 				e.stopPropagation();
-				dd.classList.contains("tp-dd-open") ? cd() : od2();
+				dd.classList.contains("ft-dd-open") ? cd() : od2();
 			});
 			si.addEventListener("focusout", (e) => {
 				if (!wr.contains(e.relatedTarget)) cd();
 			});
 
-			tc.createEl("span", { text: "  +  ", cls: "tp-plus" });
-			ds = tc.createEl("select", { cls: "tp-time-dur" });
+			tc.createEl("span", { text: "  +  ", cls: "ft-plus" });
+			ds = tc.createEl("select", { cls: "ft-time-dur" });
 			ds.createEl("option", { attr: { value: "" }, text: "--" });
 			for (const d of DUR_OPTS) {
 				const o = ds.createEl("option", {
@@ -488,7 +488,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 				});
 				if (d === dur) o.selected = true;
 			}
-			const ps = tc.createEl("span", { text: "", cls: "tp-preview" });
+			const ps = tc.createEl("span", { text: "", cls: "ft-preview" });
 			const up = () => {
 				const s = si.value,
 					d = parseInt(ds.value, 10);
@@ -505,11 +505,11 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 		// Task cell: priority + text
 		this._buildTaskCell(row, task);
 
-		const pc = row.createEl("td", { cls: "tp-project-cell" });
+		const pc = row.createEl("td", { cls: "ft-project-cell" });
 		if (task.project) {
 			const plink = pc.createEl("a", {
 				text: task.project,
-				cls: "tp-project-link",
+				cls: "ft-project-link",
 			});
 			if (task.projectPath) {
 				plink.addEventListener("click", () =>
@@ -517,12 +517,12 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 				);
 			}
 		} else {
-			pc.createEl("span", { text: "—", cls: "tp-project-none" });
+			pc.createEl("span", { text: "—", cls: "ft-project-none" });
 		}
-		const sc = row.createEl("td", { cls: "tp-source" });
+		const sc = row.createEl("td", { cls: "ft-source" });
 		const lnk = sc.createEl("a", {
 			text: task.file.basename,
-			cls: "tp-source-link",
+			cls: "ft-source-link",
 		});
 		lnk.addEventListener("click", () =>
 			this.app.workspace.openLinkText(task.file.path, "", false, {
@@ -531,39 +531,39 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 		);
 
 		/* Date cell (shared) */
-		const dc = row.createEl("td", { cls: "tp-date-cell" });
-		const dw = dc.createEl("div", { cls: "tp-date-wrap" });
+		const dc = row.createEl("td", { cls: "ft-date-cell" });
+		const dw = dc.createEl("div", { cls: "ft-date-wrap" });
 		const dispDate = task.taskDate || "+";
 		const hasDate = task.taskDate;
 		const ds2 = dw.createEl("span", {
 			text: dispDate,
-			cls: "tp-date-badge" + (hasDate ? "" : " tp-date-none"),
+			cls: "ft-date-badge" + (hasDate ? "" : " ft-date-none"),
 		});
 		const dp = document.createElement("div");
-		dp.className = "tp-date-popup";
+		dp.className = "ft-date-popup";
 		const dpi = dp.createEl("input", {
 			type: "date",
 			value: task.taskDate || "",
-			cls: "tp-dp-input",
+			cls: "ft-dp-input",
 		});
 		const mkDpBtn = (txt, cls) => dp.createEl("button", { text: txt, cls });
-		const bTdy = mkDpBtn("Today", "tp-dp-btn"),
-			bTmw = mkDpBtn("Tomorrow", "tp-dp-btn"),
-			bNw = mkDpBtn("Next Week", "tp-dp-btn"),
-			bBkl = mkDpBtn("✕ Backlog", "tp-dp-btn tp-dp-remove");
+		const bTdy = mkDpBtn("Today", "ft-dp-btn"),
+			bTmw = mkDpBtn("Tomorrow", "ft-dp-btn"),
+			bNw = mkDpBtn("Next Week", "ft-dp-btn"),
+			bBkl = mkDpBtn("✕ Backlog", "ft-dp-btn ft-dp-remove");
 		const fmt = (d) => d.toISOString().split("T")[0];
 		// Register one document capture handler for all popups
 		if (!this._closePopups) {
 			this._closePopups = (ev) => {
 				document
-					.querySelectorAll(".tp-date-popup.tp-dp-open")
+					.querySelectorAll(".ft-date-popup.ft-dp-open")
 					.forEach((p) => {
 						if (
 							p.contains(ev.target) ||
 							(p._badge && p._badge.contains(ev.target))
 						)
 							return;
-						p.classList.remove("tp-dp-open");
+						p.classList.remove("ft-dp-open");
 						if (p.parentNode) p.parentNode.removeChild(p);
 					});
 			};
@@ -574,16 +574,16 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 			const r = dw.getBoundingClientRect();
 			dp.style.left = r.left + "px";
 			dp.style.top = r.bottom + 4 + "px";
-			dp.classList.add("tp-dp-open");
+			dp.classList.add("ft-dp-open");
 			document.body.appendChild(dp);
 		};
 		const cp = () => {
-			dp.classList.remove("tp-dp-open");
+			dp.classList.remove("ft-dp-open");
 			if (dp.parentNode) dp.parentNode.removeChild(dp);
 		};
 		ds2.addEventListener("click", (e) => {
 			e.stopPropagation();
-			dp.classList.contains("tp-dp-open") ? cp() : op();
+			dp.classList.contains("ft-dp-open") ? cp() : op();
 		});
 		const ap = async (nd) => {
 			cp();
@@ -592,7 +592,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 				task.taskDate = nd;
 				if (nd && nd === tdy) {
 					ds2.setText(nd);
-					ds2.removeClass("tp-date-none");
+					ds2.removeClass("ft-date-none");
 					await this._refreshSiblings();
 				} else {
 					row.remove();
@@ -617,11 +617,11 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 
 		/* Timer (today) or action buttons (compact) */
 		if (isCompact) {
-			const ac = row.createEl("td", { cls: "tp-actions-cell" });
-			const aw = ac.createEl("div", { cls: "tp-actions-wrap" });
+			const ac = row.createEl("td", { cls: "ft-actions-cell" });
+			const aw = ac.createEl("div", { cls: "ft-actions-wrap" });
 			const abTdy = aw.createEl("button", {
 				text: "📅 Today",
-				cls: "tp-act-btn",
+				cls: "ft-act-btn",
 			});
 			abTdy.addEventListener("click", async () => {
 				await this.updateDate(task, tdy);
@@ -633,7 +633,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 			if (od) {
 				const abBkl = aw.createEl("button", {
 					text: "🗑 Backlog",
-					cls: "tp-act-btn tp-act-remove",
+					cls: "ft-act-btn ft-act-remove",
 				});
 				abBkl.addEventListener("click", async () => {
 					await this.updateDate(task, "");
@@ -650,17 +650,17 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 				interval: null,
 				running: false,
 			};
-			const tmr = row.createEl("td", { cls: "tp-timer-cell" });
-			const tr2 = tmr.createEl("div", { cls: "tp-timer-row" });
-			const pb = tr2.createEl("button", { text: "▶", cls: "tp-timer-play" });
+			const tmr = row.createEl("td", { cls: "ft-timer-cell" });
+			const tr2 = tmr.createEl("div", { cls: "ft-timer-row" });
+			const pb = tr2.createEl("button", { text: "▶", cls: "ft-timer-play" });
 			const disp = tr2.createEl("span", {
 				text: this._fmtT(ts.remaining),
-				cls: "tp-timer-display",
+				cls: "ft-timer-display",
 			});
-			const rb = tr2.createEl("button", { text: "↺", cls: "tp-timer-reset" });
+			const rb = tr2.createEl("button", { text: "↺", cls: "ft-timer-reset" });
 			const ud = () => {
 				disp.setText(this._fmtT(ts.remaining));
-				disp.toggleClass("tp-timer-expired", ts.remaining <= 0);
+				disp.toggleClass("ft-timer-expired", ts.remaining <= 0);
 			};
 			const stp = () => {
 				if (ts.interval) {
@@ -684,7 +684,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 						stp();
 						ts.remaining = 0;
 						ud();
-						disp.addClass("tp-timer-expired");
+						disp.addClass("ft-timer-expired");
 						this.plugin?.notify?.("⏰ Time's up! " + task.cleanText);
 						if (this.plugin?.settings?.timerSound !== false) {
 							this._beep();
@@ -734,23 +734,23 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 
 	/* Build task cell with priority + text (checkbox is separate column) */
 	_buildTaskCell(row, task) {
-		const tc = row.createEl("td", { cls: "tp-task-cell" });
+		const tc = row.createEl("td", { cls: "ft-task-cell" });
 		if (task.priority) {
-			tc.createEl("span", { text: task.priority, cls: "tp-priority" });
+			tc.createEl("span", { text: task.priority, cls: "ft-priority" });
 		}
-		const textEl = tc.createEl("span", { text: task.cleanText, cls: "tp-task-text" });
+		const textEl = tc.createEl("span", { text: task.cleanText, cls: "ft-task-text" });
 		if (task.status === "x" || task.status === "X") {
-			row.addClass("tp-task-done");
-			textEl.addClass("tp-task-done-text");
+			row.addClass("ft-task-done");
+			textEl.addClass("ft-task-done-text");
 		}
 	}
 
 	/* Build checkbox cell as dedicated column */
 	_buildCheckCell(row, task) {
-		const cc = row.createEl("td", { cls: "tp-check-cell" });
+		const cc = row.createEl("td", { cls: "ft-check-cell" });
 		const chk = cc.createEl("span", {
 			text: task.status === "x" || task.status === "X" ? "☑" : "☐",
-			cls: "tp-checkbox",
+			cls: "ft-checkbox",
 		});
 		chk.addEventListener("click", async (e) => {
 			e.stopPropagation();
@@ -859,4 +859,4 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 	}
 }
 
-module.exports = { TaskPlannerRenderer };
+module.exports = { FlowtimeRenderer };

@@ -1,5 +1,5 @@
 const { Plugin, Notice, Modal } = require("obsidian");
-const { TaskPlannerRenderer } = require("./src/renderer");
+const { FlowtimeRenderer } = require("./src/renderer");
 const { FlowtimeSettingsTab, DEFAULT_SETTINGS } = require("./src/settings");
 const { ProjectEngine } = require("./src/project-engine");
 const { TemplateEngine } = require("./src/template-engine");
@@ -34,6 +34,20 @@ module.exports = class FlowtimePlugin extends Plugin {
 			hotkeys: [{ modifiers: ["Mod", "Shift"], key: "I" }],
 			callback: () => {
 				new QuickEntryModal(this.app, this).open();
+			},
+		});
+
+		// Add Task at Cursor command
+		this.addCommand({
+			id: "add-task-inline",
+			name: "Add Task at Cursor",
+			editorCallback: (editor) => {
+				const today = new Date().toISOString().split("T")[0];
+				const cursor = editor.getCursor();
+				const line = "- [ ]  @" + today + " ";
+				editor.replaceRange(line, cursor);
+				// Move cursor to after "- [ ] " so user can type task text immediately
+				editor.setCursor({ line: cursor.line, ch: cursor.ch + 6 });
 			},
 		});
 
@@ -143,7 +157,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 			["task-planner-project", "project"],
 		]) {
 			this.registerMarkdownCodeBlockProcessor(name, (_src, el, ctx) => {
-				const r = new TaskPlannerRenderer(this.app, el, mode, this.projectEngine, ctx.sourcePath);
+				const r = new FlowtimeRenderer(this.app, el, mode, this.projectEngine, ctx.sourcePath);
 				r.plugin = this;
 				this.renderers.push(r);
 				ctx.addChild(r);

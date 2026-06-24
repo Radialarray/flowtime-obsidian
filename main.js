@@ -49,7 +49,12 @@ class AddTaskSuggest extends EditorSuggest {
 
 module.exports = class FlowtimePlugin extends Plugin {
 	async onload() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		const savedData = await this.loadData();
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, savedData);
+		// Ensure buckets default is populated if saved data has empty/null buckets
+		if (!this.settings.buckets || this.settings.buckets.length === 0) {
+			this.settings.buckets = DEFAULT_SETTINGS.buckets;
+		}
 
 		this.notify = (message, isError = false) => {
 			if (!isError && this.settings.quietMode) return;
@@ -110,6 +115,13 @@ module.exports = class FlowtimePlugin extends Plugin {
 					taskText: data.taskText,
 					notes: "",
 				});
+			},
+			// Status bar right-click stop → stop active per-row timer
+			onTimerStop: () => {
+				if (this._activeRowTimerStop) {
+					this._activeRowTimerStop();
+					this._activeRowTimerStop = null;
+				}
 			},
 		});
 
@@ -223,6 +235,68 @@ module.exports = class FlowtimePlugin extends Plugin {
 						this.notify("❌ Failed to create project: " + e.message, true);
 					}
 				}).open();
+			},
+		});
+
+		// ── Add Bucket Command ──
+		this.addCommand({
+			id: "add-bucket",
+			name: "Add Bucket",
+			callback: () => {
+				class BucketModal extends Modal {
+					constructor(app, plugin) {
+						super(app);
+						this.plugin = plugin;
+					}
+					onOpen() {
+						const { contentEl } = this;
+						contentEl.createEl("h2", { text: "Add Bucket" });
+						contentEl.createEl("p", {
+							text: "Create a new time-budget category.",
+							cls: "flowtime-label",
+						});
+
+						contentEl.createEl("label", { text: "Name", cls: "flowtime-label" });
+						const nameInput = contentEl.createEl("input", {
+							type: "text", placeholder: "e.g. Deep Work", cls: "flowtime-input",
+						});
+
+						contentEl.createEl("label", { text: "Color", cls: "flowtime-label" });
+						const colorInput = contentEl.createEl("input", {
+							type: "color", value: "#4a9eff", cls: "flowtime-input",
+						});
+						colorInput.style.padding = "2px";
+						colorInput.style.width = "60px";
+
+						contentEl.createEl("label", { text: "Weekly limit (hours)", cls: "flowtime-label" });
+						const limitInput = contentEl.createEl("input", {
+							type: "number", value: "10", min: "1", cls: "flowtime-input",
+						});
+
+						const btnRow = contentEl.createEl("div", { cls: "flowtime-btn-row" });
+						const cancelBtn = btnRow.createEl("button", { text: "Cancel", cls: "flowtime-btn-cancel" });
+						const createBtn = btnRow.createEl("button", { text: "Create", cls: "flowtime-btn-submit" });
+
+						cancelBtn.addEventListener("click", () => this.close());
+						createBtn.addEventListener("click", async () => {
+							const name = nameInput.value.trim();
+							if (!name) { this.plugin.notify("Name is required", true); return; }
+							const color = colorInput.value;
+							const limit = parseInt(limitInput.value, 10);
+							if (!limit || limit <= 0) { this.plugin.notify("Limit must be > 0", true); return; }
+
+							const buckets = this.plugin.settings.buckets || [];
+							const id = name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+							buckets.push({ id, name, color, weeklyLimit: limit, sortOrder: buckets.length });
+							this.plugin.settings.buckets = buckets;
+							await this.plugin.saveData(this.plugin.settings);
+							this.plugin.notify("✅ Bucket created: " + name);
+							this.close();
+						});
+					}
+					onClose() { this.contentEl.empty(); }
+				}
+				new BucketModal(this.app, this).open();
 			},
 		});
 

@@ -1,9 +1,10 @@
 class StatusTimer {
-	constructor({ statusBarItem, settings, notify, onSessionEnd }) {
+	constructor({ statusBarItem, settings, notify, onSessionEnd, onTimerStop }) {
 		this.statusBarItem = statusBarItem;
 		this.settings = settings;
 		this.notify = notify;
 		this.onSessionEnd = onSessionEnd;
+		this.onTimerStop = onTimerStop;
 		this.currentTimer = null;
 		this._currentTaskName = "";
 		this._startTime = null;
@@ -50,13 +51,28 @@ class StatusTimer {
 				const now = new Date();
 				this.onSessionEnd({
 					taskText: this._currentTaskName,
-					startTime: this._startTime,
+					startTime: this._startTime.toISOString(),
 					endTime: now.toISOString(),
 					durationMinutes: Math.round((now - this._startTime) / 60000),
 				});
 			}
 		}
+		if (this.onTimerStop) {
+			this.onTimerStop();
+		}
 		this.currentTimer = null;
+		this.updateDisplay();
+	}
+
+	/**
+	 * Pause without recording a session or notifying onTimerStop.
+	 * Used when the table timer pauses — the session isn't over.
+	 */
+	pause() {
+		if (this.currentTimer?.interval) {
+			clearInterval(this.currentTimer.interval);
+			this.currentTimer.interval = null;
+		}
 		this.updateDisplay();
 	}
 

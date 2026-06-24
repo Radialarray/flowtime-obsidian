@@ -624,7 +624,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				});
 			}
 
-			applyBtn.addEventListener("click", () => {
+			applyBtn.addEventListener("click", async () => {
 				const field = fieldSel.value;
 				const op = opSel.value;
 				const val = valInput.value.trim();
@@ -640,12 +640,14 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 					return; // No value, no filter
 				}
 
+				await this.loadTasks(); // Re-load tasks (re-applies filter from scratch)
 				this.renderTable();
 				closePanel();
 			});
 
-			clearBtn.addEventListener("click", () => {
+			clearBtn.addEventListener("click", async () => {
 				this._activeFilter = null;
+				await this.loadTasks();
 				this.renderTable();
 				closePanel();
 			});
@@ -712,58 +714,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		groupSel.addEventListener("change", applyGroup);
 		subSel.addEventListener("change", applyGroup);
 
-		// ── Save/Load View ──
-		const saveBtn = toolbar.createEl("button", { text: "💾 Save View", cls: "ft-view-btn" });
-		const loadBtn = toolbar.createEl("button", { text: "📂 Load View", cls: "ft-view-btn" });
-
-		// Save modal
-		saveBtn.addEventListener("click", () => {
-			const name = prompt("Save current view as:", "");
-			if (!name || !name.trim()) return;
-			const viewName = name.trim();
-
-			const savedViews = { ...(this.plugin?.settings?.savedViews || {}) };
-			savedViews[viewName] = {
-				filter: this._activeFilter || null,
-				sortConfig: this._sortConfig || [],
-				groupConfig: this._groupConfig || { primary: null, secondary: null },
-				columnVisibility: { ...(this._columnVisibility || {}) },
-			};
-
-			this.plugin.settings.savedViews = savedViews;
-			this.plugin.saveData(this.plugin.settings);
-			this.plugin.notify("✅ View saved: " + viewName);
-		});
-
-		// Load modal
-		loadBtn.addEventListener("click", () => {
-			const savedViews = this.plugin?.settings?.savedViews || {};
-			const names = Object.keys(savedViews);
-
-			if (names.length === 0) {
-				this.plugin.notify("No saved views found.", true);
-				return;
-			}
-
-			// Simple dropdown approach: use a prompt with names
-			const viewName = prompt("Load view:\n" + names.map((n, i) => `${i + 1}. ${n}`).join("\n"), names[0]);
-			if (!viewName || !viewName.trim()) return;
-
-			const view = savedViews[viewName.trim()];
-			if (!view) {
-				this.plugin.notify("❌ View not found: " + viewName, true);
-				return;
-			}
-
-			// Restore view config
-			this._activeFilter = view.filter || null;
-			this._sortConfig = view.sortConfig || [];
-			this._groupConfig = view.groupConfig || { primary: null, secondary: null };
-			this._columnVisibility = view.columnVisibility || {};
-
-			this.renderTable();
-			this.plugin.notify("✅ View loaded: " + viewName);
-		});
+		// ── Save/Load View (placeholder — needs Modal, prompt() unavailable in Obsidian) ──
+		// To be re-implemented with Obsidian Modal API in future release
 
 		const table = this.containerEl.createEl("table", {
 			cls: "flowtime-table",
@@ -787,8 +739,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			}
 			this._sortMode = 'custom';
 			this.loadTasks().then(() => {
-				const tbody = this.containerEl.querySelector("tbody");
-				if (tbody) this.buildRows(tbody);
+				this.renderTable();
 			});
 		};
 
@@ -1261,7 +1212,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 					tmrBar.className = "ft-timer-progress ft-state-normal";
 				}
 			};
+
+			// stp: fully stop timer — records session on statusTimer
 			const stp = () => {
+				if (this.plugin) this.plugin._activeRowTimerStop = null;
 				if (ts.interval) {
 					clearInterval(ts.interval);
 					ts.interval = null;
@@ -1272,6 +1226,49 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 					this.plugin.statusTimer.stop();
 				}
 			};
+
+			// pauseTimer: just pause — no session recording
+			const pauseTimer = () => {
+				if (ts.interval) {
+					clearInterval(ts.interval);
+					ts.interval = null;
+				}
+				ts.running = false;
+				pb.setText("▶");
+				if (this.plugin?.statusTimer?.pause) {
+					this.plugin.statusTimer.pause();
+				}
+			};
+
+			// resumeTimer: resume existing timer without restarting
+			const resumeTimer = () => {
+				if (ts.remaining <= 0) return;
+				ts.running = true;
+				pb.setText("⏸");
+				ts.interval = setInterval(() => {
+					ts.remaining--;
+					ud();
+					if (ts.remaining <= 0) {
+						stp();
+						ts.remaining = 0;
+						ud();
+						disp.addClass("ft-timer-expired");
+						this.plugin?.notify?.("⏰ Time's up! " + task.cleanText);
+						if (this.plugin?.settings?.timerSound !== false) {
+							this._beep();
+						}
+						if (this.plugin?.statusTimer?.stop) {
+							this.plugin.statusTimer.stop();
+						}
+					}
+				}, 1000);
+				// Sync with status bar — toggle to resume if paused
+				if (this.plugin?.statusTimer?.currentTimer?.interval === null) {
+					this.plugin.statusTimer.toggle();
+				}
+			};
+
+			// sta: start or switch to this task
 			const sta = () => {
 				if (ts.remaining <= 0) return;
 				ts.running = true;
@@ -1293,17 +1290,20 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 						}
 					}
 				}, 1000);
-			// Sync with status bar
-			if (this.plugin?.statusTimer?.start) {
-				const dm = ds ? parseInt(ds.value, 10) : dur;
-				this.plugin.statusTimer.start(task.cleanText, dm * 60);
-			}
+				// Register this row's stop callback for status bar right-click
+				if (this.plugin) this.plugin._activeRowTimerStop = stp;
+				// Start status bar timer (stops any previous, records its session)
+				if (this.plugin?.statusTimer?.start) {
+					const dm = ds ? parseInt(ds.value, 10) : dur;
+					this.plugin.statusTimer.start(task.cleanText, dm * 60);
+				}
 			};
+
 			pb.addEventListener("click", () => {
 				const dm = ds ? parseInt(ds.value, 10) : dur;
 				if (!dm || dm <= 0) return;
 				if (ts.running) {
-					stp();
+					pauseTimer();
 				} else {
 					if (ts.remaining <= 0) {
 						ts.remaining = dm * 60;

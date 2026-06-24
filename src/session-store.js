@@ -6,6 +6,17 @@ class SessionStore {
 
 	async _ensureDir() {
 		try {
+			// Check if path exists and is a file — remove it so we can create the dir
+			const exists = await this.vault.adapter.exists(this.basePath);
+			if (exists) {
+				const stat = await this.vault.adapter.stat(this.basePath);
+				if (stat && stat.type === "file") {
+					await this.vault.adapter.remove(this.basePath);
+				}
+				return; // Already a directory
+			}
+		} catch (_) {}
+		try {
 			await this.vault.createFolder(this.basePath);
 		} catch (_) {}
 	}

@@ -64,10 +64,11 @@ class AddTaskSuggest extends EditorSuggest {
  *   @today, @b:deep-work, @p:Website, @30m, @due:tomorrow
  */
 class AtCompletionsSuggest extends EditorSuggest {
+	limit = 30; // Override default ~10 suggestion limit
+
 	constructor(app, plugin) {
 		super(app);
 		this.plugin = plugin;
-		this.limit = 30; // Ensure all suggestions are visible (default ~10 clips the list)
 	}
 
 	onTrigger(cursor, editor, file) {
@@ -172,7 +173,7 @@ class AtCompletionsSuggest extends EditorSuggest {
 			const matched = macros
 				.filter((m) => m.label.slice(1).includes(q))
 				.map((m) => ({ ...m, type: "macro" }));
-			// Always inject @inbox at the front when query matches
+			// Always inject @inbox at the front
 			if ("inbox".includes(q || "")) {
 				matched.unshift({
 					label: "@inbox",
@@ -181,6 +182,13 @@ class AtCompletionsSuggest extends EditorSuggest {
 					type: "macro",
 				});
 			}
+			// Debug: log whether @inbox is in results
+			console.debug(
+				"Flowtime suggestions:",
+				matched.length,
+				"items, has @inbox:",
+				matched.some((m) => m.label === "@inbox"),
+			);
 			return matched;
 		}
 
@@ -218,6 +226,9 @@ class AtCompletionsSuggest extends EditorSuggest {
 			{ label: "due:today", description: "Due today" },
 			{ label: "due:tomorrow", description: "Due tomorrow" },
 		];
+
+		// v0.4.0: Status & priority tags
+		const inboxAction = [{ label: "inbox", description: "Add task to inbox" }];
 
 		// v0.4.0: Status & priority tags
 		const statusTags = [
@@ -275,6 +286,13 @@ class AtCompletionsSuggest extends EditorSuggest {
 					});
 			}
 		} else {
+			for (const i of inboxAction)
+				if (i.label.toLowerCase().includes(q))
+					suggestions.push({
+						label: "@" + i.label,
+						description: i.description,
+						type: "status",
+					});
 			for (const d of dates)
 				if (d.label.toLowerCase().includes(q))
 					suggestions.push({

@@ -1,0 +1,203 @@
+const { Modal, Notice } = require("obsidian");
+const { parseDate } = require("./date-parser");
+
+class QuickEntryModal extends Modal {
+	constructor(app, plugin) {
+		super(app);
+		this.plugin = plugin;
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.empty();
+		contentEl.addClass("flowtime-quick-entry");
+
+		// Title
+		contentEl.createEl("h2", { text: "Add Task" });
+
+		// ── Task text ──
+		contentEl.createEl("label", { text: "Task", cls: "flowtime-label" });
+		const taskInput = contentEl.createEl("input", {
+			type: "text",
+			placeholder: "What needs to be done?",
+			cls: "flowtime-input",
+		});
+		taskInput.focus();
+
+		// ── Date ──
+		contentEl.createEl("label", { text: "Date", cls: "flowtime-label" });
+		const dateRow = contentEl.createEl("div", { cls: "flowtime-row" });
+		const dateInput = dateRow.createEl("input", {
+			type: "text",
+			placeholder: "today, tomorrow, next monday, 2026-06-24",
+			value: "today",
+			cls: "flowtime-input",
+		});
+		const datePreview = dateRow.createEl("span", {
+			text: "→ ⏳ " + (parseDate("today") || "—"),
+			cls: "flowtime-date-preview",
+		});
+
+		// ── Live preview helper (defined early so all handlers can call it) ──
+		const preview = contentEl.createEl("div", { cls: "flowtime-preview" });
+		preview.createEl("div", { text: "Preview:", cls: "flowtime-label" });
+		const previewCode = preview.createEl("code", { cls: "flowtime-preview-code" });
+
+		const updateLivePreview = () => {
+			const date = parseDate(dateInput.value);
+			const project = projInput.value.trim();
+			const task = taskInput.value.trim();
+			let line = "- [ ] " + (task || "task description");
+			if (project) line += " #" + this.plugin.settings.tagPrefix + project;
+			if (date) line += " ⏳ " + date;
+			previewCode.setText(line);
+		};
+
+		// Live preview on date input
+		dateInput.addEventListener("input", () => {
+			const parsed = parseDate(dateInput.value);
+			datePreview.setText(parsed ? "→ ⏳ " + parsed : "→ ?");
+			datePreview.toggleClass("flowtime-date-invalid", !parsed);
+			updateLivePreview();
+		});
+
+		// ── Project ──
+		contentEl.createEl("label", { text: "Project", cls: "flowtime-label" });
+		const projInput = contentEl.createEl("input", {
+			type: "text",
+			placeholder: "e.g. website, personal",
+			cls: "flowtime-input",
+		});
+
+		// Auto-detect project from active file
+		const activeFile = this.app.workspace.getActiveFile();
+		if (activeFile && this.plugin.projectEngine) {
+			this.plugin.projectEngine
+				.resolve(activeFile.path)
+				.then((result) => {
+					if (result?.name && !projInput.value) {
+						projInput.value = result.name;
+						projInput.setAttribute("data-auto", "true");
+					}
+				})
+				.catch(() => {
+					// projectEngine resolve failed silently
+				});
+		}
+
+		// ── Duration ──
+		contentEl.createEl("label", { text: "Duration", cls: "flowtime-label" });
+		const durSelect = contentEl.createEl("select", { cls: "flowtime-select" });
+		const durations = [
+			0, 10, 15, 20, 25, 30, 45, 60, 90, 120, 150, 180, 210, 240,
+		];
+		for (const d of durations) {
+			durSelect.createEl("option", {
+				text:
+					d === 0
+						? "None"
+						: d < 60
+							? d + "m"
+							: d / 60 + "h",
+				value: String(d),
+			});
+		}
+
+		// Update preview on any input change
+		taskInput.addEventListener("input", updateLivePreview);
+		projInput.addEventListener("input", updateLivePreview);
+		durSelect.addEventListener("change", updateLivePreview);
+		updateLivePreview();
+
+		// ── Buttons ──
+		const btnRow = contentEl.createEl("div", { cls: "flowtime-btn-row" });
+		const cancelBtn = btnRow.createEl("button", {
+			text: "Cancel",
+			cls: "flowtime-btn-cancel",
+		});
+		const submitBtn = btnRow.createEl("button", {
+			text: "Add Task",
+			cls: "flowtime-btn-submit",
+		});
+
+		cancelBtn.addEventListener("click", () => this.close());
+
+		// ── Submit logic ──
+		const doSubmit = async () => {
+			const task = taskInput.value.trim();
+			if (!task) {
+				new Notice("Task description is required");
+				return;
+			}
+
+			const date = parseDate(dateInput.value);
+			const project = projInput.value.trim();
+			// Duration not added to line for now — user timeboxes in table
+
+			// Build task line
+			let line = "- [ ] " + task;
+			if (project) line += " #" + this.plugin.settings.tagPrefix + project;
+			if (date) line += " ⏳ " + date;
+
+			// Determine target file
+			let targetFile = activeFile;
+			const target = this.plugin.settings.quickEntryTargetFile;
+
+			if (target === "daily-note") {
+				// Search vault for a file whose basename matches today's date
+				const today = new Date().toISOString().split("T")[0];
+				const allFiles = this.app.vault.getMarkdownFiles();
+				const dailyFile = allFiles.find((f) => f.basename === today);
+				targetFile = dailyFile || activeFile;
+			} else if (target === "project-file" && project) {
+				// Try to find project folder note via projectEngine cache
+				const cached = this.plugin.projectEngine?.cache?.get?.(
+					activeFile?.path,
+				);
+				if (cached?.path) {
+					const f = this.app.vault.getAbstractFileByPath(cached.path);
+					if (f) targetFile = f;
+				}
+			} // "active-file" → targetFile stays as activeFile
+
+			if (!targetFile) {
+				new Notice("No target file found. Open a note first.");
+				return;
+			}
+
+			// Append line to file
+			try {
+				const content = await this.app.vault.read(targetFile);
+				const newContent = content.trimEnd() + "\n" + line + "\n";
+				await this.app.vault.modify(targetFile, newContent);
+				new Notice("✅ Task added: " + task);
+				this.close();
+			} catch (e) {
+				new Notice("❌ Failed to add task: " + e.message);
+			}
+		};
+
+		submitBtn.addEventListener("click", doSubmit);
+
+		// Enter key submits from task or date fields
+		taskInput.addEventListener("keydown", (e) => {
+			if (e.key === "Enter" && !e.shiftKey) {
+				e.preventDefault();
+				doSubmit();
+			}
+		});
+		dateInput.addEventListener("keydown", (e) => {
+			if (e.key === "Enter" && !e.shiftKey) {
+				e.preventDefault();
+				doSubmit();
+			}
+		});
+	}
+
+	onClose() {
+		const { contentEl } = this;
+		contentEl.empty();
+	}
+}
+
+module.exports = { QuickEntryModal };

@@ -2,6 +2,7 @@ const { Plugin } = require("obsidian");
 const { TaskPlannerRenderer } = require("./src/renderer");
 const { FlowtimeSettingsTab, DEFAULT_SETTINGS } = require("./src/settings");
 const { ProjectEngine } = require("./src/project-engine");
+const { QuickEntryModal } = require("./src/quick-entry");
 
 module.exports = class FlowtimePlugin extends Plugin {
 	async onload() {
@@ -16,6 +17,15 @@ module.exports = class FlowtimePlugin extends Plugin {
 		this.registerEvent(this.app.vault.on("delete", (file) => {
 			this.projectEngine.invalidate(file.path);
 		}));
+
+		// Quick entry command
+		this.addCommand({
+			id: "add-task",
+			name: "Add Task",
+			callback: () => {
+				new QuickEntryModal(this.app, this).open();
+			},
+		});
 
 		this.renderers = [];
 		for (const [name, mode] of [

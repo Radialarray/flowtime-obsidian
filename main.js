@@ -7,6 +7,7 @@ const { QuickEntryModal } = require("./src/quick-entry");
 const { runOnboard } = require("./src/onboard");
 const { StatusTimer } = require("./src/status-timer");
 const { SessionStore } = require("./src/session-store");
+const { TaskCache } = require("./src/cache");
 
 class AddTaskSuggest extends EditorSuggest {
 	constructor(app, plugin) {
@@ -66,13 +67,20 @@ module.exports = class FlowtimePlugin extends Plugin {
 		this.projectEngine = new ProjectEngine(this.app, this.settings);
 		this.templateEngine = new TemplateEngine(this.app, this);
 		this.sessionStore = new SessionStore(this.app.vault);
+		this.taskCache = new TaskCache();
+		// Load persisted cache from saved data
+		if (savedData && savedData._taskCache) {
+			this.taskCache.fromJSON(savedData._taskCache);
+		}
 
-		this.registerEvent(this.app.vault.on("modify", (file) => {
+		const onFileChanged = (file) => {
 			this.projectEngine.invalidate(file.path);
-		}));
-		this.registerEvent(this.app.vault.on("delete", (file) => {
-			this.projectEngine.invalidate(file.path);
-		}));
+			this.taskCache.invalid(file.path);
+			this._scheduleCacheSave();
+		};
+		this.registerEvent(this.app.vault.on("modify", onFileChanged));
+		this.registerEvent(this.app.vault.on("delete", onFileChanged));
+		// Also invalidate on rename (create+delete fires separately)
 
 		// Register /add-task slash command suggester
 		this.registerEditorSuggest(new AddTaskSuggest(this.app, this));
@@ -307,6 +315,37 @@ module.exports = class FlowtimePlugin extends Plugin {
 			callback: () => {
 				runOnboard(this.app, this);
 			},
+		});
+
+		// ── Cache persistence ──
+		this._cacheSaveTimer = null;
+		this._cacheInitialSaveDone = false;
+
+		/**
+		 * Debounced cache save — writes 2s after last change.
+		 */
+		this._scheduleCacheSave = (force) => {
+			if (force && this._cacheSaveTimer) {
+				clearTimeout(this._cacheSaveTimer);
+				this._cacheSaveTimer = null;
+			}
+			if (this._cacheSaveTimer) return;
+			this._cacheSaveTimer = setTimeout(async () => {
+				this._cacheSaveTimer = null;
+				try {
+					const data = (await this.loadData()) || {};
+					data._taskCache = this.taskCache.toJSON();
+					await this.saveData(data);
+				} catch (_) {}
+			}, force ? 0 : 2000);
+		};
+
+		// Save cache on unload as well
+		this.register(() => {
+			if (this._cacheSaveTimer) {
+				clearTimeout(this._cacheSaveTimer);
+				this._cacheSaveTimer = null;
+			}
 		});
 	}
 };

@@ -101,10 +101,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		let total = 0;
 		for (const file of this.app.vault.getMarkdownFiles()) {
 			if (file.path.startsWith(".obsidian") || file.path.startsWith(".git")) continue;
-			const lines = (await this.app.vault.read(file)).split("\n");
-			for (let i = 0; i < lines.length; i++) {
-				const parsed = parseTaskLine(lines[i], file, i);
-				if (!parsed) continue;
+			const fileTasks = await this._getFileTasks(file);
+			for (const parsed of fileTasks) {
 				if (parsed.taskDate === today && parsed.durationMinutes) {
 					total += parsed.durationMinutes;
 				}
@@ -220,21 +218,46 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		return count || 1;
 	}
 
+	/* ─── helpers ─── */
+	/**
+	 * Get parsed tasks for a file, using cache if available.
+	 * Falls back to reading and parsing the file, then caches the result.
+	 */
+	async _getFileTasks(file) {
+		const cache = this.plugin?.taskCache;
+		const cached = cache?.get(file.path);
+		if (cached) {
+			return cached.parsedTasks.map(t => ({ ...t, file }));
+		}
+		const content = await this.app.vault.read(file);
+		const lines = content.split("\n");
+		const result = [];
+		for (let i = 0; i < lines.length; i++) {
+			const parsed = parseTaskLine(lines[i], file, i);
+			if (parsed) result.push(parsed);
+		}
+		// Cache without file references (not serializable)
+		if (cache) {
+			const cacheable = result.map(t => {
+				const { file: f, ...rest } = t;
+				return rest;
+			});
+			cache.set(file.path, cacheable);
+		}
+		return result;
+	}
+
 	/* ─── load ─── */
 	async loadTasks() {
 		if (this.mode === "sessions") {
-			// Don't load tasks — we'll render directly from session store
 			this.tasks = [];
 			return;
 		}
 
 		const today = new Date().toISOString().split("T")[0];
-		// End of current week — Sunday
 		const eow = new Date();
 		eow.setDate(eow.getDate() + ((7 - eow.getDay()) % 7));
 		const eowStr = eow.toISOString().split("T")[0];
-
-		// Weekly boundaries
 		const mon = this._getMonday(today);
 		const sun = this._getSunday(today);
 
@@ -245,7 +268,6 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				const sp = await this.projectEngine.resolve(this.sourcePath);
 				targetProject = sp?.name || null;
 			}
-			// If source has no project, show nothing
 			if (!targetProject) {
 				this.tasks = [];
 				return;
@@ -260,11 +282,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			const weeklyTotals = {};
 			for (const file of this.app.vault.getMarkdownFiles()) {
 				if (file.path.startsWith(".obsidian") || file.path.startsWith(".git")) continue;
-				const content = await this.app.vault.read(file);
-				const lines = content.split("\n");
-				for (let i = 0; i < lines.length; i++) {
-					const parsed = parseTaskLine(lines[i], file, i);
-					if (!parsed) continue;
+				const fileTasks = await this._getFileTasks(file);
+				for (const parsed of fileTasks) {
 					if (!parsed.bucket) continue;
 					if (parsed.taskDate && parsed.taskDate >= mon && parsed.taskDate <= sun) {
 						weeklyTotals[parsed.bucket] = (weeklyTotals[parsed.bucket] || 0) + (parsed.durationMinutes || 0);
@@ -299,10 +318,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		for (const file of this.app.vault.getMarkdownFiles()) {
 			if (file.path.startsWith(".obsidian") || file.path.startsWith(".git"))
 				continue;
-			const lines = (await this.app.vault.read(file)).split("\n");
-			for (let i = 0; i < lines.length; i++) {
-				const parsed = parseTaskLine(lines[i], file, i);
-				if (!parsed) continue;
+			const fileTasks = await this._getFileTasks(file);
+			for (const parsed of fileTasks) {
 				if (parsed.status === "x" || parsed.status === "-" || parsed.status === "X") continue;
 
 				const { taskDate, rawText, time, status, priority, cleanText, bucket, durationMinutes } = parsed;
@@ -383,6 +400,9 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		} else {
 			this._sort();
 		}
+
+		// Trigger cache persistence after first load
+		this.plugin?._scheduleCacheSave?.();
 	}
 
 	/* ─── render ─── */

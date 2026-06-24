@@ -1,3 +1,4 @@
+const { Modal } = require("obsidian");
 const { parseDate } = require("./date-parser");
 
 /**
@@ -10,17 +11,73 @@ const { parseDate } = require("./date-parser");
 /**
  * Parse inbox file content into processable items.
  *
+ * Everything from the first `#` heading through the first block of
+ * non-blank, non-heading description text (and the blank line that
+ * follows it) is treated as the **header** and excluded from processing.
+ *
+ * This keeps the auto-created template instructions ("Capture tasks...",
+ * "Process them...") from being treated as items.
+ *
  * @param {string} content — raw file content
  * @returns {{ items: InboxItem[], headings: string[] }}
  *   items — lines eligible for processing
- *   headings — all lines that are headings or blanks (preserved in order)
+ *   headings — all lines that are heads or desc (preserved in write-back)
  */
 function parseInbox(content) {
 	const lines = content.split("\n");
 	const items = [];
 	const headings = [];
 
+	// ── Find where content starts ──
+	// State machine: skip the heading block (first # + desc lines + trailing blank)
+	let contentStart = 0;
+	let state = "before_heading";
+
 	for (let i = 0; i < lines.length; i++) {
+		const trimmed = lines[i].trim();
+
+		if (state === "before_heading") {
+			headings.push({ index: i, text: lines[i] });
+			if (trimmed.startsWith("#")) state = "after_heading";
+			// blank or text before heading → stay before_heading
+			continue;
+		}
+
+		if (state === "after_heading") {
+			if (trimmed === "") {
+				headings.push({ index: i, text: lines[i] });
+				// stay — more blanks after heading
+			} else if (trimmed.startsWith("#")) {
+				// Second heading → content starts here (no desc block)
+				contentStart = i;
+				break;
+			} else {
+				// First non-blank after heading — could be description or content
+				headings.push({ index: i, text: lines[i] });
+				state = "in_description";
+			}
+			continue;
+		}
+
+		if (state === "in_description") {
+			if (trimmed === "") {
+				// Blank line ends the description block → header complete
+				headings.push({ index: i, text: lines[i] });
+				contentStart = i + 1;
+				break;
+			} else if (trimmed.startsWith("#")) {
+				// Next heading — content starts here
+				contentStart = i;
+				break;
+			} else {
+				// More description lines
+				headings.push({ index: i, text: lines[i] });
+			}
+		}
+	}
+
+	// ── Process content lines ──
+	for (let i = contentStart; i < lines.length; i++) {
 		const raw = lines[i];
 		const trimmed = raw.trim();
 
@@ -48,7 +105,12 @@ function parseInbox(content) {
 function reconstructInbox(items, headings) {
 	// Merge headings and items back in order of their original index
 	const all = [...headings, ...items].sort((a, b) => a.index - b.index);
-	return all.map(entry => entry.text).join("\n").trimEnd() + "\n";
+	return (
+		all
+			.map((entry) => entry.text)
+			.join("\n")
+			.trimEnd() + "\n"
+	);
 }
 
 /**
@@ -59,7 +121,7 @@ function reconstructInbox(items, headings) {
  * @returns {object} — detected fields with their values and cleaned text
  */
 function detectTags(text) {
-	let remaining = text;
+	const remaining = text;
 
 	// Date: @YYYY-MM-DD or natural date keyword
 	let date = "";
@@ -68,7 +130,9 @@ function detectTags(text) {
 		date = dateMatch[1];
 	} else {
 		// Try natural date keywords
-		const naturalMatch = remaining.match(/@(today|tomorrow|yesterday|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next-week|next-monday)\b/i);
+		const naturalMatch = remaining.match(
+			/@(today|tomorrow|yesterday|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next-week|next-monday)\b/i,
+		);
 		if (naturalMatch) {
 			date = parseDate(naturalMatch[1]) || "";
 		}
@@ -108,13 +172,24 @@ function detectTags(text) {
 
 	// Recurrence: 🔁 every <period>
 	let recurrence = "";
-	const recMatch = remaining.match(/🔁\s*every\s+(\d*\s*(?:day|days|week|weeks|month|months))/);
+	const recMatch = remaining.match(
+		/🔁\s*every\s+(\d*\s*(?:day|days|week|weeks|month|months))/,
+	);
 	if (recMatch) recurrence = "🔁 every " + recMatch[1];
 
 	// Already a task line?
 	const isTaskLine = /^\s*[-*+]\s*\[[^\]]*\]/.test(remaining);
 
-	return { date, duration, bucket, project, priority, snoozeDate, recurrence, isTaskLine };
+	return {
+		date,
+		duration,
+		bucket,
+		project,
+		priority,
+		snoozeDate,
+		recurrence,
+		isTaskLine,
+	};
 }
 
 /**
@@ -124,13 +199,16 @@ function cleanDescription(text) {
 	return text
 		.replace(/^\s*[-*+]\s*\[[^\]]*\]\s*/, "") // checkbox prefix
 		.replace(/@\d{4}-\d{2}-\d{2}/g, "")
-		.replace(/@(today|tomorrow|yesterday|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next-week|next-monday)\b/gi, "")
+		.replace(
+			/@(today|tomorrow|yesterday|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next-week|next-monday)\b/gi,
+			"",
+		)
 		.replace(/@\d+(?:\.\d+)?[hm]/g, "")
 		.replace(/@(?:bucket|b):[^\s]+/g, "")
 		.replace(/@p:[^\s]+/g, "")
 		.replace(/@(?:high|med|low|soon|snooze)\b/gi, "")
 		.replace(/@snooze\s+\d{4}-\d{2}-\d{2}/g, "")
-		.replace(/[🟥🟨🟩]/g, "")
+		.replace(/[🟥🟨🟩]/gu, "")
 		.replace(/🔁\s*every\s+\d*\s*(?:day|days|week|weeks|month|months)/g, "")
 		.replace(/#\S+/g, "")
 		.replace(/\s+/g, " ")
@@ -156,9 +234,10 @@ function buildTaskLine(description, opts = {}) {
 	if (opts.priority) parts.push(opts.priority);
 	if (opts.date) parts.push("@" + opts.date);
 	if (opts.durationMinutes && opts.durationMinutes > 0) {
-		const durStr = opts.durationMinutes < 60
-			? opts.durationMinutes + "m"
-			: (opts.durationMinutes / 60) + "h";
+		const durStr =
+			opts.durationMinutes < 60
+				? opts.durationMinutes + "m"
+				: opts.durationMinutes / 60 + "h";
 		parts.push("@" + durStr);
 	}
 	if (opts.bucket) parts.push("@b:" + opts.bucket);
@@ -186,8 +265,8 @@ function isSnoozed(text) {
 
 class InboxItem {
 	constructor(text, index) {
-		this.text = text;       // original line text
-		this.index = index;     // original line number in file
+		this.text = text; // original line text
+		this.index = index; // original line number in file
 	}
 
 	/**
@@ -229,14 +308,25 @@ class ProcessInboxModal extends Modal {
 			if (!(await this.plugin.app.vault.adapter.exists(path))) {
 				this.contentEl.empty();
 				this.contentEl.createEl("h2", { text: "\u{1F4E5} Inbox Not Found" });
-				this.contentEl.createEl("p", { text: "No inbox file found at " + path + ". Create one?" });
-				const btnRow = this.contentEl.createEl("div", { cls: "flowtime-btn-row" });
-				btnRow.createEl("button", { text: "Cancel", cls: "flowtime-btn-cancel" })
+				this.contentEl.createEl("p", {
+					text: "No inbox file found at " + path + ". Create one?",
+				});
+				const btnRow = this.contentEl.createEl("div", {
+					cls: "flowtime-btn-row",
+				});
+				btnRow
+					.createEl("button", { text: "Cancel", cls: "flowtime-btn-cancel" })
 					.addEventListener("click", () => this.close());
-				btnRow.createEl("button", { text: "Create Inbox", cls: "flowtime-btn-submit" })
+				btnRow
+					.createEl("button", {
+						text: "Create Inbox",
+						cls: "flowtime-btn-submit",
+					})
 					.addEventListener("click", async () => {
 						await this.plugin._ensureInbox();
-						this.plugin.notify("\u{1F4E5} Inbox created. Add some items and try again.");
+						this.plugin.notify(
+							"\u{1F4E5} Inbox created. Add some items and try again.",
+						);
 						this.close();
 					});
 				return;
@@ -256,8 +346,8 @@ class ProcessInboxModal extends Modal {
 
 			// Keep ALL items for write-back; filter snoozed for display
 			this.allItems = items;
-			this.snoozedCount = items.filter(item => isSnoozed(item.text)).length;
-			this.items = items.filter(item => !isSnoozed(item.text));
+			this.snoozedCount = items.filter((item) => isSnoozed(item.text)).length;
+			this.items = items.filter((item) => !isSnoozed(item.text));
 			this.currentIndex = 0;
 
 			if (this.items.length === 0) {
@@ -275,12 +365,16 @@ class ProcessInboxModal extends Modal {
 	_showEmpty() {
 		this.contentEl.empty();
 		this.contentEl.createEl("h2", { text: "\u{1F4E5} Inbox" });
-		const snoozeMsg = this.snoozedCount > 0
-			? ` (${this.snoozedCount} snoozed — will reappear on their snooze date)`
-			: "";
-		this.contentEl.createEl("p", { text: "Inbox is empty!" + snoozeMsg + " Capture some tasks first." });
+		const snoozeMsg =
+			this.snoozedCount > 0
+				? ` (${this.snoozedCount} snoozed — will reappear on their snooze date)`
+				: "";
+		this.contentEl.createEl("p", {
+			text: "Inbox is empty!" + snoozeMsg + " Capture some tasks first.",
+		});
 		const btnRow = this.contentEl.createEl("div", { cls: "flowtime-btn-row" });
-		btnRow.createEl("button", { text: "Close", cls: "flowtime-btn-submit" })
+		btnRow
+			.createEl("button", { text: "Close", cls: "flowtime-btn-submit" })
 			.addEventListener("click", () => this.close());
 	}
 
@@ -294,7 +388,7 @@ class ProcessInboxModal extends Modal {
 
 		// ── Header ──
 		contentEl.createEl("h2", { text: "\u{1F4E5} Process Inbox" });
-		const progress = contentEl.createEl("p", {
+		contentEl.createEl("p", {
 			text: `${this.currentIndex + 1} of ${total}`,
 			cls: "flowtime-inbox-progress",
 		});
@@ -305,7 +399,10 @@ class ProcessInboxModal extends Modal {
 			cls: "flowtime-input flowtime-inbox-text",
 		});
 		// Truncate very long lines for display only
-		const displayText = (cleanDescription(item.text) || item.text).slice(0, 500);
+		const displayText = (cleanDescription(item.text) || item.text).slice(
+			0,
+			500,
+		);
 		textInput.value = displayText;
 		textInput.style.width = "100%";
 		textInput.style.minHeight = "50px";
@@ -313,7 +410,9 @@ class ProcessInboxModal extends Modal {
 
 		// ── Action dropdown ──
 		contentEl.createEl("label", { text: "Action", cls: "flowtime-label" });
-		const actionSelect = contentEl.createEl("select", { cls: "flowtime-select" });
+		const actionSelect = contentEl.createEl("select", {
+			cls: "flowtime-select",
+		});
 		const actions = [
 			{ value: "task", text: "\u{2705} Task" },
 			{ value: "project", text: "\u{1F4C1} Project" },
@@ -327,7 +426,9 @@ class ProcessInboxModal extends Modal {
 		actionSelect.value = tags.isTaskLine ? "task" : "task";
 
 		// ── Conditional fields container ──
-		const fieldsContainer = contentEl.createEl("div", { cls: "flowtime-inbox-fields" });
+		const fieldsContainer = contentEl.createEl("div", {
+			cls: "flowtime-inbox-fields",
+		});
 
 		const rebuildFields = () => {
 			fieldsContainer.empty();
@@ -349,9 +450,18 @@ class ProcessInboxModal extends Modal {
 
 		// ── Buttons ──
 		const btnRow = contentEl.createEl("div", { cls: "flowtime-btn-row" });
-		const skipBtn = btnRow.createEl("button", { text: "Skip", cls: "flowtime-btn-cancel" });
-		const processBtn = btnRow.createEl("button", { text: "Process", cls: "flowtime-btn-submit" });
-		const doneBtn = btnRow.createEl("button", { text: "Done", cls: "flowtime-btn-cancel" });
+		const skipBtn = btnRow.createEl("button", {
+			text: "Skip",
+			cls: "flowtime-btn-cancel",
+		});
+		const processBtn = btnRow.createEl("button", {
+			text: "Process",
+			cls: "flowtime-btn-submit",
+		});
+		const doneBtn = btnRow.createEl("button", {
+			text: "Done",
+			cls: "flowtime-btn-cancel",
+		});
 
 		skipBtn.addEventListener("click", () => {
 			this.skippedCount++;
@@ -380,9 +490,7 @@ class ProcessInboxModal extends Modal {
 
 				if (result && result.keepInFile) {
 					// Snoozed — update in allItems, remove from display, don't mark processed
-					const idx = this.allItems.findIndex(
-						a => a.index === item.index
-					);
+					const idx = this.allItems.findIndex((a) => a.index === item.index);
 					if (idx >= 0) {
 						this.allItems[idx] = item; // updated item with @snooze tag
 					}
@@ -447,7 +555,9 @@ class ProcessInboxModal extends Modal {
 		// Duration
 		container.createEl("label", { text: "Duration", cls: "flowtime-label" });
 		const durSelect = container.createEl("select", { cls: "flowtime-select" });
-		const durations = [0, 10, 15, 20, 25, 30, 45, 60, 90, 120, 150, 180, 210, 240];
+		const durations = [
+			0, 10, 15, 20, 25, 30, 45, 60, 90, 120, 150, 180, 210, 240,
+		];
 		for (const d of durations) {
 			durSelect.createEl("option", {
 				text: d === 0 ? "None" : d < 60 ? d + "m" : d / 60 + "h",
@@ -455,18 +565,22 @@ class ProcessInboxModal extends Modal {
 			});
 		}
 		// Pre-fill from detected or default
-		const prefillDur = tags.duration || this.plugin.settings.inboxDefaultDuration || 0;
+		const prefillDur =
+			tags.duration || this.plugin.settings.inboxDefaultDuration || 0;
 		durSelect.value = String(prefillDur);
 
 		// Bucket
 		container.createEl("label", { text: "Bucket", cls: "flowtime-label" });
-		const bucketSelect = container.createEl("select", { cls: "flowtime-select" });
+		const bucketSelect = container.createEl("select", {
+			cls: "flowtime-select",
+		});
 		const buckets = this.plugin.settings.buckets || [];
 		bucketSelect.createEl("option", { text: "None", value: "" });
 		for (const b of buckets) {
 			bucketSelect.createEl("option", { text: b.name, value: b.id });
 		}
-		bucketSelect.value = tags.bucket || this.plugin.settings.inboxDefaultBucket || "";
+		bucketSelect.value =
+			tags.bucket || this.plugin.settings.inboxDefaultBucket || "";
 
 		// Project
 		container.createEl("label", { text: "Project", cls: "flowtime-label" });
@@ -504,16 +618,27 @@ class ProcessInboxModal extends Modal {
 		for (const r of recurrences) {
 			recSelect.createEl("option", { value: r.value, text: r.text });
 		}
-		if (tags.recurrence) recSelect.value = tags.recurrence.replace("\uD83D\uDD01 every ", "");
+		if (tags.recurrence)
+			recSelect.value = tags.recurrence.replace("\uD83D\uDD01 every ", "");
 
 		// Store refs for _processItem
-		container._taskRefs = { dateInput, durSelect, bucketSelect, projInput, prioSelect, recSelect };
+		container._taskRefs = {
+			dateInput,
+			durSelect,
+			bucketSelect,
+			projInput,
+			prioSelect,
+			recSelect,
+		};
 	}
 
 	_buildProjectFields(container, tags) {
 		container.createEl("h4", { text: "Project Options" });
 
-		container.createEl("label", { text: "Project name", cls: "flowtime-label" });
+		container.createEl("label", {
+			text: "Project name",
+			cls: "flowtime-label",
+		});
 		const nameInput = container.createEl("input", {
 			type: "text",
 			placeholder: "Project name",
@@ -548,7 +673,10 @@ class ProcessInboxModal extends Modal {
 			cls: "flowtime-input",
 		});
 
-		container.createEl("label", { text: "Section (optional)", cls: "flowtime-label" });
+		container.createEl("label", {
+			text: "Section (optional)",
+			cls: "flowtime-label",
+		});
 		const sectionInput = container.createEl("input", {
 			type: "text",
 			placeholder: "e.g. Ideas, Notes, Reference",
@@ -612,11 +740,16 @@ class ProcessInboxModal extends Modal {
 
 				// Add the original description as the first task in Tasks.md
 				if (result.tasksPath) {
-					const tasksFile = this.app.vault.getAbstractFileByPath(result.tasksPath);
+					const tasksFile = this.app.vault.getAbstractFileByPath(
+						result.tasksPath,
+					);
 					if (tasksFile) {
 						const taskLine = buildTaskLine(description, { date: "today" });
 						const content = await this.app.vault.read(tasksFile);
-						await this.app.vault.modify(tasksFile, content.trimEnd() + "\n" + taskLine);
+						await this.app.vault.modify(
+							tasksFile,
+							content.trimEnd() + "\n" + taskLine,
+						);
 					}
 				}
 
@@ -626,7 +759,7 @@ class ProcessInboxModal extends Modal {
 
 			case "wiki": {
 				const refs = fieldsContainer._wikiRefs;
-				let projectName = refs.projInput.value.trim();
+				const projectName = refs.projInput.value.trim();
 				if (!projectName) {
 					this.plugin.notify("Project name is required for wiki action", true);
 					return;
@@ -638,12 +771,15 @@ class ProcessInboxModal extends Modal {
 
 				// Find the project wiki file
 				const projects = await this.plugin.projectEngine.getAllProjects();
-				const match = projects.find(p =>
-					p.name.toLowerCase() === projectName.toLowerCase()
+				const match = projects.find(
+					(p) => p.name.toLowerCase() === projectName.toLowerCase(),
 				);
 
 				if (projects.length === 0) {
-					this.plugin.notify("No projects exist yet. Create a project first.", true);
+					this.plugin.notify(
+						"No projects exist yet. Create a project first.",
+						true,
+					);
 					return;
 				}
 
@@ -661,10 +797,11 @@ class ProcessInboxModal extends Modal {
 							// Append after the section header
 							content = content.replace(
 								sectionHeader,
-								sectionHeader + "\n" + wikiLine.trimEnd()
+								sectionHeader + "\n" + wikiLine.trimEnd(),
 							);
 						} else {
-							content = content.trimEnd() + "\n\n" + sectionHeader + "\n" + wikiLine;
+							content =
+								content.trimEnd() + "\n\n" + sectionHeader + "\n" + wikiLine;
 						}
 						await this.app.vault.modify(wikiFile, content);
 					} else {
@@ -674,7 +811,10 @@ class ProcessInboxModal extends Modal {
 					}
 					this.plugin.notify(`\u{1F4D6} Added to ${match.name} Wiki`);
 				} else {
-					this.plugin.notify(`Project "${projectName}" not found. Available projects: ${projects.map(p => p.name).join(", ")}`, true);
+					this.plugin.notify(
+						`Project "${projectName}" not found. Available projects: ${projects.map((p) => p.name).join(", ")}`,
+						true,
+					);
 					return;
 				}
 				break;
@@ -708,7 +848,7 @@ class ProcessInboxModal extends Modal {
 		if (target === "daily-note") {
 			const today = new Date().toISOString().split("T")[0];
 			const allFiles = this.app.vault.getMarkdownFiles();
-			const dailyFile = allFiles.find(f => f.basename === today);
+			const dailyFile = allFiles.find((f) => f.basename === today);
 			if (dailyFile) {
 				targetFile = dailyFile;
 			} else {
@@ -716,10 +856,17 @@ class ProcessInboxModal extends Modal {
 				const dailyNotesPath = this.app.vault.configDir + "/daily-notes.json";
 				try {
 					if (await this.app.vault.adapter.exists(dailyNotesPath)) {
-						const config = JSON.parse(await this.app.vault.adapter.read(dailyNotesPath));
+						const config = JSON.parse(
+							await this.app.vault.adapter.read(dailyNotesPath),
+						);
 						const folder = config.folder || "";
-						const dailyPath = folder ? folder + "/" + today + ".md" : today + ".md";
-						targetFile = await this.app.vault.create(dailyPath, "# " + today + "\n\n");
+						const dailyPath = folder
+							? folder + "/" + today + ".md"
+							: today + ".md";
+						targetFile = await this.app.vault.create(
+							dailyPath,
+							"# " + today + "\n\n",
+						);
 					}
 				} catch (_) {}
 			}
@@ -730,10 +877,12 @@ class ProcessInboxModal extends Modal {
 			const projectMatch = line.match(/@p:([^\s]+)/);
 			if (projectMatch) {
 				const projects = await this.plugin.projectEngine.getAllProjects();
-				const match = projects.find(p =>
-					p.name.toLowerCase() === projectMatch[1].toLowerCase()
+				const match = projects.find(
+					(p) => p.name.toLowerCase() === projectMatch[1].toLowerCase(),
 				);
-				if (match && match.file) targetFile = match.file;
+				if (match && match.path) {
+					targetFile = this.app.vault.getAbstractFileByPath(match.path);
+				}
 			}
 			if (!targetFile) targetFile = this.app.workspace.getActiveFile();
 		}
@@ -751,10 +900,11 @@ class ProcessInboxModal extends Modal {
 		// Re-read the file to handle concurrent external edits
 		try {
 			const freshContent = await this.app.vault.read(this.file);
-			const { items: freshItems, headings: freshHeadings } = parseInbox(freshContent);
+			const { items: freshItems, headings: freshHeadings } =
+				parseInbox(freshContent);
 
 			// Remove processed items by their original index+text signature
-			const remainingItems = freshItems.filter(fresh => {
+			const remainingItems = freshItems.filter((fresh) => {
 				const key = fresh.index + ":" + fresh.text;
 				const wasProcessed = this._processedIds.has(key);
 				return !wasProcessed;
@@ -771,7 +921,7 @@ class ProcessInboxModal extends Modal {
 		if (this.skippedCount > 0) msg.push(`${this.skippedCount} skipped`);
 		// Count remaining non-processed items still in the file (allItems minus processedIds)
 		const remaining = this.allItems.filter(
-			item => !this._processedIds.has(item.index + ":" + item.text)
+			(item) => !this._processedIds.has(item.index + ":" + item.text),
 		).length;
 		if (remaining > 0) msg.push(`${remaining} remaining in inbox`);
 

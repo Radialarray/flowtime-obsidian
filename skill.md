@@ -36,6 +36,7 @@ vault/
 ```
 
 **Key rules:**
+
 - **Vault root** should have only dashboards, `Daily/`, and `Projects/` — everything else is infrastructure
 - **`flowtime-project` code block** goes ONLY on the folder note (`ProjectA.md`), NOT on the Tasks page — that avoids duplicate task rendering
 - **Projects** can be at vault root (flat) or nested under `Projects/` — set `projectsRoot` accordingly in settings
@@ -115,6 +116,7 @@ The vault has a high-level overview document (typically `Dashboard.md` at the va
 ````
 
 **Plugin shortcuts:**
+
 - `Cmd+P` → "Insert daily dashboard" — inserts today/overdue/due-week blocks
 - `Cmd+P` → "Insert weekly dashboard" — inserts weekly review blocks
 - Create it manually as a `Dashboard.md` file at the vault root
@@ -122,6 +124,7 @@ The vault has a high-level overview document (typically `Dashboard.md` at the va
 ### Agent's Role
 
 When a user asks about their day or week:
+
 1. Check if `Dashboard.md` exists. If not, offer to create it.
 2. Scan the vault for tasks matching the requested view (today, overdue, weekly, etc.)
 3. Present a structured summary grouped by project
@@ -186,6 +189,7 @@ Alternatively, use `plugin.projectEngine.getAllProjects()` from within an Obsidi
 
 1. Create a folder: `app.vault.createFolder("ProjectName")`
 2. Create a folder note from the project template:
+
    ```
    ---
    type: project
@@ -208,6 +212,7 @@ Alternatively, use `plugin.projectEngine.getAllProjects()` from within an Obsidi
    - [ ] Daily check-in 🔁 every day @{{DATE}}
 
    ## 📝 Notes
+
    ```
 3. Replace `{{DATE}}` with `today`'s date (YYYY-MM-DD), `{{NAME}}` with the project name.
 
@@ -218,6 +223,7 @@ Alternatively, use `plugin.projectEngine.getAllProjects()` from within an Obsidi
 After creating the project folder and folder note, scaffold two additional docs:
 
 **Project Management doc** (`ProjectName Tasks.md` — contains tasks and flowtime blocks):
+
 ````markdown
 # ProjectName — Tasks
 
@@ -237,6 +243,7 @@ After creating the project folder and folder note, scaffold two additional docs:
 ````
 
 **Wiki / Knowledge Base doc** (`ProjectName Wiki.md` — reference information):
+
 ```markdown
 # ProjectName — Wiki
 
@@ -252,6 +259,7 @@ After creating the project folder and folder note, scaffold two additional docs:
 ```
 
 **Example project folder after scaffolding:**
+
 ```
 Website-Redesign/
   Website-Redesign.md              ← folder note / project home (type: project)
@@ -289,12 +297,14 @@ Buckets are time-budget categories with weekly limits. They live in plugin setti
 ### READ Buckets
 
 Access via plugin settings:
+
 ```
 plugin.settings.buckets
 // Returns: [{ id, name, color, weeklyLimit, sortOrder }, ...]
 ```
 
 From vault data directly:
+
 ```
 data = await app.vault.readJson(".obsidian/plugins/flowtime/data.json")
 buckets = data.buckets
@@ -342,6 +352,7 @@ await plugin.saveData(plugin.settings);
 ### Assigning Tasks to Buckets
 
 Add `@b:bucket-id` or `@bucket:bucket-id` to the task line:
+
 ```
 - [ ] Code review @today @1h @b:deep-work
 - [ ] Standup @today @15m @bucket:meetings
@@ -440,18 +451,19 @@ Type `@` at the **start of a line** (no task marker) to open command macros. Sel
 
 | Macro | Expands to |
 |-------|-----------|
-| `@td` | `- [ ]  @today ` — quick today task |
-| `@tm` | `- [ ]  @tomorrow ` — tomorrow task |
-| `@tk` | `- [ ]  ` — empty skeleton |
-| `@now` | `- [ ]  @today @15m ` — quick 15min pomodoro |
-| `@1h` | `- [ ]  @today @1h ` — quick 1h block |
-| `@rec` | `- [ ]  🔁 every day @today ` — daily recurring |
-| `@rep` | `- [ ]  🔁 every week @monday ` — weekly recurring |
+| `@td` | `- [ ]  @today` — quick today task |
+| `@tm` | `- [ ]  @tomorrow` — tomorrow task |
+| `@tk` | `- [ ]` — empty skeleton |
+| `@now` | `- [ ]  @today @15m` — quick 15min pomodoro |
+| `@1h` | `- [ ]  @today @1h` — quick 1h block |
+| `@rec` | `- [ ]  🔁 every day @today` — daily recurring |
+| `@rep` | `- [ ]  🔁 every week @monday` — weekly recurring |
 | `@today` | ``flowtime-today`` code block |
 | `@overdue` | ``flowtime-overdue`` code block |
 | `@weekly` | ``flowtime-weekly`` code block |
 | `@budget` | ``flowtime-buckets`` code block |
 | `@proj` | ``flowtime-project`` code block |
+| `@inbox` | `- [ ]` — inbox task skeleton (no date) |
 | `@sessions` | ``flowtime-sessions`` code block |
 
 ### READ Tasks (List All)
@@ -483,6 +495,7 @@ When the user wants tasks by view, apply these date-based filters after reading 
 | **project** | `project === targetProjectName` |
 
 Where `today`, `monday` and `sunday` are derived from current date:
+
 - `today = YYYY-MM-DD`
 - `monday = today - (dayOfWeek === 0 ? 6 : dayOfWeek - 1)`
 - `sunday = monday + 6`
@@ -491,10 +504,13 @@ Where `today`, `monday` and `sunday` are derived from current date:
 
 1. Determine target file (daily note, active file, or project note)
 2. Build task line:
+
    ```
    - [ ] Task description @2026-06-24 @1.5h @b:deep-work #project/ProjectName
    ```
+
 3. Append to file:
+
    ```javascript
    content = await app.vault.read(file)
    newContent = content.trimEnd() + "\n" + taskLine + "\n"
@@ -502,6 +518,7 @@ Where `today`, `monday` and `sunday` are derived from current date:
    ```
 
 **Target file priority:**
+
 1. If user specifies a file, use that
 2. If user asks for "daily note": find file whose basename = today's date (YYYY-MM-DD)
 3. If user asks for "project file": find the folder note of the task's project
@@ -519,6 +536,7 @@ To modify a task, you must edit its line in its source file:
 4. Write back: `await app.vault.modify(file, lines.join("\n"))`
 
 **Change date:** Replace or add `@YYYY-MM-DD` in the line:
+
 ```javascript
 // Replace existing date: remove old @date, append new one
 line = line.replace(/[@⏳📅]\s*\d{4}-\d{2}-\d{2}/g, "").trimEnd()
@@ -529,6 +547,7 @@ line = line.replace(/[@⏳📅]\s*\d{4}-\d{2}-\d{2}/g, "").trimEnd()
 ```
 
 **Change bucket:** Replace or add `@b:bucket-id`:
+
 ```javascript
 // Replace existing bucket directive
 line = line.replace(/@(?:bucket|b):[^\s]+/g, "").trimEnd()
@@ -536,6 +555,7 @@ if (bucketId) line = line + ` @b:${bucketId}`
 ```
 
 **Change duration:** Replace or add `@1.5h`:
+
 ```javascript
 line = line.replace(/@\d+(?:\.\d+)?[hm]/g, "").trimEnd()
 if (minutes > 0) {
@@ -545,6 +565,7 @@ if (minutes > 0) {
 ```
 
 **Change time block:** Replace the leading time block:
+
 ```javascript
 line = line.replace(/^\s*(\d{1,2}:\d{2})\s*[—\-–]\s*(\d{1,2}:\d{2})\s*/, "")
   .trimStart()
@@ -553,6 +574,7 @@ if (timeBlock) line = line.replace(/^(\s*[-*+]\s*\[[^\]]*\]\s*)/,
 ```
 
 **Change status (complete/uncomplete):**
+
 ```javascript
 // Mark complete:
 line = line.replace(/\[(\s)\]/, "[x]")
@@ -572,11 +594,13 @@ await app.vault.modify(file, lines.join("\n"))
 ### Recurring Tasks
 
 Tasks with `🔁` directive auto-reschedule when completed. The pattern is:
+
 ```
 - [ ] Morning review 🔁 every day @2026-06-24
 ```
 
 When you mark such a task complete (change `[ ]` to `[x]`), you should also:
+
 1. Update the date to the next occurrence
 2. Change `[x]` back to `[ ]` (it stays open, just advances to next date)
 
@@ -601,6 +625,7 @@ Each line is a JSON record:
 ```
 
 Completion records (from checkbox toggle):
+
 ```json
 {"type":"completion","date":"2026-06-24","bucket":"deep-work","task_text":"Code review","completed_at":"2026-06-24T10:30:00.000Z"}
 ```
@@ -650,7 +675,7 @@ These are registered Obsidian commands. You can ask the user to run them via the
 | Command ID | Name | Shortcut | What it does |
 |-----------|------|----------|-------------|
 | `add-task` | Add Task | `Cmd+Shift+I` | Opens Quick Entry modal |
-| `add-task-inline` | Add Task at Cursor | — | Inserts `- [ ] @today ` at cursor |
+| `add-task-inline` | Add Task at Cursor | — | Inserts `- [ ] @today` at cursor |
 | `@` completions | (built-in) | — | `@` in task lines → directives (@today, @b:, @p:, @soon). `@` at line start → command macros (@td, @now, @weekly) |
 | `insert-daily-dashboard` | Insert daily dashboard | — | Inserts today/overdue/due-week blocks |
 | `insert-weekly-dashboard` | Insert weekly dashboard | — | Inserts weekly review blocks |
@@ -659,6 +684,201 @@ These are registered Obsidian commands. You can ask the user to run them via the
 | `onboard` | Onboard / Migrate | — | Multi-step setup wizard: layout → dashboards → buckets → daily notes → first project (v0.4.0) |
 | `reset-settings` | Reset to Defaults | — | Clears settings + cache, resets to factory defaults (v0.4.0) |
 | `rebuild-cache` | Rebuild Task Cache | — | Clears task cache, rebuilds on next render (v0.4.0) |
+| `process-inbox` | Process Inbox | — | Opens inbox processing modal (v0.4.0) |
+| `append-to-inbox` | Append to Inbox | — | Textarea prompt, appends to Inbox.md (v0.4.0) |
+
+---
+
+## 5.5 INBOX (Capture & Processing)
+
+Flowtime has a GTD-inspired inbox: a plain markdown file (`Inbox.md` at vault root) that accepts **any line of text** as a task candidate. No syntax required. A processing command transforms raw lines into proper Flowtime entities.
+
+### Inbox File
+
+Auto-created at `Inbox.md` on plugin load (configurable via `inboxPath` setting).
+
+```markdown
+# 📥 Inbox
+
+Capture tasks, ideas, and notes here. One line per item.
+Process them with **Flowtime: Process Inbox**.
+
+Fix the login button
+Research SSR for landing page
+- [ ] Update deployment docs @b:admin
+Buy groceries
+```
+
+The inbox accepts:
+
+- **Plain text** — no prefix required
+- **Already-formed task lines** — `- [ ] ...`
+- **URLs, fragments, ideas** — any text
+- **Already-tagged lines** — `@today`, `@b:deep-work`, `@p:Website`, `#project/Name` — tags survive as pre-fills
+
+**Header exclusion:** Lines above the first blank line that follows description text after the initial heading are treated as the header section and excluded from processing. This keeps the template's instruction lines from being processed as items.
+
+### Capture Methods
+
+| Method | How |
+|--------|-----|
+| **Open Inbox.md** | Open the file and type raw lines. `@`-completions work here too |
+| **Append to Inbox** (`⌘+P`) | Opens a textarea prompt. Submit appends to Inbox.md |
+| **Quick Entry → Inbox** | Set `quickEntryTargetFile` to `"inbox"`. `⌘+Shift+I` writes straight to Inbox.md |
+| **`@inbox` macro** | On a blank line in any note, type `@inbox` → expands to `- [ ]` |
+
+### Processing — Process Inbox Command (`⌘+P` → "Process Inbox")
+
+Opens a modal that works through inbox lines **one at a time**. Each line gets classified into one of 5 actions:
+
+#### Action: ✅ Task
+
+Transforms the line into a proper Flowtime task line and appends to the target file (determined by `quickEntryTargetFile` setting):
+
+| Field | How it's set | Pre-fill source |
+|-------|-------------|----------------|
+| Date | Text input (natural language) | `@today`, `@tomorrow`, or explicit `@YYYY-MM-DD` in line |
+| Duration | Dropdown (10m–4h, or None) | `@30m`, `@1.5h`, or `inboxDefaultDuration` setting |
+| Bucket | Dropdown of configured buckets | `@b:deep-work`, `@bucket:admin`, or `inboxDefaultBucket` setting |
+| Project | Text input | `@p:Website` or `#project/Website` in line |
+| Priority | Dropdown (None/High/Med/Low) | `🟥`/`@high`, `🟨`/`@med`, `🟩`/`@low` in line |
+| Recurrence | Dropdown (None/Daily/Weekly/Biweekly/Monthly) | `🔁 every week` in line |
+
+**Output example:**
+
+```
+- [ ] Fix the login button @2026-06-24 🟨 @30m @b:deep-work @p:Website
+```
+
+The line is appended to the target file determined by `quickEntryTargetFile`:
+
+- `daily-note` → today's daily note (creates if missing)
+- `active-file` → currently open file
+- `project-file` → project's folder note (parsed from `@p:` tag)
+- `inbox` → falls back to daily note (circular, not valid)
+
+#### Action: 📁 Project
+
+Scaffolds a new project via `TemplateEngine.createProject()`:
+
+1. Creates folder `{name}/`
+2. Creates folder note `{name}/{name}.md` with frontmatter `type: project`
+3. Creates `{name}/{name} Tasks.md` with a `flowtime-project` block
+4. Creates `{name}/{name} Wiki.md` with template sections
+5. The original description becomes the first task line in Tasks.md (with `@today` date)
+
+The user can toggle whether Tasks.md and Wiki.md should be scaffolded.
+
+#### Action: 📖 Wiki
+
+Appends the line to a project's wiki file:
+
+1. User selects/enters a project name
+2. Optionally enters a section header (default: "From Inbox")
+3. Line is appended under `## 📥 {section}` in `{project}/{project} Wiki.md`
+4. If the wiki file doesn't exist, it's created
+5. Line is prepended with date: `- YYYY-MM-DD: {text}`
+
+If no projects exist yet, the user is notified.
+
+#### Action: 🗑 Discard
+
+The line is removed from the inbox with no further action.
+
+#### Action: ⏰ Snooze
+
+The line stays in the inbox but gets a `@snooze YYYY-MM-DD` tag appended:
+
+- The line is **hidden** from processing until that date arrives
+- On the snooze date (or later), it reappears in the processing queue
+- The original description is cleaned of any existing directives before `@snooze` is added
+
+### Tag Detection (Pre-fill Logic)
+
+When the modal loads a line, `detectTags()` scans for:
+
+| Tag | Field | Example |
+|-----|-------|--------|
+| `@YYYY-MM-DD` | Date | `@2026-06-30` |
+| `@today`, `@tomorrow`, `@monday`... | Date (parsed) | `@tomorrow` |
+| `@1.5h`, `@30m` | Duration | `@30m` → 30 minutes |
+| `@b:name`, `@bucket:name` | Bucket | `@b:deep-work` |
+| `@p:Name` | Project | `@p:Website` |
+| `#project/Name` | Project (fallback) | `#project/Website` |
+| `🟥`, `@high` | Priority | `🟥` |
+| `🟨`, `@med` | Priority | `@med` |
+| `🟩`, `@low` | Priority | `🟩` |
+| `🔁 every <period>` | Recurrence | `🔁 every week` |
+| `@snooze YYYY-MM-DD` | Snooze date | `@snooze 2026-07-01` |
+
+### Wake-Back Write Strategy
+
+When "Done" is clicked, `_finish()`:
+
+1. **Re-reads the inbox file** from disk (handles concurrent external edits)
+2. Re-parses all lines
+3. Removes lines matching `_processedIds` (tracked by original index + text)
+4. Preserves all headings, blank lines, and unprocessed items in their original order
+5. Writes the result back
+
+Snoozed items are kept in the `allItems` array (not the display `items` array), so they survive the write-back.
+
+### Inbox Settings (plugin data.json)
+
+```javascript
+{
+  "inboxPath": "Inbox.md",         // Path to the inbox file
+  "inboxDefaultDuration": 30,     // Default duration in minutes
+  "inboxDefaultBucket": "",       // Default bucket id
+  "inboxDefaultProject": ""       // Default project name
+}
+```
+
+The `quickEntryTargetFile` setting now supports `"inbox"` as a value.
+
+### Agent Workflow: Processing Inbox from Outside Obsidian
+
+When operating on the inbox file directly (CLI / agent context):
+
+1. **Read** `Inbox.md` and identify processable lines (non-blank, non-heading, not in header section)
+2. For each line, use `detectTags()` logic to extract pre-fill data
+3. Transform each line using the actions above
+4. **Remove** processed lines from the inbox file
+5. **Write** remaining lines back (preserve headings and blanks)
+6. **Notify** the user: "Inbox: X processed, Y remaining"
+7. Ask user to reload Obsidian so the plugin cache picks up changes
+
+The `cleanDescription()` function strips all directives from a line:
+
+```javascript
+function cleanDescription(text) {
+  return text
+    .replace(/^\s*[-*+]\s*\[[^\]]*\]\s*/, "")  // checkbox
+    .replace(/@\d{4}-\d{2}-\d{2}/g, "")             // dates
+    .replace(/@(today|tomorrow|...)/gi, "")          // natural dates
+    .replace(/@\d+(?:\.\d+)?[hm]/g, "")             // durations
+    .replace(/@(?:bucket|b):[^\s]+/g, "")           // buckets
+    .replace(/@p:[^\s]+/g, "")                       // project directive
+    .replace(/@(?:high|med|low|soon|snooze)\b/gi, "") // tags
+    .replace(/@snooze\s+\d{4}-\d{2}-\d{2}/g, "")   // snooze
+    .replace(/[\uD83D\uDFE5\uD83D\uDFE8\uD83D\uDFE9]/g, "") // color dots
+    .replace(/\uD83D\uDD01\s*every\s+\d*\s*(?:day|days|week|weeks|month|months)/g, "") // recurrence
+    .replace(/#\S+/g, "")                              // tags
+    .replace(/\s+/g, " ").trim()
+}
+```
+
+### Inbox Marker Reference (for agent-generated lines)
+
+| Marker | Purpose | Example |
+|--------|---------|--------|
+| `@YYYY-MM-DD` or `@today` | Date for pre-fill | Line with `@today` → date field pre-filled |
+| `@30m` or `@1.5h` | Duration pre-fill | `@30m` → duration dropdown picks 30m |
+| `@b:deep-work` | Bucket pre-fill | Matches bucket dropdown |
+| `@p:Website` | Project pre-fill | `@p:Website` → project field pre-filled |
+| `@snooze YYYY-MM-DD` | Snooze until date | `@snooze 2026-07-01` → hidden from processing until July 1 |
+| `🟥` / `@high` | Priority | `🟥` → priority dropdown sets High |
+| `🔁 every week` | Recurrence | `🔁 every week` → recurrence dropdown sets Weekly |
 
 ---
 
@@ -695,7 +915,11 @@ Key settings for agent use:
 | `fallbackToFolderName` | bool | true | Use folder name when no frontmatter |
 | `tagPrefix` | string | `project/` | Prefix for project tags |
 | `projectsRoot` | string | "" | Root folder for projects (empty = entire vault) |
-| `quickEntryTargetFile` | string | `daily-note` | Default task target |
+| `quickEntryTargetFile` | string | `daily-note` | Default task target (`daily-note`, `active-file`, `project-file`, `inbox`) |
+| `inboxPath` | string | `"Inbox.md"` | Path to inbox file relative to vault root |
+| `inboxDefaultDuration` | number | `30` | Default duration in minutes for inbox task processing |
+| `inboxDefaultBucket` | string | `""` | Default bucket id for inbox task processing |
+| `inboxDefaultProject` | string | `""` | Default project name for inbox task processing |
 
 To read/write settings:
 
@@ -732,9 +956,11 @@ await plugin.saveData(plugin.settings)
 
 1. Locate the project folder note for X, or find/add the daily note
 2. Append:
+
    ```
    - [ ] [user description] @tomorrow @1h @b:deep-work #project/X
    ```
+
 3. If user gave a duration and/or bucket, include those
 
 ### "What tasks are overdue?"
@@ -745,6 +971,7 @@ await plugin.saveData(plugin.settings)
 ### "Move all overdue tasks to today"
 
 For each overdue task (taskDate exists and < today):
+
 1. Replace the date in the task line with today's date
 2. Write the file back
 
@@ -886,6 +1113,7 @@ If the task cache shows stale/incorrect data (e.g., deleted files still appearin
 ### Cache File Location (v0.4.0+)
 
 The task cache is stored separately from `data.json` at:
+
 ```
 .obsidian/plugins/flowtime/task-cache.json
 ```
@@ -906,6 +1134,7 @@ If you see `_taskCache` in `data.json` while running v0.4.0+, the plugin migrate
 ### Plugin Config Not Taking Effect
 
 Changes to `.obsidian/plugins/flowtime/data.json` from outside Obsidian require one of:
+
 - Reload the plugin: `Cmd+P` → "Reload app without saving"
 - Restart Obsidian entirely
 - Run `Cmd+P` → "Flowtime: Reset to Defaults" if settings are corrupted
@@ -917,6 +1146,7 @@ Changes to `.obsidian/plugins/flowtime/data.json` from outside Obsidian require 
 Guidelines for agent behavior when managing Flowtime data:
 
 ### DO
+
 - Read the vault to understand existing projects and tasks before making changes
 - Always check `status !== "x"` when listing active tasks (completed tasks are still in files but marked `[x]`)
 - Use the `@b:<id>` format for bucket assignment (short form preferred)
@@ -925,6 +1155,7 @@ Guidelines for agent behavior when managing Flowtime data:
 - Use natural dates (`@today`, `@tomorrow`) for readability when the user will see the raw task line
 
 ### DON'T
+
 - Don't create duplicate projects — check existing projects first
 - Don't modify files in `.obsidian/` **except** `plugins/flowtime/data.json`, `plugins/flowtime/task-cache.json`, and `daily-notes.json` — these are safe to edit
 - Don't modify `.git/` or any git-internal files
@@ -934,6 +1165,7 @@ Guidelines for agent behavior when managing Flowtime data:
 - Don't delete `task-cache.json` without warning the user — it will be rebuilt but may cause a temporary performance hit on next render
 
 ### Error Handling
+
 - If a file read/write fails, report the error to the user
 - If a task line can't be parsed, skip it and continue scanning — don't crash
 - If a project folder already exists when creating, skip the create step
@@ -944,11 +1176,13 @@ Guidelines for agent behavior when managing Flowtime data:
 ## 11. QUICK REFERENCE
 
 ### Parse a task line (regex)
+
 ```
 /^(\s*[-*+]\s*\[([^\]]*)\]\s*)(.*)$/
 ```
 
 ### Clean task text (remove all directives)
+
 ```
 .replace(/[@⏳📅]\s*\d{4}-\d{2}-\d{2}/g, "")
 .replace(/@\d+(?:\.\d+)?[hm]/g, "")
@@ -961,9 +1195,11 @@ Guidelines for agent behavior when managing Flowtime data:
 ```
 
 ### Duration parsing
+
 - `@1.5h` = 90 minutes, `@30m` = 30 minutes
 - Regex: `/@(\d+(?:\.\d+)?)([hm])/`
 
 ### Date format
+
 - Always use `YYYY-MM-DD` internally
 - Display uses moment.js format from settings (default `YYYY-MM-DD`)

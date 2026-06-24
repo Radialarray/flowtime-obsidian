@@ -168,6 +168,34 @@ Mark recurring tasks with `🔁`:
 - When marked complete, auto-reschedules to the next occurrence
 - Recurrence directive is cleaned from displayed task text
 
+### Inbox Capture & Processing
+
+A GTD-inspired inbox for dumping raw tasks without syntax pressure.
+
+**`Inbox.md`** is auto-created at vault root. Open it and type anything — one line per thought. No syntax required. Tags are optional but pre-filled during processing (`@today`, `@b:deep-work`, `@p:Website`).
+
+**Capture methods:**
+
+- Open `Inbox.md` directly and type
+- `⌘+P` → **Append to Inbox** — quick textarea prompt
+- Set Quick Entry target to "Inbox" in settings → `⌘+Shift+I` writes to inbox
+- Type `@inbox` on a blank line → expands to `- [ ]`
+
+**Processing** (`⌘+P` → **Process Inbox**):
+Opens a modal that walks through inbox lines one at a time. Each line gets one action:
+
+| Action | Result |
+|--------|--------|
+| **✅ Task** | Becomes a proper Flowtime task line with date/duration/bucket/project/priority/recurrence — appended to daily note, active file, or project file |
+| **📁 Project** | Scaffolds a new project folder + folder note + Tasks.md + Wiki.md. The line becomes the first task |
+| **📖 Wiki** | Appends to a project's Wiki.md under an "📥 From Inbox" section |
+| **🗑 Discard** | Removed from inbox |
+| **⏰ Snooze** | Stays in inbox with `@snooze` date — hidden from processing until that date passes |
+
+Tags already in the line pre-fill the form: `@today` → date, `@30m` → duration, `@b:deep-work` → bucket, `@p:Website` → project, `🟥` → priority, `🔁 every week` → recurrence.
+
+Processed lines are removed from the inbox. Snoozed lines persist with their `@snooze` tag.
+
 ### Templates
 
 Three commands available from the command palette:
@@ -277,7 +305,11 @@ All settings in **Settings → Flowtime**.
 | Tag prefix | `project/` | Prefix for inline project tags (`#project/Name`) |
 | Projects root | (empty) | Root folder for project detection; empty = scan entire vault |
 | **Quick Entry** | | |
-| Default target file | daily-note | Where new tasks save: daily note / active file / project file |
+| Default target file | daily-note | Where new tasks save: daily note / active file / project file / inbox |
+| **Inbox** | | |
+| Inbox file path | `Inbox.md` | Path to the inbox file |
+| Default duration | 30m | Pre-filled duration when processing inbox items |
+| Default bucket | (none) | Pre-filled bucket when processing inbox items |
 | **Buckets** | | |
 | Bucket tag prefix | `budget/` | Prefix for bucket inline tags |
 | Daily budget cap | 12h | Maximum scheduled hours before warning |

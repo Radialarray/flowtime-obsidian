@@ -736,7 +736,9 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		table.style.tableLayout = "fixed";
 		// Colgroup for column widths
 		const colgroup = table.createEl("colgroup");
-		colgroup.createEl("col", { cls: "col-check" });
+		const colCheck = colgroup.createEl("col", { cls: "col-check" });
+		colCheck.width = 32;
+		const colTask = colgroup.createEl("col", { cls: "col-task" });
 		const hr = table.createEl("thead").createEl("tr");
 
 		const sortByColumn = (field) => (e) => {
@@ -769,6 +771,9 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		const makeSortableHeader = (label, field, cls) => {
 			const th = hr.createEl("th", { cls });
 			th.classList.add("ft-sortable");
+			// Set width attribute for fixed table layout (CSS width is ignored for table cells)
+			if (cls === "col-check") th.setAttribute("width", "32");
+			if (cls === "col-timer") th.setAttribute("width", "60");
 			th.createEl("span", { text: label });
 			if (field) {
 				th.createEl("span", { cls: "ft-sort-indicator", text: sortIndicator(field) });
@@ -809,7 +814,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				makeSortableHeader("Date", "date", "col-date");
 			if (this._columnVisibility.timer !== false) {
 				const th = hr.createEl("th", { cls: "col-timer" });
-				th.style.width = "60px";
+				th.setAttribute("width", "60");
 			}
 		}
 		const tbody = table.createEl("tbody");
@@ -1400,13 +1405,13 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 	/* Build checkbox cell as dedicated column */
 	_buildCheckCell(row, task) {
 		const cc = row.createEl("td", { cls: "ft-check-cell" });
-		const chk = cc.createEl("input", {
-			type: "checkbox",
-			cls: "ft-checkbox",
-			attr: { checked: task.status === "x" || task.status === "X" ? true : null },
+		const done = task.status === "x" || task.status === "X";
+		const chk = cc.createEl("span", {
+			cls: "ft-checkbox" + (done ? " ft-checked" : ""),
 		});
 		chk.addEventListener("click", async (e) => {
 			e.stopPropagation();
+			chk.classList.toggle("ft-checked");
 			await this.toggleTaskComplete(task);
 		});
 	}

@@ -5,12 +5,13 @@ const START_H = 7;
 const START_END = 20;
 
 class TaskPlannerRenderer extends MarkdownRenderChild {
-	constructor(app, containerEl, mode, projectEngine) {
+	constructor(app, containerEl, mode, projectEngine, sourcePath) {
 		super(containerEl);
 		this.app = app;
 		this.plugin = null;
 		this.mode = mode || "today";
 		this.projectEngine = projectEngine || null;
+		this.sourcePath = sourcePath || null;
 		this.tasks = [];
 		this.rowData = [];
 		this.startOpts = [];
@@ -82,10 +83,31 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 		return t
 			.replace(/[⏳📅🛫➕✅] \d{4}-\d{2}-\d{2}/gu, "")
 			.replace(/🔺|⏫|🔼|🔽|⏬/g, "")
+			.replace(/🔁 every \d* (day|days|week|weeks|month|months)/g, "")
 			.replace(/🔁 [^\s]+( \d+[dwmy])?/g, "")
 			.replace(/#\S+/g, "")
 			.replace(/\s+/g, " ")
 			.trim();
+	}
+
+	_getMonday(d) {
+		const date = new Date(d);
+		const day = date.getDay();
+		const diff = day === 0 ? -6 : 1 - day;
+		date.setDate(date.getDate() + diff);
+		return date.toISOString().split("T")[0];
+	}
+	_getSunday(d) {
+		const monday = new Date(this._getMonday(d));
+		monday.setDate(monday.getDate() + 6);
+		return monday.toISOString().split("T")[0];
+	}
+	_parseRecurrence(text) {
+		const match = text.match(/🔁\s*every\s+(\d*)\s*(day|days|week|weeks|month|months)/);
+		if (!match) return null;
+		const n = parseInt(match[1] || "1", 10);
+		const unit = match[2].replace(/s$/, "");
+		return { interval: n, unit };
 	}
 
 	_beep() {
@@ -128,6 +150,24 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 		eow.setDate(eow.getDate() + ((7 - eow.getDay()) % 7));
 		const eowStr = eow.toISOString().split("T")[0];
 
+		// Weekly boundaries
+		const mon = this._getMonday(today);
+		const sun = this._getSunday(today);
+
+		// Project mode: resolve source file's project first
+		let targetProject = null;
+		if (this.mode === "project") {
+			if (this.sourcePath && this.projectEngine) {
+				const sp = await this.projectEngine.resolve(this.sourcePath);
+				targetProject = sp?.name || null;
+			}
+			// If source has no project, show nothing
+			if (!targetProject) {
+				this.tasks = [];
+				return;
+			}
+		}
+
 		this.tasks = [];
 		for (const file of this.app.vault.getMarkdownFiles()) {
 			if (file.path.startsWith(".obsidian") || file.path.startsWith(".git"))
@@ -152,6 +192,10 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 						d && (inclToday ? d >= today : d > today) && d <= eowStr;
 					if (!inWeek(dueDate, true) && !inWeek(taskDate, false)) continue;
 				}
+				if (this.mode === "weekly") {
+					const inRange = (d) => d && d >= mon && d <= sun;
+					if (!inRange(taskDate) && !inRange(dueDate)) continue;
+				}
 
 				let time = "",
 					rest = m[3];
@@ -163,9 +207,19 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 					rest = rest.slice(tm[0].length);
 				}
 
+				// Extract priority before cleaning
+				let priority = null;
+				const prioMatch = rest.match(/[🔺⏫🔼🔽⏬]/);
+				if (prioMatch) priority = prioMatch[0];
+
 				const project = this.projectEngine
 					? await this.projectEngine.resolve(file.path)
 					: null;
+
+				// Project mode: skip tasks not matching target project
+				if (this.mode === "project") {
+					if (project?.name !== targetProject) continue;
+				}
 
 				this.tasks.push({
 					file,
@@ -177,13 +231,26 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 					rawText: rest.trim(),
 					cleanText: this._clean(rest),
 					status,
+					priority,
 					project: project?.name || null,
 					projectPath: project?.path || null,
 					projectSource: project?.source || null,
 				});
 			}
 		}
-		this._sort();
+
+		if (this.mode === "weekly") {
+			this.tasks.sort((a, b) => {
+				const pa = a.project || "";
+				const pb = b.project || "";
+				if (pa !== pb) return pa.localeCompare(pb);
+				const da = a.taskDate || a.dueDate || "";
+				const db = b.taskDate || b.dueDate || "";
+				return da.localeCompare(db);
+			});
+		} else {
+			this._sort();
+		}
 	}
 
 	/* ─── render ─── */
@@ -194,6 +261,8 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 			const msgs = {
 				overdue: "🎉 No overdue tasks!",
 				dueweek: "🎉 No tasks due this week!",
+				weekly: "🎉 No tasks scheduled this week!",
+				project: "📭 No tasks for this project.",
 				today: "📭 No tasks scheduled for today. Add ⏳ today to any task.",
 			};
 			this.containerEl.createEl("p", {
@@ -204,12 +273,15 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 		}
 		this.startOpts = this._timeOpts(START_H, START_END);
 		const od = this.mode === "overdue",
-			dw = this.mode === "dueweek";
+			dw = this.mode === "dueweek",
+			wk = this.mode === "weekly",
+			pj = this.mode === "project";
+		const isCompact = od || dw || wk;
 		const toolbar = this.containerEl.createEl("div", { cls: "tp-toolbar" });
 
 		const tdy = new Date().toISOString().split("T")[0];
 
-		if (od || dw) {
+		if (isCompact) {
 			const mkBtn = (text, cls, fn) => {
 				const b = toolbar.createEl("button", { text, cls });
 				b.addEventListener("click", fn);
@@ -270,7 +342,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 			cls: "flowtime",
 		});
 		const hr = table.createEl("thead").createEl("tr");
-		if (od || dw) {
+		if (isCompact) {
 			hr.createEl("th", { text: "Task", cls: "col-task" });
 			hr.createEl("th", { text: "Project", cls: "col-project" });
 			hr.createEl("th", { text: "Source", cls: "col-source" });
@@ -301,323 +373,371 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 		}
 		const tdy = new Date().toISOString().split("T")[0];
 		const od = this.mode === "overdue",
-			_dw = this.mode === "dueweek";
+			_dw = this.mode === "dueweek",
+			wk = this.mode === "weekly",
+			pj = this.mode === "project";
+		const isCompact = od || _dw || wk;
+
+		// Weekly: group rows by project with header rows
+		if (wk) {
+			const groups = {};
+			for (const task of this.tasks) {
+				const key = task.project || "__none__";
+				if (!groups[key]) groups[key] = [];
+				groups[key].push(task);
+			}
+			for (const [proj, projTasks] of Object.entries(groups)) {
+				const gr = tbody.createEl("tr", { cls: "tp-project-group" });
+				gr.createEl("td", {
+					text: proj === "__none__" ? "Other" : proj,
+					attr: { colspan: "5" },
+				});
+				for (const task of projTasks) {
+					this._renderTaskRow(tbody, task, tdy, od, _dw, wk, pj, isCompact);
+				}
+			}
+			return;
+		}
 
 		for (const task of this.tasks) {
-			const { start, dur } = this._parseStored(task.time);
-			const row = tbody.createEl("tr");
-			let si, ds; // startInput, durationSelect
+			this._renderTaskRow(tbody, task, tdy, od, _dw, wk, pj, isCompact);
+		}
+	}
 
-			if (!od && !_dw) {
-				const tc = row.createEl("td");
-				const wr = tc.createEl("div", { cls: "tp-start-wrap" });
-				si = wr.createEl("input", {
-					type: "text",
-					value: start || "",
-					placeholder: "09:00",
-					cls: "tp-start-input",
-				});
-				const tb = wr.createEl("button", { text: "▾", cls: "tp-start-toggle" });
-				const dd = document.createElement("div");
-				dd.className = "tp-start-dd";
-				for (const t of this.startOpts) {
-					const it = dd.createEl("button", { text: t, cls: "tp-dd-item" });
-					if (t === start) it.addClass("tp-dd-sel");
-					it.addEventListener("click", () => {
-						si.value = t;
-						cd();
-						up();
-					});
-				}
-				const od2 = () => {
-					const r = wr.getBoundingClientRect();
-					["left", "top"].forEach(
-						(p) =>
-							(dd.style[p] =
-								r[p === "left" ? "left" : "bottom"] +
-								(p === "left" ? 0 : 4) +
-								"px"),
-					);
-					dd.style.width = Math.max(r.width, 80) + "px";
-					dd.classList.add("tp-dd-open");
-					document.body.appendChild(dd);
-				};
-				const cd = () => {
-					dd.classList.remove("tp-dd-open");
-					if (dd.parentNode) dd.parentNode.removeChild(dd);
-				};
-				tb.addEventListener("click", (e) => {
-					e.stopPropagation();
-					dd.classList.contains("tp-dd-open") ? cd() : od2();
-				});
-				si.addEventListener("focusout", (e) => {
-					if (!wr.contains(e.relatedTarget)) cd();
-				});
+	/* Single row builder for all modes */
+	_renderTaskRow(tbody, task, tdy, od, _dw, wk, pj, isCompact) {
+		const { start, dur } = this._parseStored(task.time);
+		const row = tbody.createEl("tr");
+		let si, ds; // startInput, durationSelect
 
-				tc.createEl("span", { text: "  +  ", cls: "tp-plus" });
-				ds = tc.createEl("select", { cls: "tp-time-dur" });
-				ds.createEl("option", { attr: { value: "" }, text: "--" });
-				for (const d of DUR_OPTS) {
-					const o = ds.createEl("option", {
-						text: this._fmtDur(d),
-						attr: { value: d },
-					});
-					if (d === dur) o.selected = true;
-				}
-				const ps = tc.createEl("span", { text: "", cls: "tp-preview" });
-				const up = () => {
-					const s = si.value,
-						d = parseInt(ds.value, 10);
-					ps.setText(s && d > 0 ? "→ " + this._calcEnd(s, d) : "");
-				};
-				si.addEventListener("input", up);
-				ds.addEventListener("change", up);
-				up();
-			}
-
-			row.createEl("td", { text: task.cleanText, cls: "tp-task-text" });
-			const pc = row.createEl("td", { cls: "tp-project-cell" });
-			if (task.project) {
-				const plink = pc.createEl("a", {
-					text: task.project,
-					cls: "tp-project-link",
-				});
-				if (task.projectPath) {
-					plink.addEventListener("click", () =>
-						this.app.workspace.openLinkText(task.projectPath, "", false),
-					);
-				}
-			} else {
-				pc.createEl("span", { text: "—", cls: "tp-project-none" });
-			}
-			const sc = row.createEl("td", { cls: "tp-source" });
-			const lnk = sc.createEl("a", {
-				text: task.file.basename,
-				cls: "tp-source-link",
+		if (!isCompact) {
+			const tc = row.createEl("td");
+			const wr = tc.createEl("div", { cls: "tp-start-wrap" });
+			si = wr.createEl("input", {
+				type: "text",
+				value: start || "",
+				placeholder: "09:00",
+				cls: "tp-start-input",
 			});
-			lnk.addEventListener("click", () =>
-				this.app.workspace.openLinkText(task.file.path, "", false, {
-					line: task.line + 1,
-				}),
-			);
-
-			/* Date cell (shared) */
-			const dc = row.createEl("td", { cls: "tp-date-cell" });
-			const dw = dc.createEl("div", { cls: "tp-date-wrap" });
-			const dispDate = _dw
-				? task.dueDate || task.taskDate || "+"
-				: task.taskDate || "+";
-			const hasDate = _dw ? task.dueDate || task.taskDate : task.taskDate;
-			const ds2 = dw.createEl("span", {
-				text: dispDate,
-				cls: "tp-date-badge" + (hasDate ? "" : " tp-date-none"),
-			});
-			const dp = document.createElement("div");
-			dp.className = "tp-date-popup";
-			const dpi = dp.createEl("input", {
-				type: "date",
-				value: task.taskDate || "",
-				cls: "tp-dp-input",
-			});
-			const mkDpBtn = (txt, cls) => dp.createEl("button", { text: txt, cls });
-			const bTdy = mkDpBtn("Today", "tp-dp-btn"),
-				bTmw = mkDpBtn("Tomorrow", "tp-dp-btn"),
-				bNw = mkDpBtn("Next Week", "tp-dp-btn"),
-				bBkl = mkDpBtn("✕ Backlog", "tp-dp-btn tp-dp-remove");
-			const fmt = (d) => d.toISOString().split("T")[0];
-			// Register one document capture handler for all popups
-			if (!this._closePopups) {
-				this._closePopups = (ev) => {
-					document
-						.querySelectorAll(".tp-date-popup.tp-dp-open")
-						.forEach((p) => {
-							if (
-								p.contains(ev.target) ||
-								(p._badge && p._badge.contains(ev.target))
-							)
-								return;
-							p.classList.remove("tp-dp-open");
-							if (p.parentNode) p.parentNode.removeChild(p);
-						});
-				};
-				document.addEventListener("click", this._closePopups, true);
+			const tb = wr.createEl("button", { text: "▾", cls: "tp-start-toggle" });
+			const dd = document.createElement("div");
+			dd.className = "tp-start-dd";
+			for (const t of this.startOpts) {
+				const it = dd.createEl("button", { text: t, cls: "tp-dd-item" });
+				if (t === start) it.addClass("tp-dd-sel");
+				it.addEventListener("click", () => {
+					si.value = t;
+					cd();
+					up();
+				});
 			}
-			dp._badge = ds2;
-			const op = () => {
-				const r = dw.getBoundingClientRect();
-				dp.style.left = r.left + "px";
-				dp.style.top = r.bottom + 4 + "px";
-				dp.classList.add("tp-dp-open");
-				document.body.appendChild(dp);
+			const od2 = () => {
+				const r = wr.getBoundingClientRect();
+				["left", "top"].forEach(
+					(p) =>
+						(dd.style[p] =
+							r[p === "left" ? "left" : "bottom"] +
+							(p === "left" ? 0 : 4) +
+							"px"),
+				);
+				dd.style.width = Math.max(r.width, 80) + "px";
+				dd.classList.add("tp-dd-open");
+				document.body.appendChild(dd);
 			};
-			const cp = () => {
-				dp.classList.remove("tp-dp-open");
-				if (dp.parentNode) dp.parentNode.removeChild(dp);
+			const cd = () => {
+				dd.classList.remove("tp-dd-open");
+				if (dd.parentNode) dd.parentNode.removeChild(dd);
 			};
-			ds2.addEventListener("click", (e) => {
+			tb.addEventListener("click", (e) => {
 				e.stopPropagation();
-				dp.classList.contains("tp-dp-open") ? cp() : op();
+				dd.classList.contains("tp-dd-open") ? cd() : od2();
 			});
-			const ap = async (nd) => {
-				cp();
-				try {
-					await this.updateDate(task, nd);
-					task.taskDate = nd;
-					if (nd && nd === tdy) {
-						const newDisp = _dw ? task.dueDate || nd : nd;
-						ds2.setText(newDisp);
-						ds2.removeClass("tp-date-none");
-						await this._refreshSiblings();
-					} else {
-						row.remove();
-						this.tasks = this.tasks.filter((t) => t !== task);
-						this.rowData = this.rowData.filter((r) => r.task !== task);
-						if (!this.tasks.length) this.renderTable();
-						if (nd && nd !== tdy) await this._refreshSiblings();
-					}
-				} catch (e) {
-					this.plugin?.notify?.("❌ " + e.message, true);
-				}
-			};
-			dpi.addEventListener("change", () => ap(dpi.value));
-			bTdy.addEventListener("click", () => ap(fmt(new Date())));
-			bTmw.addEventListener("click", () =>
-				ap(fmt(new Date(Date.now() + 864e5))),
-			);
-			bNw.addEventListener("click", () =>
-				ap(fmt(new Date(Date.now() + 7 * 864e5))),
-			);
-			bBkl.addEventListener("click", () => ap(""));
+			si.addEventListener("focusout", (e) => {
+				if (!wr.contains(e.relatedTarget)) cd();
+			});
 
-			/* Timer (today) or action buttons (overdue) */
-			if (od || _dw) {
-				const ac = row.createEl("td", { cls: "tp-actions-cell" });
-				const aw = ac.createEl("div", { cls: "tp-actions-wrap" });
-				const abTdy = aw.createEl("button", {
-					text: "📅 Today",
-					cls: "tp-act-btn",
+			tc.createEl("span", { text: "  +  ", cls: "tp-plus" });
+			ds = tc.createEl("select", { cls: "tp-time-dur" });
+			ds.createEl("option", { attr: { value: "" }, text: "--" });
+			for (const d of DUR_OPTS) {
+				const o = ds.createEl("option", {
+					text: this._fmtDur(d),
+					attr: { value: d },
 				});
-				abTdy.addEventListener("click", async () => {
-					await this.updateDate(task, tdy);
+				if (d === dur) o.selected = true;
+			}
+			const ps = tc.createEl("span", { text: "", cls: "tp-preview" });
+			const up = () => {
+				const s = si.value,
+					d = parseInt(ds.value, 10);
+				ps.setText(s && d > 0 ? "→ " + this._calcEnd(s, d) : "");
+			};
+			si.addEventListener("input", up);
+			ds.addEventListener("change", up);
+			up();
+		}
+
+		// Task cell: checkbox + priority + text
+		this._buildTaskCell(row, task);
+
+		const pc = row.createEl("td", { cls: "tp-project-cell" });
+		if (task.project) {
+			const plink = pc.createEl("a", {
+				text: task.project,
+				cls: "tp-project-link",
+			});
+			if (task.projectPath) {
+				plink.addEventListener("click", () =>
+					this.app.workspace.openLinkText(task.projectPath, "", false),
+				);
+			}
+		} else {
+			pc.createEl("span", { text: "—", cls: "tp-project-none" });
+		}
+		const sc = row.createEl("td", { cls: "tp-source" });
+		const lnk = sc.createEl("a", {
+			text: task.file.basename,
+			cls: "tp-source-link",
+		});
+		lnk.addEventListener("click", () =>
+			this.app.workspace.openLinkText(task.file.path, "", false, {
+				line: task.line + 1,
+			}),
+		);
+
+		/* Date cell (shared) */
+		const dc = row.createEl("td", { cls: "tp-date-cell" });
+		const dw = dc.createEl("div", { cls: "tp-date-wrap" });
+		const dispDate = _dw
+			? task.dueDate || task.taskDate || "+"
+			: task.taskDate || "+";
+		const hasDate = _dw ? task.dueDate || task.taskDate : task.taskDate;
+		const ds2 = dw.createEl("span", {
+			text: dispDate,
+			cls: "tp-date-badge" + (hasDate ? "" : " tp-date-none"),
+		});
+		const dp = document.createElement("div");
+		dp.className = "tp-date-popup";
+		const dpi = dp.createEl("input", {
+			type: "date",
+			value: task.taskDate || "",
+			cls: "tp-dp-input",
+		});
+		const mkDpBtn = (txt, cls) => dp.createEl("button", { text: txt, cls });
+		const bTdy = mkDpBtn("Today", "tp-dp-btn"),
+			bTmw = mkDpBtn("Tomorrow", "tp-dp-btn"),
+			bNw = mkDpBtn("Next Week", "tp-dp-btn"),
+			bBkl = mkDpBtn("✕ Backlog", "tp-dp-btn tp-dp-remove");
+		const fmt = (d) => d.toISOString().split("T")[0];
+		// Register one document capture handler for all popups
+		if (!this._closePopups) {
+			this._closePopups = (ev) => {
+				document
+					.querySelectorAll(".tp-date-popup.tp-dp-open")
+					.forEach((p) => {
+						if (
+							p.contains(ev.target) ||
+							(p._badge && p._badge.contains(ev.target))
+						)
+							return;
+						p.classList.remove("tp-dp-open");
+						if (p.parentNode) p.parentNode.removeChild(p);
+					});
+			};
+			document.addEventListener("click", this._closePopups, true);
+		}
+		dp._badge = ds2;
+		const op = () => {
+			const r = dw.getBoundingClientRect();
+			dp.style.left = r.left + "px";
+			dp.style.top = r.bottom + 4 + "px";
+			dp.classList.add("tp-dp-open");
+			document.body.appendChild(dp);
+		};
+		const cp = () => {
+			dp.classList.remove("tp-dp-open");
+			if (dp.parentNode) dp.parentNode.removeChild(dp);
+		};
+		ds2.addEventListener("click", (e) => {
+			e.stopPropagation();
+			dp.classList.contains("tp-dp-open") ? cp() : op();
+		});
+		const ap = async (nd) => {
+			cp();
+			try {
+				await this.updateDate(task, nd);
+				task.taskDate = nd;
+				if (nd && nd === tdy) {
+					const newDisp = _dw ? task.dueDate || nd : nd;
+					ds2.setText(newDisp);
+					ds2.removeClass("tp-date-none");
+					await this._refreshSiblings();
+				} else {
+					row.remove();
+					this.tasks = this.tasks.filter((t) => t !== task);
+					this.rowData = this.rowData.filter((r) => r.task !== task);
+					if (!this.tasks.length) this.renderTable();
+					if (nd && nd !== tdy) await this._refreshSiblings();
+				}
+			} catch (e) {
+				this.plugin?.notify?.("❌ " + e.message, true);
+			}
+		};
+		dpi.addEventListener("change", () => ap(dpi.value));
+		bTdy.addEventListener("click", () => ap(fmt(new Date())));
+		bTmw.addEventListener("click", () =>
+			ap(fmt(new Date(Date.now() + 864e5))),
+		);
+		bNw.addEventListener("click", () =>
+			ap(fmt(new Date(Date.now() + 7 * 864e5))),
+		);
+		bBkl.addEventListener("click", () => ap(""));
+
+		/* Timer (today) or action buttons (compact) */
+		if (isCompact) {
+			const ac = row.createEl("td", { cls: "tp-actions-cell" });
+			const aw = ac.createEl("div", { cls: "tp-actions-wrap" });
+			const abTdy = aw.createEl("button", {
+				text: "📅 Today",
+				cls: "tp-act-btn",
+			});
+			abTdy.addEventListener("click", async () => {
+				await this.updateDate(task, tdy);
+				await this._refreshSiblings();
+				row.remove();
+				this.tasks = this.tasks.filter((t) => t !== task);
+				if (!this.tasks.length) this.renderTable();
+			});
+			if (od) {
+				const abBkl = aw.createEl("button", {
+					text: "🗑 Backlog",
+					cls: "tp-act-btn tp-act-remove",
+				});
+				abBkl.addEventListener("click", async () => {
+					await this.updateDate(task, "");
 					await this._refreshSiblings();
 					row.remove();
 					this.tasks = this.tasks.filter((t) => t !== task);
 					if (!this.tasks.length) this.renderTable();
 				});
-				if (od) {
-					const abBkl = aw.createEl("button", {
-						text: "🗑 Backlog",
-						cls: "tp-act-btn tp-act-remove",
-					});
-					abBkl.addEventListener("click", async () => {
-						await this.updateDate(task, "");
-						await this._refreshSiblings();
-						row.remove();
-						this.tasks = this.tasks.filter((t) => t !== task);
-						if (!this.tasks.length) this.renderTable();
-					});
-				} else {
-					const abDue = aw.createEl("button", {
-						text: "📅 On Due",
-						cls: "tp-act-btn",
-					});
-					abDue.addEventListener("click", async () => {
-						if (!task.dueDate) return;
-						await this.updateDate(task, task.dueDate);
-						await this._refreshSiblings();
-						row.remove();
-						this.tasks = this.tasks.filter((t) => t !== task);
-						if (!this.tasks.length) this.renderTable();
-					});
-				}
 			} else {
-				const ts = {
-					remaining: (dur || 0) * 60,
-					total: (dur || 0) * 60,
-					interval: null,
-					running: false,
-				};
-				const tmr = row.createEl("td", { cls: "tp-timer-cell" });
-				const tr2 = tmr.createEl("div", { cls: "tp-timer-row" });
-				const pb = tr2.createEl("button", { text: "▶", cls: "tp-timer-play" });
-				const disp = tr2.createEl("span", {
-					text: this._fmtT(ts.remaining),
-					cls: "tp-timer-display",
+				const abDue = aw.createEl("button", {
+					text: "📅 On Due",
+					cls: "tp-act-btn",
 				});
-				const rb = tr2.createEl("button", { text: "↺", cls: "tp-timer-reset" });
-				const ud = () => {
-					disp.setText(this._fmtT(ts.remaining));
-					disp.toggleClass("tp-timer-expired", ts.remaining <= 0);
-				};
-				const stp = () => {
-					if (ts.interval) {
-						clearInterval(ts.interval);
-						ts.interval = null;
-					}
-					ts.running = false;
-					pb.setText("▶");
-					if (this.plugin?.stopStatusTimer) {
-						this.plugin.stopStatusTimer();
-					}
-				};
-				const sta = () => {
-					if (ts.remaining <= 0) return;
-					ts.running = true;
-					pb.setText("⏸");
-					ts.interval = setInterval(() => {
-						ts.remaining--;
-						ud();
-						if (ts.remaining <= 0) {
-							stp();
-							ts.remaining = 0;
-							ud();
-							disp.addClass("tp-timer-expired");
-							this.plugin?.notify?.("⏰ Time's up! " + task.cleanText);
-							if (this.plugin?.settings?.timerSound !== false) {
-								this._beep();
-							}
-							if (this.plugin?.stopStatusTimer) {
-								this.plugin.stopStatusTimer();
-							}
-						}
-					}, 1000);
-					// Sync with status bar
-					if (this.plugin?.startStatusTimer) {
-						const dm = parseInt(ds.value, 10);
-						this.plugin.startStatusTimer(task.cleanText, dm * 60);
-					}
-				};
-				pb.addEventListener("click", () => {
-					const dm = parseInt(ds.value, 10);
-					if (!dm || dm <= 0) return;
-					if (ts.running) {
-						stp();
-					} else {
-						if (ts.remaining <= 0) {
-							ts.remaining = dm * 60;
-							ts.total = dm * 60;
-							ud();
-						}
-						sta();
-					}
-				});
-				rb.addEventListener("click", () => {
-					stp();
-					const dm = parseInt(ds.value, 10);
-					ts.remaining = dm && dm > 0 ? dm * 60 : 0;
-					ts.total = ts.remaining;
-					ud();
-				});
-				ds.addEventListener("change", () => {
-					stp();
-					const dm = parseInt(ds.value, 10);
-					ts.remaining = dm && dm > 0 ? dm * 60 : 0;
-					ts.total = ts.remaining;
-					ud();
+				abDue.addEventListener("click", async () => {
+					if (!task.dueDate) return;
+					await this.updateDate(task, task.dueDate);
+					await this._refreshSiblings();
+					row.remove();
+					this.tasks = this.tasks.filter((t) => t !== task);
+					if (!this.tasks.length) this.renderTable();
 				});
 			}
-			if (!od) this.rowData.push({ task, si, ds });
+		} else {
+			const ts = {
+				remaining: (dur || 0) * 60,
+				total: (dur || 0) * 60,
+				interval: null,
+				running: false,
+			};
+			const tmr = row.createEl("td", { cls: "tp-timer-cell" });
+			const tr2 = tmr.createEl("div", { cls: "tp-timer-row" });
+			const pb = tr2.createEl("button", { text: "▶", cls: "tp-timer-play" });
+			const disp = tr2.createEl("span", {
+				text: this._fmtT(ts.remaining),
+				cls: "tp-timer-display",
+			});
+			const rb = tr2.createEl("button", { text: "↺", cls: "tp-timer-reset" });
+			const ud = () => {
+				disp.setText(this._fmtT(ts.remaining));
+				disp.toggleClass("tp-timer-expired", ts.remaining <= 0);
+			};
+			const stp = () => {
+				if (ts.interval) {
+					clearInterval(ts.interval);
+					ts.interval = null;
+				}
+				ts.running = false;
+				pb.setText("▶");
+				if (this.plugin?.stopStatusTimer) {
+					this.plugin.stopStatusTimer();
+				}
+			};
+			const sta = () => {
+				if (ts.remaining <= 0) return;
+				ts.running = true;
+				pb.setText("⏸");
+				ts.interval = setInterval(() => {
+					ts.remaining--;
+					ud();
+					if (ts.remaining <= 0) {
+						stp();
+						ts.remaining = 0;
+						ud();
+						disp.addClass("tp-timer-expired");
+						this.plugin?.notify?.("⏰ Time's up! " + task.cleanText);
+						if (this.plugin?.settings?.timerSound !== false) {
+							this._beep();
+						}
+						if (this.plugin?.stopStatusTimer) {
+							this.plugin.stopStatusTimer();
+						}
+					}
+				}, 1000);
+				// Sync with status bar
+				if (this.plugin?.startStatusTimer) {
+					const dm = parseInt(ds.value, 10);
+					this.plugin.startStatusTimer(task.cleanText, dm * 60);
+				}
+			};
+			pb.addEventListener("click", () => {
+				const dm = parseInt(ds.value, 10);
+				if (!dm || dm <= 0) return;
+				if (ts.running) {
+					stp();
+				} else {
+					if (ts.remaining <= 0) {
+						ts.remaining = dm * 60;
+						ts.total = dm * 60;
+						ud();
+					}
+					sta();
+				}
+			});
+			rb.addEventListener("click", () => {
+				stp();
+				const dm = parseInt(ds.value, 10);
+				ts.remaining = dm && dm > 0 ? dm * 60 : 0;
+				ts.total = ts.remaining;
+				ud();
+			});
+			ds.addEventListener("change", () => {
+				stp();
+				const dm = parseInt(ds.value, 10);
+				ts.remaining = dm && dm > 0 ? dm * 60 : 0;
+				ts.total = ts.remaining;
+				ud();
+			});
 		}
+		if (!isCompact) this.rowData.push({ task, si, ds });
+	}
+
+	/* Build task cell with checkbox toggle + priority + text */
+	_buildTaskCell(row, task) {
+		const tc = row.createEl("td", { cls: "tp-task-cell" });
+		const chk = tc.createEl("span", {
+			text: task.status === "x" || task.status === "X" ? "☑" : "☐",
+			cls: "tp-checkbox",
+		});
+		chk.addEventListener("click", async (e) => {
+			e.stopPropagation();
+			await this.toggleTaskComplete(task);
+		});
+		if (task.priority) {
+			tc.createEl("span", { text: task.priority, cls: "tp-priority" });
+		}
+		tc.createEl("span", { text: task.cleanText, cls: "tp-task-text" });
 	}
 
 	async saveTime(task, time) {
@@ -657,6 +777,69 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 			await r.loadTasks();
 			r.renderTable();
 		}
+	}
+
+	/* ─── checkbox toggle ─── */
+	async toggleTaskComplete(task) {
+		const content = await this.app.vault.read(task.file);
+		const lines = content.split("\n");
+		const line = lines[task.line];
+		if (!line) return;
+
+		const wasCompleted = /\[(x|X)\]/.test(line);
+		const newLine = wasCompleted
+			? line.replace(/\[(x|X)\]/, "[ ]")
+			: line.replace(/\[ \]/, "[x]");
+		lines[task.line] = newLine;
+		await this.app.vault.modify(task.file, lines.join("\n"));
+
+		// Handle recurrence if completing
+		if (!wasCompleted) {
+			await this._handleRecurrence(task, newLine);
+		}
+
+		// Remove from display
+		this.tasks = this.tasks.filter((t) => t !== task);
+		if (this.tasks.length === 0) {
+			this.renderTable();
+		} else {
+			const tbody = this.containerEl.querySelector("tbody");
+			if (tbody) this.buildRows(tbody);
+		}
+		await this._refreshSiblings();
+	}
+
+	/* ─── recurrence ─── */
+	async _handleRecurrence(task, completedLine) {
+		const rec = this._parseRecurrence(completedLine);
+		if (!rec) return;
+
+		let baseDate = task.taskDate
+			? new Date(task.taskDate + "T00:00:00")
+			: new Date();
+
+		const next = new Date(baseDate);
+		switch (rec.unit) {
+			case "day":
+				next.setDate(next.getDate() + rec.interval);
+				break;
+			case "week":
+				next.setDate(next.getDate() + rec.interval * 7);
+				break;
+			case "month":
+				next.setMonth(next.getMonth() + rec.interval);
+				break;
+		}
+		const nextDate = next.toISOString().split("T")[0];
+
+		const newTaskLine = completedLine
+			.replace(/\[x\]/i, "[ ]")
+			.replace(/⏳\s*\d{4}-\d{2}-\d{2}/, "⏳ " + nextDate);
+
+		const content = await this.app.vault.read(task.file);
+		const lines = content.split("\n");
+		lines.splice(task.line + 1, 0, newTaskLine);
+		await this.app.vault.modify(task.file, lines.join("\n"));
 	}
 }
 

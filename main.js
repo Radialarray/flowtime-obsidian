@@ -134,9 +134,11 @@ module.exports = class FlowtimePlugin extends Plugin {
 			["task-planner", "today"],
 			["task-planner-overdue", "overdue"],
 			["task-planner-dueweek", "dueweek"],
+			["task-planner-weekly", "weekly"],
+			["task-planner-project", "project"],
 		]) {
 			this.registerMarkdownCodeBlockProcessor(name, (_src, el, ctx) => {
-				const r = new TaskPlannerRenderer(this.app, el, mode, this.projectEngine);
+				const r = new TaskPlannerRenderer(this.app, el, mode, this.projectEngine, ctx.sourcePath);
 				r.plugin = this;
 				this.renderers.push(r);
 				ctx.addChild(r);

@@ -593,6 +593,44 @@
 	color: var(--text-normal);
 }
 
+/* --- Checkbox in table --- */
+.tp-checkbox {
+	cursor: pointer;
+	margin-right: 6px;
+	font-size: var(--font-ui-small);
+	user-select: none;
+	opacity: 0.6;
+	transition: opacity 120ms ease;
+}
+
+.tp-checkbox:hover {
+	opacity: 1;
+}
+
+.tp-task-cell {
+	display: flex;
+	align-items: baseline;
+}
+
+/* --- Priority --- */
+.tp-priority {
+	margin-right: 4px;
+	font-size: var(--font-ui-smaller);
+}
+
+/* --- Weekly group headers --- */
+.tp-project-group {
+	background: var(--background-primary-alt);
+	font-weight: var(--font-semibold);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.tp-project-group td {
+	padding: 6px 8px;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
 /* --- Status Bar Timer --- */
 .flowtime-status-timer {
 	cursor: pointer;

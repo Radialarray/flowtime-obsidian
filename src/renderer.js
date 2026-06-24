@@ -1290,13 +1290,13 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 						}
 					}
 				}, 1000);
-				// Register this row's stop callback for status bar right-click
-				if (this.plugin) this.plugin._activeRowTimerStop = stp;
-				// Start status bar timer (stops any previous, records its session)
+					// Start status bar timer first (stops any previous, records its session)
 				if (this.plugin?.statusTimer?.start) {
 					const dm = ds ? parseInt(ds.value, 10) : dur;
 					this.plugin.statusTimer.start(task.cleanText, dm * 60);
 				}
+				// Register stop callback AFTER start() so onTimerStop doesn't fire on ourselves
+				if (this.plugin) this.plugin._activeRowTimerStop = stp;
 			};
 
 			pb.addEventListener("click", () => {
@@ -1489,8 +1489,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 								text: `${usedHours.toFixed(1)}h`,
 								cls: "ft-sesh-analytics-value",
 							});
-			}
-		} else if (!isCompact && this._columnVisibility.timer !== false) {
+						}
+					} else {
 						row.createEl("span", { text: w.bucket || "unassigned", cls: "ft-sesh-analytics-name" });
 						row.createEl("span", {
 							text: `${(w.total_minutes / 60).toFixed(1)}h`,

@@ -61,16 +61,13 @@ class QuickEntryModal extends Modal {
 			updateLivePreview();
 		});
 
-		// ── Project (input + dropdown button, like start time selector) ──
+		// ── Project (input with dropdown on focus) ──
 		contentEl.createEl("label", { text: "Project", cls: "flowtime-label" });
-		const pw = contentEl.createEl("div", { cls: "flowtime-proj-wrap" });
-		const projInput = pw.createEl("input", {
+		const projInput = contentEl.createEl("input", {
 			type: "text",
-			placeholder: "e.g. website",
+			placeholder: "Type or select a project",
 			cls: "flowtime-input",
 		});
-		projInput.style.flex = "1";
-		const projBtn = pw.createEl("button", { text: "▾", cls: "flowtime-proj-btn" });
 
 		// Dropdown appended to body
 		const projDD = document.createElement("div");
@@ -78,7 +75,7 @@ class QuickEntryModal extends Modal {
 		let allProjects = [];
 
 		const openDD = () => {
-			const r = pw.getBoundingClientRect();
+			const r = projInput.getBoundingClientRect();
 			projDD.style.left = r.left + "px";
 			projDD.style.top = (r.bottom + 4) + "px";
 			projDD.style.width = r.width + "px";
@@ -111,31 +108,18 @@ class QuickEntryModal extends Modal {
 			}
 		};
 
-		projBtn.addEventListener("click", (e) => {
-			e.stopPropagation();
-			if (projDD.parentNode) closeDD();
-			else openDD();
-		});
-
-		projInput.addEventListener("focus", () => {
-			if (!projDD.parentNode) openDD();
-		});
-
+		projInput.addEventListener("focus", () => openDD());
 		projInput.addEventListener("input", () => {
-			if (projDD.parentNode) populateDD(projInput.value);
+			if (!projDD.parentNode) openDD();
+			else populateDD(projInput.value);
 			updateLivePreview();
 		});
-
 		projInput.addEventListener("keydown", (e) => {
 			if (e.key === "Escape") closeDD();
 		});
-
-		// Close on outside click
-		document.addEventListener("click", (e) => {
-			if (!pw.contains(e.target) && !projDD.contains(e.target)) {
-				closeDD();
-			}
-		}, true);
+		projInput.addEventListener("blur", () => {
+			setTimeout(closeDD, 150);
+		});
 
 		// Load projects + auto-detect
 		const activeFile = this.app.workspace.getActiveFile();

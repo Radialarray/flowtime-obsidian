@@ -623,39 +623,7 @@
 	color: var(--text-normal);
 }
 
-/* --- Project selector (input + button pattern) --- */
-.flowtime-proj-wrap {
-	display: flex;
-	align-items: center;
-	gap: 0;
-}
-
-.flowtime-proj-wrap .flowtime-input {
-	border-radius: 4px 0 0 4px;
-	border-right: none;
-}
-
-.flowtime-proj-btn {
-	width: 28px;
-	height: 100%;
-	padding: 0;
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 0 4px 4px 0;
-	background: transparent;
-	color: var(--text-muted);
-	font-size: 10px;
-	cursor: pointer;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	flex-shrink: 0;
-}
-
-.flowtime-proj-btn:hover {
-	border-color: var(--interactive-accent);
-	background: var(--background-primary-alt);
-	color: var(--text-normal);
-}
+/* --- Project dropdown --- */
 
 .flowtime-proj-dd {
 	display: none;

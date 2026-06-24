@@ -25,7 +25,7 @@ const DEFAULT_SETTINGS = {
 	dailyTemplate:
 		"## 🔄 Carry Over\n```task-planner-overdue\n```\n\n## 🎯 Today\n```task-planner\n```\n\n## ⚠️ Due This Week\n```task-planner-dueweek\n```\n\n## 📝 Notes\n",
 	weeklyTemplate:
-		"## 📊 This Week (by project)\n```task-planner-weekly\n```\n\n## ⚠️ Due Next Week\n```task-planner-dueweek\n```\n\n## 📝 Review\n",
+		"## 📊 This Week\n```task-planner-weekly\n```\n\n## ⚠️ Due Next Week\n```task-planner-dueweek\n```\n\n## 📝 Review\n",
 	projectTemplate:
 		"---\ntype: project\nname: {{NAME}}\nstatus: active\ntags: [project]\n---\n\n# {{NAME}}\n\n## 🎯 Goal\n\n## 📋 Tasks\n\n```task-planner-project\n```\n\n## 📝 Notes\n",
 };

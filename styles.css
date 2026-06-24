@@ -698,12 +698,17 @@
 }
 
 /* --- Completed task --- */
-.ft-task-done td {
+.ft-task-done td:not(.ft-check-cell) {
 	opacity: 0.45;
 }
 
-.ft-task-done:hover td {
+.ft-task-done:hover td:not(.ft-check-cell) {
 	opacity: 0.75;
+}
+
+.ft-task-done .ft-checkbox {
+	opacity: 1;
+	color: var(--interactive-success);
 }
 
 .ft-task-done-text {

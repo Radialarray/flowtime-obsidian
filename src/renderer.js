@@ -216,9 +216,22 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 					? await this.projectEngine.resolve(file.path)
 					: null;
 
+				// Fallback: check task text for #project/xxx tag
+				let projName = project?.name || null;
+				let projPath = project?.path || null;
+				let projSource = project?.source || null;
+				if (!projName && this.projectEngine && rest) {
+					const tagPrefix = this.plugin?.settings?.tagPrefix || "project/";
+					const tagProject = this.projectEngine.resolveFromTag(rest, tagPrefix);
+					if (tagProject) {
+						projName = tagProject;
+						projSource = "tag";
+					}
+				}
+
 				// Project mode: skip tasks not matching target project
 				if (this.mode === "project") {
-					if (project?.name !== targetProject) continue;
+					if (projName !== targetProject) continue;
 				}
 
 				this.tasks.push({
@@ -232,9 +245,9 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 					cleanText: this._clean(rest),
 					status,
 					priority,
-					project: project?.name || null,
-					projectPath: project?.path || null,
-					projectSource: project?.source || null,
+					project: projName,
+					projectPath: projPath,
+					projectSource: projSource,
 				});
 			}
 		}

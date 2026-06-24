@@ -1,7 +1,7 @@
 const { Notice } = require("obsidian");
 
 async function runOnboard(app, plugin) {
-	const stats = { migrated: 0, projects: 0, skipped: 0 };
+	const stats = { migrated: 0, projects: 0, blocks: 0 };
 
 	// ── Step 1: Migrate dates ──
 	const files = app.vault.getMarkdownFiles();
@@ -70,11 +70,9 @@ async function runOnboard(app, plugin) {
 		if (hasFM) {
 			const fm = hasFM[1];
 			if (fm.match(/^type\s*:\s*project/m)) continue; // already marked
-			// Has frontmatter but not "type: project" — add it
 			const newContent = content.replace(/^(---\n)/, "$1type: project\n");
 			await app.vault.modify(file, newContent);
 		} else {
-			// No frontmatter at all — add it with name
 			const newContent =
 				"---\ntype: project\nname: " + folder + "\n---\n\n" + content;
 			await app.vault.modify(file, newContent);
@@ -82,10 +80,40 @@ async function runOnboard(app, plugin) {
 		stats.projects++;
 	}
 
-	// ── Step 3: Report ──
+	// ── Step 3: Update old code block names ──
+	const blockRenames = {
+		"task-planner-project": "flowtime-project",
+		"task-planner-weekly": "flowtime-weekly",
+		"task-planner-dueweek": "flowtime-dueweek",
+		"task-planner-overdue": "flowtime-overdue",
+		"task-planner": "flowtime-today",
+	};
+	for (const file of files) {
+		if (file.path.startsWith(".obsidian")) continue;
+		const content = await app.vault.read(file);
+		let newContent = content;
+		let fileChanged = false;
+
+		for (const [oldName, newName] of Object.entries(blockRenames)) {
+			const oldBlock = "```" + oldName;
+			const newBlock = "```" + newName;
+			if (newContent.includes(oldBlock)) {
+				newContent = newContent.split(oldBlock).join(newBlock);
+				fileChanged = true;
+			}
+		}
+
+		if (fileChanged) {
+			await app.vault.modify(file, newContent);
+			stats.blocks++;
+		}
+	}
+
+	// ── Step 4: Report ──
 	const msgs = [];
 	if (stats.migrated > 0) msgs.push("✅ " + stats.migrated + " files migrated to @ format");
 	if (stats.projects > 0) msgs.push("📁 " + stats.projects + " projects marked");
+	if (stats.blocks > 0) msgs.push("📝 " + stats.blocks + " files updated to flowtime code blocks");
 	if (msgs.length === 0) msgs.push("✨ Already up to date — nothing to migrate");
 
 	plugin.notify(msgs.join(", "));

@@ -623,43 +623,75 @@
 	color: var(--text-normal);
 }
 
-/* --- Project dropdown (appended to body, fixed positioning) --- */
+/* --- Project selector (input + button pattern) --- */
 .flowtime-proj-wrap {
-	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 0;
 }
 
-.flowtime-proj-list {
+.flowtime-proj-wrap .flowtime-input {
+	border-radius: 4px 0 0 4px;
+	border-right: none;
+}
+
+.flowtime-proj-btn {
+	width: 28px;
+	height: 100%;
+	padding: 0;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 0 4px 4px 0;
+	background: transparent;
+	color: var(--text-muted);
+	font-size: 10px;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+}
+
+.flowtime-proj-btn:hover {
+	border-color: var(--interactive-accent);
+	background: var(--background-primary-alt);
+	color: var(--text-normal);
+}
+
+.flowtime-proj-dd {
+	display: none;
 	position: fixed;
 	z-index: 1001;
-	max-height: 180px;
+	max-height: 200px;
 	overflow-y: auto;
 	background: var(--background-primary);
 	border: 1px solid var(--background-modifier-border);
-	border-radius: 4px;
-	box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+	border-radius: 5px;
+	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+	padding: 4px;
 }
 
-.flowtime-proj-item {
-	padding: 6px 10px;
-	font-size: var(--font-ui-small);
+.flowtime-proj-dd-item {
+	display: block;
+	width: 100%;
+	padding: 5px 10px;
+	border: none;
+	background: transparent;
 	color: var(--text-normal);
+	font-size: var(--font-ui-small);
 	cursor: pointer;
+	text-align: left;
+	border-radius: 3px;
 }
 
-.flowtime-proj-item:hover {
+.flowtime-proj-dd-item:hover {
 	background: var(--background-modifier-hover);
 }
 
-.flowtime-proj-item:first-child {
-	border-radius: 4px 4px 0 0;
-}
-
-.flowtime-proj-item:last-child {
-	border-radius: 0 0 4px 4px;
-}
-
-.flowtime-proj-item:only-child {
-	border-radius: 4px;
+.flowtime-proj-dd-empty {
+	padding: 5px 10px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	text-align: center;
 }
 
 /* --- Checkbox in table --- */

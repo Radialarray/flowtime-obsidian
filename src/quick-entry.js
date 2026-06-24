@@ -34,7 +34,7 @@ class QuickEntryModal extends Modal {
 			cls: "flowtime-input",
 		});
 		const datePreview = dateRow.createEl("span", {
-			text: "→ ⏳ " + (parseDate("today") || "—"),
+			text: "→ @" + (parseDate("today") || "—"),
 			cls: "flowtime-date-preview",
 		});
 
@@ -49,93 +49,102 @@ class QuickEntryModal extends Modal {
 			const task = taskInput.value.trim();
 			let line = "- [ ] " + (task || "task description");
 			if (project) line += " #" + this.plugin.settings.tagPrefix + project;
-			if (date) line += " ⏳ " + date;
+			if (date) line += " @" + date;
 			previewCode.setText(line);
 		};
 
 		// Live preview on date input
 		dateInput.addEventListener("input", () => {
 			const parsed = parseDate(dateInput.value);
-			datePreview.setText(parsed ? "→ ⏳ " + parsed : "→ ?");
+			datePreview.setText(parsed ? "→ @" + parsed : "→ ?");
 			datePreview.toggleClass("flowtime-date-invalid", !parsed);
 			updateLivePreview();
 		});
 
-		// ── Project (custom dropdown appended to body for z-index) ──
+		// ── Project (input + dropdown button, like start time selector) ──
 		contentEl.createEl("label", { text: "Project", cls: "flowtime-label" });
-		const projInput = contentEl.createEl("input", {
+		const pw = contentEl.createEl("div", { cls: "flowtime-proj-wrap" });
+		const projInput = pw.createEl("input", {
 			type: "text",
-			placeholder: "Type or select a project",
+			placeholder: "e.g. website",
 			cls: "flowtime-input",
 		});
+		projInput.style.flex = "1";
+		const projBtn = pw.createEl("button", { text: "▾", cls: "flowtime-proj-btn" });
+
+		// Dropdown appended to body
+		const projDD = document.createElement("div");
+		projDD.className = "flowtime-proj-dd";
 		let allProjects = [];
 
-		// Dropdown appended to body to escape modal overflow clipping
-		const projList = document.createElement("div");
-		projList.className = "flowtime-proj-list";
-
-		const openList = () => {
-			const r = projInput.getBoundingClientRect();
-			projList.style.top = (r.bottom + 2) + "px";
-			projList.style.left = r.left + "px";
-			projList.style.width = r.width + "px";
-			filterProjects(projInput.value);
-			document.body.appendChild(projList);
+		const openDD = () => {
+			const r = pw.getBoundingClientRect();
+			projDD.style.left = r.left + "px";
+			projDD.style.top = (r.bottom + 4) + "px";
+			projDD.style.width = r.width + "px";
+			projDD.style.display = "block";
+			document.body.appendChild(projDD);
+			populateDD(projInput.value);
 		};
 
-		const closeList = () => {
-			if (projList.parentNode) projList.parentNode.removeChild(projList);
+		const closeDD = () => {
+			projDD.style.display = "none";
+			if (projDD.parentNode) projDD.parentNode.removeChild(projDD);
 		};
 
-		const filterProjects = (query) => {
-			projList.empty();
+		const populateDD = (query) => {
+			projDD.empty();
 			const q = query.toLowerCase().trim();
 			const matches = q
-				? allProjects.filter((p) => p.name.toLowerCase().includes(q))
+				? allProjects.filter(p => p.name.toLowerCase().includes(q))
 				: allProjects;
-			if (matches.length === 0) { closeList(); return; }
 			for (const proj of matches.slice(0, 8)) {
-				const item = projList.createEl("div", {
-					text: proj.name,
-					cls: "flowtime-proj-item",
-				});
-				item.addEventListener("mousedown", (e) => {
-					e.preventDefault();
+				const item = projDD.createEl("button", { text: proj.name, cls: "flowtime-proj-dd-item" });
+				item.addEventListener("click", () => {
 					projInput.value = proj.name;
-					closeList();
+					closeDD();
 					updateLivePreview();
 				});
 			}
+			if (matches.length === 0) {
+				projDD.createEl("div", { text: "No projects found", cls: "flowtime-proj-dd-empty" });
+			}
 		};
 
-		projInput.addEventListener("focus", () => openList());
-		projInput.addEventListener("input", () => {
-			if (!projList.parentNode) openList();
-			else filterProjects(projInput.value);
-			updateLivePreview();
-		});
-		projInput.addEventListener("blur", () => {
-			setTimeout(closeList, 150);
-		});
-		projInput.addEventListener("keydown", (e) => {
-			if (e.key === "Escape") closeList();
+		projBtn.addEventListener("click", (e) => {
+			e.stopPropagation();
+			if (projDD.parentNode) closeDD();
+			else openDD();
 		});
 
-		// Global click to close
+		projInput.addEventListener("focus", () => {
+			if (!projDD.parentNode) openDD();
+		});
+
+		projInput.addEventListener("input", () => {
+			if (projDD.parentNode) populateDD(projInput.value);
+			updateLivePreview();
+		});
+
+		projInput.addEventListener("keydown", (e) => {
+			if (e.key === "Escape") closeDD();
+		});
+
+		// Close on outside click
 		document.addEventListener("click", (e) => {
-			if (!projInput.contains(e.target) && !projList.contains(e.target)) {
-				closeList();
+			if (!pw.contains(e.target) && !projDD.contains(e.target)) {
+				closeDD();
 			}
 		}, true);
 
-		// Load projects and auto-detect
+		// Load projects + auto-detect
 		const activeFile = this.app.workspace.getActiveFile();
 		if (this.plugin.projectEngine) {
-			this.plugin.projectEngine.getAllProjects().then((projects) => {
+			this.plugin.projectEngine.getAllProjects().then(projects => {
 				allProjects = projects;
 			});
 			if (activeFile) {
-				this.plugin.projectEngine.resolve(activeFile.path).then((result) => {
+				this.plugin.projectEngine.resolve(activeFile.path).then(result => {
 					if (result?.name && !projInput.value) {
 						projInput.value = result.name;
 						updateLivePreview();
@@ -196,7 +205,7 @@ class QuickEntryModal extends Modal {
 			// Build task line
 			let line = "- [ ] " + task;
 			if (project) line += " #" + this.plugin.settings.tagPrefix + project;
-			if (date) line += " ⏳ " + date;
+			if (date) line += " @" + date;
 
 			// Determine target file
 			let targetFile = activeFile;

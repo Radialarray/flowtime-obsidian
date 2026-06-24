@@ -81,7 +81,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 
 	_clean(t) {
 		return t
-			.replace(/[@⏳📅🛫➕✅]\s*\d{4}-\d{2}-\d{2}/gu, "")
+			.replace(/@\s*\d{4}-\d{2}-\d{2}/gu, "")
 			.replace(/🔺|⏫|🔼|🔽|⏬/g, "")
 			.replace(/🔁 every \d* (day|days|week|weeks|month|months)/g, "")
 			.replace(/🔁 [^\s]+( \d+[dwmy])?/g, "")
@@ -179,22 +179,17 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 				const status = m[2].trim();
 				if (status === "x" || status === "-" || status === "X") continue;
 
-				const schedMatch = m[3].match(/⏳\s*(\d{4}-\d{2}-\d{2})/);
-				const dueMatch = m[3].match(/[@📅]\s*(\d{4}-\d{2}-\d{2})/);
-				const taskDate = (schedMatch || [])[1] || "";
-				const dueDate = (dueMatch || [])[1] || "";
+				const dateMatch = m[3].match(/@\s*(\d{4}-\d{2}-\d{2})/);
+				const taskDate = (dateMatch || [])[1] || "";
 
 				if (this.mode === "today" && taskDate !== today) continue;
 				if (this.mode === "overdue" && (!taskDate || taskDate >= today))
 					continue;
 				if (this.mode === "dueweek") {
-					const inWeek = (d, inclToday) =>
-						d && (inclToday ? d >= today : d > today) && d <= eowStr;
-					if (!inWeek(dueDate, true) && !inWeek(taskDate, false)) continue;
+					if (!taskDate || taskDate < today || taskDate > eowStr) continue;
 				}
 				if (this.mode === "weekly") {
-					const inRange = (d) => d && d >= mon && d <= sun;
-					if (!inRange(taskDate) && !inRange(dueDate)) continue;
+					if (!taskDate || taskDate < mon || taskDate > sun) continue;
 				}
 
 				let time = "",
@@ -240,7 +235,6 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 					rawLine: lines[i],
 					time,
 					taskDate,
-					dueDate,
 					rawText: rest.trim(),
 					cleanText: this._clean(rest),
 					status,
@@ -257,8 +251,8 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 				const pa = a.project || "";
 				const pb = b.project || "";
 				if (pa !== pb) return pa.localeCompare(pb);
-				const da = a.taskDate || a.dueDate || "";
-				const db = b.taskDate || b.dueDate || "";
+				const da = a.taskDate || "";
+				const db = b.taskDate || "";
 				return da.localeCompare(db);
 			});
 		} else {
@@ -276,7 +270,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 				dueweek: "🎉 No tasks due this week!",
 				weekly: "🎉 No tasks scheduled this week!",
 				project: "📭 No tasks for this project.",
-				today: "📭 No tasks scheduled for today. Add ⏳ today to any task.",
+				today: "📭 No tasks scheduled for today. Add @today to any task.",
 			};
 			this.containerEl.createEl("p", {
 				text: msgs[this.mode] || msgs.today,
@@ -539,10 +533,8 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 		/* Date cell (shared) */
 		const dc = row.createEl("td", { cls: "tp-date-cell" });
 		const dw = dc.createEl("div", { cls: "tp-date-wrap" });
-		const dispDate = _dw
-			? task.dueDate || task.taskDate || "+"
-			: task.taskDate || "+";
-		const hasDate = _dw ? task.dueDate || task.taskDate : task.taskDate;
+		const dispDate = task.taskDate || "+";
+		const hasDate = task.taskDate;
 		const ds2 = dw.createEl("span", {
 			text: dispDate,
 			cls: "tp-date-badge" + (hasDate ? "" : " tp-date-none"),
@@ -599,8 +591,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 				await this.updateDate(task, nd);
 				task.taskDate = nd;
 				if (nd && nd === tdy) {
-					const newDisp = _dw ? task.dueDate || nd : nd;
-					ds2.setText(newDisp);
+					ds2.setText(nd);
 					ds2.removeClass("tp-date-none");
 					await this._refreshSiblings();
 				} else {
@@ -646,19 +637,6 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 				});
 				abBkl.addEventListener("click", async () => {
 					await this.updateDate(task, "");
-					await this._refreshSiblings();
-					row.remove();
-					this.tasks = this.tasks.filter((t) => t !== task);
-					if (!this.tasks.length) this.renderTable();
-				});
-			} else {
-				const abDue = aw.createEl("button", {
-					text: "📅 On Due",
-					cls: "tp-act-btn",
-				});
-				abDue.addEventListener("click", async () => {
-					if (!task.dueDate) return;
-					await this.updateDate(task, task.dueDate);
 					await this._refreshSiblings();
 					row.remove();
 					this.tasks = this.tasks.filter((t) => t !== task);
@@ -797,15 +775,15 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 		const line = lines[task.line];
 		if (!line) return;
 		if (nd) {
-			const re = /⏳\s*\d{4}-\d{2}-\d{2}/;
+			const re = /@\s*\d{4}-\d{2}-\d{2}/;
 			lines[task.line] = re.test(line)
-				? line.replace(re, "⏳ " + nd)
+				? line.replace(re, "@" + nd)
 				: line.replace(
 						/^(\s*[-*+]\s*\[[^\]]*\]\s*)(.*)$/,
-						(_, p, r) => p + r + " ⏳ " + nd,
+						(_, p, r) => p + r + " @" + nd,
 					);
 		} else {
-			lines[task.line] = line.replace(/\s*⏳\s*\d{4}-\d{2}-\d{2}/, "");
+			lines[task.line] = line.replace(/\s*@\s*\d{4}-\d{2}-\d{2}/, "");
 		}
 		await this.app.vault.modify(task.file, lines.join("\n"));
 	}
@@ -872,7 +850,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 
 		const newTaskLine = completedLine
 			.replace(/\[x\]/i, "[ ]")
-			.replace(/⏳\s*\d{4}-\d{2}-\d{2}/, "⏳ " + nextDate);
+			.replace(/@\s*\d{4}-\d{2}-\d{2}/, "@" + nextDate);
 
 		const content = await this.app.vault.read(task.file);
 		const lines = content.split("\n");

@@ -237,7 +237,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			if (v.date !== false) count++;
 			if (v.timer !== false) count++;
 		}
-		return (count || 1) + 1; // +1 for the detail column
+		return count || 1;
 	}
 
 	/* ─── helpers ─── */
@@ -785,7 +785,6 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				makeSortableHeader(dw ? "Due" : "Date", "date", "col-date");
 			if (this._columnVisibility.actions !== false)
 				hr.createEl("th", { cls: "col-actions" });
-			hr.createEl("th", { cls: "col-detail", text: "···" });
 		} else {
 			if (this._columnVisibility.time !== false)
 				makeSortableHeader("Time", "time", "col-time");
@@ -803,7 +802,6 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				makeSortableHeader("Date", "date", "col-date");
 			if (this._columnVisibility.timer !== false)
 				hr.createEl("th", { cls: "col-timer" });
-			hr.createEl("th", { cls: "col-detail", text: "···" });
 		}
 		const tbody = table.createEl("tbody");
 		this.bucketTotals = this._computeBucketTotals();
@@ -1175,15 +1173,6 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			bBkl.addEventListener("click", () => ap(""));
 		}
 
-		/* ── Detail button (shows hidden fields popup) ── */
-		const detailCell = row.createEl("td", { cls: "ft-detail-cell" });
-		const detailBtn = detailCell.createEl("button", { text: "···", cls: "ft-detail-btn" });
-
-		detailBtn.addEventListener("click", (e) => {
-			e.stopPropagation();
-			this._showTaskDetail(task, detailBtn, tdy);
-		});
-
 		/* Timer (today) or action buttons (compact) */
 		if (isCompact && this._columnVisibility.actions !== false) {
 			const ac = row.createEl("td", { cls: "ft-actions-cell" });
@@ -1412,6 +1401,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			row.addClass("ft-task-done");
 			textEl.addClass("ft-task-done-text");
 		}
+		textEl.addEventListener("click", (e) => {
+			e.stopPropagation();
+			this._showTaskDetail(task, textEl, new Date().toISOString().split("T")[0]);
+		});
 	}
 
 	/* Build checkbox cell as dedicated column */
@@ -1503,10 +1496,20 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			if (tbody) this.buildRows(tbody);
 		});
 
-		// Project
+		// Project (clickable link)
 		const projRow = popup.createEl("div", { cls: "ft-detail-row" });
 		projRow.createEl("label", { text: "Project: ", cls: "ft-detail-label" });
-		projRow.createEl("span", { text: task.project || "—", cls: "ft-detail-value" });
+		if (task.projectPath) {
+			const projLink = projRow.createEl("a", {
+				text: task.project,
+				cls: "ft-detail-link",
+			});
+			projLink.addEventListener("click", () =>
+				this.app.workspace.openLinkText(task.projectPath, "", false),
+			);
+		} else {
+			projRow.createEl("span", { text: task.project || "—", cls: "ft-detail-value" });
+		}
 
 		// Source
 		const srcRow = popup.createEl("div", { cls: "ft-detail-row" });

@@ -66,34 +66,6 @@
 	width: 22%;
 }
 
-.col-detail {
-	width: 36px;
-	text-align: center;
-}
-
-.ft-detail-cell {
-	width: 36px;
-	text-align: center;
-	vertical-align: middle;
-}
-
-.ft-detail-btn {
-	background: none;
-	border: none;
-	cursor: pointer;
-	color: var(--text-faint);
-	font-size: 14px;
-	letter-spacing: 1px;
-	padding: 2px 4px;
-	border-radius: 3px;
-	line-height: 1;
-}
-
-.ft-detail-btn:hover {
-	color: var(--text-normal);
-	background: var(--background-modifier-hover);
-}
-
 /* ── Task Detail Popup ── */
 .ft-detail-popup {
 	position: fixed;
@@ -786,6 +758,14 @@
 .ft-checkbox {
 	cursor: pointer;
 	accent-color: var(--interactive-accent);
+}
+
+.ft-task-text {
+	cursor: pointer;
+}
+
+.ft-task-text:hover {
+	color: var(--text-accent);
 }
 
 .ft-task-done td:not(.ft-check-cell) {

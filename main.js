@@ -157,9 +157,9 @@ class AtCompletionsSuggest extends EditorSuggest {
 		// v0.4.0: Status & priority tags
 		const statusTags = [
 			{ label: "soon", description: "Up next / backlog item" },
-			{ label: "high", description: "🔺 High priority" },
-			{ label: "med", description: "🔼 Medium priority" },
-			{ label: "low", description: "🔽 Low priority" },
+			{ label: "high", description: "🟥 High priority" },
+			{ label: "med", description: "🟨 Medium priority" },
+			{ label: "low", description: "🟩 Low priority" },
 		];
 
 		let projects = [];

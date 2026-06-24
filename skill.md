@@ -370,15 +370,15 @@ Tasks are markdown list items with checkbox status and annotation tags.
 | Duration | `@1.5h` or `@30m` | `@1.5h` | Hours or minutes |
 | Bucket | `@b:name` / `@bucket:name` | `@b:deep-work` | Links to bucket definition |
 | Project tag | `@p:Name` | `@p:Website` | New `@p:` syntax (v0.4.0). Legacy `#project/Name` still works |
-| Priority emoji | Emoji | `🔺⏫🔼🔽⏬` | 🔺=highest, ⏬=lowest |
-| Priority text | `@high` / `@med` / `@low` | `@high` | Aliases for 🔺/🔼/🔽 (v0.4.0) |
+| Priority (color dot) | `🟥` / `🟨` / `🟩` | `🟥` | 🟥=high, 🟨=med, 🟩=low |
+| Priority text | `@high` / `@med` / `@low` | `@high` | Aliases for 🟥/🟨/🟩 (v0.4.0) |
 | Status tag | `@soon` | `@soon` | Marks as backlog/up-next. Shows in "📋 Up Next" section (v0.4.0) |
 | Recurrence | `🔁 every <period>` | `🔁 every day` | Auto-reschedules on completion |
 
 ### Full Examples
 
 ```markdown
-- [ ] 09:00—11:30 Code review @2026-06-24 🔼 @1.5h @b:deep-work @p:backend
+- [ ] 09:00—11:30 Code review @2026-06-24 🟨 @1.5h @b:deep-work @p:backend
 - [ ] Review PR draft @soon @high
 - [ ] Morning standup @tomorrow @med @15m @b:meetings
 ```
@@ -955,7 +955,7 @@ Guidelines for agent behavior when managing Flowtime data:
 .replace(/@(?:bucket|b):[^\s]+/g, "")
 .replace(/@p:[^\s]+/g, "")              // project directive
 .replace(/@(?:high|med|low|soon)\b/gi, "") // status/priority tags
-.replace(/🔺|⏫|🔼|🔽|⏬/g, "")
+.replace(/[🟥🟨🟩]/g, "")                   // priority color dots
 .replace(/🔁 every \d* (day|days|week|weeks|month|months)/g, "")
 .replace(/#\S+/g, "")
 ```

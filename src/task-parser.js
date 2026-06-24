@@ -30,16 +30,14 @@ function parseTaskLine(line, file, lineIndex) {
 		rest = rest.slice(tm[0].length);
 	}
 
-	// Extract priority emoji: /[🔺⏫🔼🔽⏬]/
+	// v0.4.0: Extract priority — color dots (🟥🟨🟩) or @high/@med/@low aliases
 	let priority = null;
-	const prioMatch = rest.match(/[🔺⏫🔼🔽⏬]/);
+	const prioMatch = rest.match(/[🟥🟨🟩]/);
 	if (prioMatch) priority = prioMatch[0];
-
-	// v0.4.0: @high/@med/@low → priority aliases (only if no emoji priority set)
 	if (!priority) {
-		if (rest.match(/@high\b/)) priority = "🔺";
-		else if (rest.match(/@med\b/)) priority = "🔼";
-		else if (rest.match(/@low\b/)) priority = "🔽";
+		if (rest.match(/@high\b/)) priority = "🟥";
+		else if (rest.match(/@med\b/)) priority = "🟨";
+		else if (rest.match(/@low\b/)) priority = "🟩";
 	}
 
 	// v0.4.0: @soon tag — marks task as upcoming backlog
@@ -100,7 +98,7 @@ function cleanTaskText(text) {
 		.replace(/@(?:bucket|b):[^\s]+/g, "") // bucket directive
 		.replace(/@p:[^\s]+/g, "")             // v0.4.0: project directive
 		.replace(/@(?:high|med|low|soon)\b/gi, "") // v0.4.0: priority/status tags
-		.replace(/🔺|⏫|🔼|🔽|⏬/g, "")
+		.replace(/[🟥🟨🟩]/g, "")
 		.replace(/🔁 every \d* (day|days|week|weeks|month|months)/g, "")
 		.replace(/🔁 [^\s]+( \d+[dwmy])?/g, "")
 		.replace(/#\S+/g, "")

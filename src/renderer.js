@@ -151,7 +151,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
 	/** v0.4.0: Map priority emoji to sort weight (higher = first) */
 	_priorityWeight(p) {
-		const w = { "🔺": 5, "⏫": 4, "🔼": 3, "🔽": 2, "⏬": 1 };
+		const w = { "🟥": 3, "🟨": 2, "🟩": 1 };
 		return w[p] || 0;
 	}
 
@@ -577,7 +577,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			overdue: "📋 Tasks past their scheduled date — reassign or backlog",
 			dueweek: "⚠️ Tasks due this week — schedule or defer",
 			weekly: "📊 This week's tasks grouped by project",
-			soon: "📋 Up next — backlog items surfaced for attention",
+			soon: "◌ Up next — @soon backlog items surfaced for attention",
 			project: "📁 Tasks for this project",
 		};
 		const heading = headings[this.mode];
@@ -1051,7 +1051,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			if (soonTasks.length > 0) {
 				const gr = tbody.createEl("tr", { cls: "ft-project-group" });
 				gr.createEl("td", {
-					text: "📋 Up Next  (" + soonTasks.length + " tasks)",
+					text: "◌ Up Next  (" + soonTasks.length + " tasks)",
 					attr: { colspan: String(this._visibleColCount(isCompact)) },
 				});
 				for (const task of soonTasks) {
@@ -1140,7 +1140,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		if (this._columnVisibility.soon !== false && this._columnVisibility.soon) {
 			const sc = row.createEl("td", { cls: "ft-soon-cell", attr: { style: "text-align:center" } });
 			if (task.isSoon) {
-				sc.createEl("span", { text: "📋", cls: "ft-soon-badge" });
+				sc.createEl("span", { text: "◌", cls: "ft-soon-badge" });
 			}
 		}
 

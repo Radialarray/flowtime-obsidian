@@ -294,6 +294,11 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 		document
 			.querySelectorAll(".tp-start-dd,.tp-date-popup")
 			.forEach((e) => e.remove());
+		// Remove stale outside-click handler
+		if (this._closePopups) {
+			document.removeEventListener("click", this._closePopups, true);
+			this._closePopups = null;
+		}
 		const tdy = new Date().toISOString().split("T")[0];
 		const od = this.mode === "overdue",
 			_dw = this.mode === "dueweek";
@@ -385,8 +390,10 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 			/* Date cell (shared) */
 			const dc = row.createEl("td", { cls: "tp-date-cell" });
 			const dw = dc.createEl("div", { cls: "tp-date-wrap" });
-			const dispDate = _dw ? (task.dueDate || task.taskDate || "+") : (task.taskDate || "+");
-			const hasDate = _dw ? (task.dueDate || task.taskDate) : task.taskDate;
+			const dispDate = _dw
+				? task.dueDate || task.taskDate || "+"
+				: task.taskDate || "+";
+			const hasDate = _dw ? task.dueDate || task.taskDate : task.taskDate;
 			const ds2 = dw.createEl("span", {
 				text: dispDate,
 				cls: "tp-date-badge" + (hasDate ? "" : " tp-date-none"),
@@ -404,6 +411,18 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 				bNw = mkDpBtn("Next Week", "tp-dp-btn"),
 				bBkl = mkDpBtn("✕ Backlog", "tp-dp-btn tp-dp-remove");
 			const fmt = (d) => d.toISOString().split("T")[0];
+			// Register one document capture handler for all popups
+			if (!this._closePopups) {
+				this._closePopups = (ev) => {
+					document.querySelectorAll(".tp-date-popup.tp-dp-open").forEach((p) => {
+						if (p.contains(ev.target) || (p._badge && p._badge.contains(ev.target))) return;
+						p.classList.remove("tp-dp-open");
+						if (p.parentNode) p.parentNode.removeChild(p);
+					});
+				};
+				document.addEventListener("click", this._closePopups, true);
+			}
+			dp._badge = ds2;
 			const op = () => {
 				const r = dw.getBoundingClientRect();
 				dp.style.left = r.left + "px";
@@ -425,7 +444,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 					await this.updateDate(task, nd);
 					task.taskDate = nd;
 					if (nd && nd === tdy) {
-						const newDisp = _dw ? (task.dueDate || nd) : nd;
+						const newDisp = _dw ? task.dueDate || nd : nd;
 						ds2.setText(newDisp);
 						ds2.removeClass("tp-date-none");
 					} else {

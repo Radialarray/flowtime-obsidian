@@ -7,6 +7,12 @@ const { QuickEntryModal } = require("./src/quick-entry");
 module.exports = class FlowtimePlugin extends Plugin {
 	async onload() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+
+		this.notify = (message, isError = false) => {
+			if (!isError && this.settings.quietMode) return;
+			new Notice(message, this.settings.noticeDuration);
+		};
+
 		this.addSettingTab(new FlowtimeSettingsTab(this.app, this));
 
 		this.projectEngine = new ProjectEngine(this.app, this.settings);
@@ -57,7 +63,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 
 				if (this.currentTimer.remaining <= 0) {
 					this.stopStatusTimer();
-					new Notice("⏰ Time's up! " + taskName, this.settings.noticeDuration);
+					this.notify("⏰ Time's up! " + taskName);
 				}
 			}, 1000);
 
@@ -85,10 +91,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 
 					if (this.currentTimer.remaining <= 0) {
 						this.stopStatusTimer();
-						new Notice(
-							"⏰ Time's up! " + this.currentTimer.taskName,
-							this.settings.noticeDuration,
-						);
+						this.notify("⏰ Time's up! " + this.currentTimer.taskName);
 					}
 				}, 1000);
 			}

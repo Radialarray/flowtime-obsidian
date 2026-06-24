@@ -220,7 +220,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 				await this._refreshSiblings();
 				this.tasks = [];
 				this.renderTable();
-				new Notice("✅ All assigned to today");
+				this.plugin?.notify?.("✅ All assigned to today");
 			});
 			if (od) {
 				mkBtn("🗑 Backlog All", "tp-bulk-btn tp-bulk-remove", async () => {
@@ -228,7 +228,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 					await this._refreshSiblings();
 					this.tasks = [];
 					this.renderTable();
-					new Notice("🗑 All sent to backlog");
+					this.plugin?.notify?.("🗑 All sent to backlog");
 				});
 			}
 		} else {
@@ -262,7 +262,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 				if (ok) p.push(`✅ ${ok} saved`);
 				if (err) p.push(`❌ ${err} failed`);
 				sv.setText(p.length ? p.join(" ") : "💾 Save All");
-				if (p.length) new Notice(p.join(", "));
+				if (p.length) this.plugin?.notify?.(p.join(", "), err > 0);
 			});
 		}
 
@@ -476,7 +476,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 						if (nd && nd !== tdy) await this._refreshSiblings();
 					}
 				} catch (e) {
-					new Notice("❌ " + e.message);
+					this.plugin?.notify?.("❌ " + e.message, true);
 				}
 			};
 			dpi.addEventListener("change", () => ap(dpi.value));
@@ -572,12 +572,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 							ts.remaining = 0;
 							ud();
 							disp.addClass("tp-timer-expired");
-							if (!this.plugin?.settings?.quietMode) {
-								new Notice(
-									"⏰ Time's up! " + task.cleanText,
-									this.plugin?.settings?.noticeDuration || 4000,
-								);
-							}
+							this.plugin?.notify?.("⏰ Time's up! " + task.cleanText);
 							if (this.plugin?.settings?.timerSound !== false) {
 								this._beep();
 							}

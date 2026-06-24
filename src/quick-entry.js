@@ -126,7 +126,7 @@ class QuickEntryModal extends Modal {
 		const doSubmit = async () => {
 			const task = taskInput.value.trim();
 			if (!task) {
-				new Notice("Task description is required");
+				this.plugin.notify("Task description is required", true);
 				return;
 			}
 
@@ -161,7 +161,7 @@ class QuickEntryModal extends Modal {
 			} // "active-file" → targetFile stays as activeFile
 
 			if (!targetFile) {
-				new Notice("No target file found. Open a note first.");
+				this.plugin.notify("No target file found...", true);
 				return;
 			}
 
@@ -170,10 +170,10 @@ class QuickEntryModal extends Modal {
 				const content = await this.app.vault.read(targetFile);
 				const newContent = content.trimEnd() + "\n" + line + "\n";
 				await this.app.vault.modify(targetFile, newContent);
-				new Notice("✅ Task added: " + task);
+				this.plugin.notify("✅ Task added: " + task);
 				this.close();
 			} catch (e) {
-				new Notice("❌ Failed to add task: " + e.message);
+				this.plugin.notify("❌ Failed to add task: " + e.message, true);
 			}
 		};
 

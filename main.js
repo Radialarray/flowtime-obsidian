@@ -159,7 +159,8 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 				if (this.mode === "overdue" && (!taskDate || taskDate >= today))
 					continue;
 				if (this.mode === "dueweek") {
-					const inWeek = (d, inclToday) => d && (inclToday ? d >= today : d > today) && d <= eowStr;
+					const inWeek = (d, inclToday) =>
+						d && (inclToday ? d >= today : d > today) && d <= eowStr;
 					if (!inWeek(dueDate, true) && !inWeek(taskDate, false)) continue;
 				}
 
@@ -384,11 +385,11 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 			/* Date cell (shared) */
 			const dc = row.createEl("td", { cls: "tp-date-cell" });
 			const dw = dc.createEl("div", { cls: "tp-date-wrap" });
+			const dispDate = _dw ? (task.dueDate || task.taskDate || "+") : (task.taskDate || "+");
+			const hasDate = _dw ? (task.dueDate || task.taskDate) : task.taskDate;
 			const ds2 = dw.createEl("span", {
-				text: _dw ? task.dueDate || "+" : task.taskDate || "+",
-				cls:
-					"tp-date-badge" +
-					((_dw ? task.dueDate : task.taskDate) ? "" : " tp-date-none"),
+				text: dispDate,
+				cls: "tp-date-badge" + (hasDate ? "" : " tp-date-none"),
 			});
 			const dp = document.createElement("div");
 			dp.className = "tp-date-popup";
@@ -423,12 +424,16 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 				try {
 					await this.updateDate(task, nd);
 					task.taskDate = nd;
-					nd && nd === tdy
-						? (ds2.setText(nd), ds2.removeClass("tp-date-none"))
-						: (row.remove(),
-							(this.tasks = this.tasks.filter((t) => t !== task)),
-							(this.rowData = this.rowData.filter((r) => r.task !== task)),
-							this.tasks.length || this.renderTable());
+					if (nd && nd === tdy) {
+						const newDisp = _dw ? (task.dueDate || nd) : nd;
+						ds2.setText(newDisp);
+						ds2.removeClass("tp-date-none");
+					} else {
+						row.remove();
+						this.tasks = this.tasks.filter((t) => t !== task);
+						this.rowData = this.rowData.filter((r) => r.task !== task);
+						if (!this.tasks.length) this.renderTable();
+					}
 				} catch (e) {
 					new Notice("❌ " + e.message);
 				}

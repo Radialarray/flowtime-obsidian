@@ -1008,10 +1008,14 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 						d = parseInt(ds.value, 10);
 					ps.setText(s && d > 0 ? "→ " + this._calcEnd(s, d) : "");
 				};
-				si.addEventListener("change", async () => {
-					up();
-					await this._autoSaveTime(task, si, ds);
-				});
+				const debounceSave = (() => {
+					let timer;
+					return () => {
+						if (timer) clearTimeout(timer);
+						timer = setTimeout(() => this._autoSaveTime(task, si, ds), 300);
+					};
+				})();
+				si.addEventListener("input", () => { up(); debounceSave(); });
 				ds.addEventListener("change", async () => {
 					up();
 					await this._autoSaveTime(task, si, ds);

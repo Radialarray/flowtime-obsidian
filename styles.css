@@ -47,16 +47,21 @@
 	width: 22%;
 	text-align: center;
 }
+.col-actions {
+	width: 22%;
+}
 
 /* --- Toolbar --- */
 .tp-toolbar {
 	display: flex;
+	gap: 6px;
 	justify-content: flex-end;
 	margin-bottom: 4px;
 }
 
-.tp-save-all-btn {
-	padding: 4px 14px;
+.tp-save-all-btn,
+.tp-bulk-btn {
+	padding: 4px 12px;
 	border: 1px solid var(--interactive-accent);
 	border-radius: 5px;
 	background: var(--interactive-accent);
@@ -66,8 +71,20 @@
 	cursor: pointer;
 }
 
-.tp-save-all-btn:hover {
+.tp-save-all-btn:hover,
+.tp-bulk-btn:hover {
 	background: var(--interactive-accent-hover);
+}
+
+.tp-bulk-remove {
+	border-color: var(--text-error);
+	background: transparent;
+	color: var(--text-error);
+}
+
+.tp-bulk-remove:hover {
+	background: var(--background-modifier-error-rgb);
+	color: var(--text-on-accent);
 }
 
 /* --- Time cell --- */
@@ -311,6 +328,43 @@
 	border-top: 1px solid var(--background-modifier-border);
 	margin-top: 4px;
 	padding-top: 6px;
+	color: var(--text-error);
+}
+
+/* --- Actions cell (overdue mode) --- */
+.tp-actions-cell {
+	text-align: center;
+}
+
+.tp-actions-wrap {
+	display: inline-flex;
+	gap: 4px;
+}
+
+.tp-act-btn {
+	padding: 3px 8px;
+	border: 1px solid var(--interactive-accent);
+	border-radius: 4px;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-semibold);
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.tp-act-btn:hover {
+	background: var(--interactive-accent-hover);
+}
+
+.tp-act-remove {
+	border-color: var(--text-error);
+	background: transparent;
+	color: var(--text-error);
+}
+
+.tp-act-remove:hover {
+	background: rgba(var(--background-modifier-error-rgb), 0.2);
 	color: var(--text-error);
 }
 

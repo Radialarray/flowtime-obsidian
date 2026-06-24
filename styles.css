@@ -1114,3 +1114,131 @@
 	margin: 0;
 	vertical-align: middle;
 }
+
+/* ── Filter UI ── */
+.ft-filter-btn {
+	background: none;
+	border: 1px solid var(--background-modifier-border);
+	padding: 2px 8px;
+	border-radius: var(--radius-s);
+	cursor: pointer;
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+}
+.ft-filter-btn:hover {
+	background: var(--background-modifier-hover);
+}
+.ft-filter-active-btn {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border-color: var(--interactive-accent);
+}
+.ft-filter-panel {
+	display: none;
+	position: fixed;
+	z-index: 1000;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+	padding: 12px;
+	min-width: 300px;
+}
+.ft-filter-open {
+	display: block;
+}
+.ft-filter-row {
+	display: flex;
+	gap: 6px;
+	align-items: center;
+	flex-wrap: wrap;
+}
+.ft-filter-field,
+.ft-filter-op {
+	font-size: var(--font-ui-small);
+	padding: 4px 6px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-primary);
+	color: var(--text-normal);
+}
+.ft-filter-val {
+	font-size: var(--font-ui-small);
+	padding: 4px 6px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-primary);
+	color: var(--text-normal);
+	width: 100px;
+}
+.ft-filter-apply,
+.ft-filter-clear {
+	font-size: var(--font-ui-small);
+	padding: 4px 10px;
+	border: none;
+	border-radius: var(--radius-s);
+	cursor: pointer;
+}
+.ft-filter-apply {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+.ft-filter-clear {
+	background: var(--background-modifier-hover);
+	color: var(--text-muted);
+}
+.ft-filter-active {
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	margin-top: 8px;
+	padding: 4px 8px;
+	background: var(--background-primary-alt);
+	border-radius: var(--radius-s);
+}
+
+/* ── Sort and Group ── */
+.ft-sortable {
+	cursor: pointer;
+	user-select: none;
+}
+.ft-sortable:hover {
+	background: var(--background-modifier-hover);
+}
+.ft-sort-indicator {
+	font-size: 10px;
+	margin-left: 2px;
+}
+.ft-group-label {
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	margin-left: 8px;
+}
+.ft-group-select {
+	font-size: var(--font-ui-small);
+	padding: 2px 6px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-primary);
+	color: var(--text-normal);
+}
+.ft-subgroup-header td {
+	padding-left: 24px !important;
+	font-style: italic;
+	color: var(--text-muted);
+	background: var(--background-primary-alt);
+}
+
+/* ── View Buttons ── */
+.ft-view-btn {
+	background: none;
+	border: 1px solid var(--background-modifier-border);
+	padding: 2px 8px;
+	border-radius: var(--radius-s);
+	cursor: pointer;
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	margin-left: 4px;
+}
+.ft-view-btn:hover {
+	background: var(--background-modifier-hover);
+}

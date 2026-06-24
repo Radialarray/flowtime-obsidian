@@ -1,6 +1,7 @@
 const { MarkdownRenderChild, Notice } = require("obsidian");
 const { parseTaskLine, cleanTaskText, parseRecurrence, formatDuration, formatTimer } = require("./task-parser");
 const { renderProgressBar, formatHours } = require("./budget-state");
+const { evaluateFilter } = require("./filter-engine");
 
 const DUR_OPTS = [10, 15, 20, 25, 30, 45, 60, 90, 120, 150, 180, 210, 240];
 const START_H = 7;
@@ -18,6 +19,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		this.rowData = [];
 		this.startOpts = [];
 		this._columnVisibility = null;
+		this._activeFilter = null;
+		this._sortConfig = [];
+		this._sortMode = null;
+		this._groupConfig = { primary: null, secondary: null };
 	}
 
 	async onload() {
@@ -138,6 +143,56 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			if (!b.time) return -1;
 			return a.time.localeCompare(b.time);
 		});
+	}
+
+	_applySort() {
+		if (!this._sortConfig || this._sortConfig.length === 0) {
+			this._sort();
+			return;
+		}
+		this.tasks.sort((a, b) => {
+			for (const sc of this._sortConfig) {
+				const va = this._getSortValue(a, sc.field);
+				const vb = this._getSortValue(b, sc.field);
+				let cmp = 0;
+				if (typeof va === "string" && typeof vb === "string") {
+					cmp = va.localeCompare(vb);
+				} else if (typeof va === "number" && typeof vb === "number") {
+					cmp = va - vb;
+				} else {
+					cmp = String(va || "").localeCompare(String(vb || ""));
+				}
+				if (cmp !== 0) return sc.direction === "desc" ? -cmp : cmp;
+			}
+			return 0;
+		});
+	}
+
+	_getSortValue(task, field) {
+		switch (field) {
+			case "time": return task.time || "";
+			case "status": return task.status || "";
+			case "text": return task.cleanText || "";
+			case "project": return task.project || "";
+			case "bucket": return task.bucket || "";
+			case "source": return task.file?.basename || "";
+			case "date": return task.taskDate || "";
+			default: return "";
+		}
+	}
+
+	_getGroupValue(task, field) {
+		switch (field) {
+			case "bucket": return task.bucket || "Unassigned";
+			case "project": return task.project || "Other";
+			case "date": return task.taskDate || "No date";
+			case "status": return task.status?.trim() ? "Done" : "Open";
+			default: return "Other";
+		}
+	}
+
+	_isCompactMode() {
+		return this.mode === "overdue" || this.mode === "dueweek" || this.mode === "weekly";
 	}
 
 	/* Count how many columns are visible for current mode */
@@ -303,7 +358,20 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			}
 		}
 
-		if (this.mode === "weekly") {
+		// Apply active filter
+		if (this._activeFilter) {
+			this.tasks = this.tasks.filter(t => evaluateFilter(this._activeFilter, t));
+		}
+
+		// Default grouping for weekly mode when no custom group set
+		if (this.mode === "weekly" && this._groupConfig && !this._groupConfig.primary) {
+			this._groupConfig = { primary: "project", secondary: null };
+		}
+
+		// Apply sort
+		if (this._sortConfig && this._sortConfig.length > 0) {
+			this._applySort();
+		} else if (this.mode === "weekly") {
 			this.tasks.sort((a, b) => {
 				const pa = a.project || "";
 				const pb = b.project || "";
@@ -497,42 +565,282 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		};
 		document.addEventListener("click", closeDD, true);
 
+		// ── Filter button ──
+		const filterBtn = toolbar.createEl("button", { text: "🔍 Filter", cls: "ft-filter-btn" });
+		if (this._activeFilter) {
+			filterBtn.addClass("ft-filter-active-btn");
+		} else {
+			filterBtn.removeClass("ft-filter-active-btn");
+		}
+		const filterPanel = document.createElement("div");
+		filterPanel.className = "ft-filter-panel";
+
+		const buildFilterUI = () => {
+			filterPanel.empty();
+
+			// Filter row: field selector + op selector + value input + apply/clear
+			const row = filterPanel.createEl("div", { cls: "ft-filter-row" });
+
+			const fieldSel = row.createEl("select", { cls: "ft-filter-field" });
+			const fieldOpts = [
+				{ id: "bucket", label: "Bucket" },
+				{ id: "project", label: "Project" },
+				{ id: "date", label: "Date" },
+				{ id: "text", label: "Task Text" },
+				{ id: "duration", label: "Duration" },
+				{ id: "status", label: "Status" },
+				{ id: "priority", label: "Priority" },
+			];
+			for (const f of fieldOpts) {
+				fieldSel.createEl("option", { text: f.label, value: f.id });
+			}
+
+			const opSel = row.createEl("select", { cls: "ft-filter-op" });
+			const opOpts = [
+				{ id: "eq", label: "is" },
+				{ id: "neq", label: "is not" },
+				{ id: "contains", label: "contains" },
+				{ id: "gt", label: ">" },
+				{ id: "gte", label: "≥" },
+				{ id: "lt", label: "<" },
+				{ id: "lte", label: "≤" },
+				{ id: "exists", label: "exists" },
+				{ id: "not_exists", label: "does not exist" },
+			];
+			for (const o of opOpts) {
+				opSel.createEl("option", { text: o.label, value: o.id });
+			}
+
+			const valInput = row.createEl("input", { type: "text", placeholder: "Value", cls: "ft-filter-val" });
+
+			const applyBtn = row.createEl("button", { text: "Apply", cls: "ft-filter-apply" });
+			const clearBtn = row.createEl("button", { text: "✕ Clear", cls: "ft-filter-clear" });
+
+			// Show active filter indicator
+			if (this._activeFilter) {
+				filterPanel.createEl("div", {
+					text: "Active filter: " + JSON.stringify(this._activeFilter),
+					cls: "ft-filter-active",
+				});
+			}
+
+			applyBtn.addEventListener("click", () => {
+				const field = fieldSel.value;
+				const op = opSel.value;
+				const val = valInput.value.trim();
+
+				if (op === "exists" || op === "not_exists") {
+					this._activeFilter = { field, op };
+				} else if (val) {
+					// Parse number if numeric field
+					const numericFields = ["duration"];
+					const parsedVal = numericFields.includes(field) ? (isNaN(Number(val)) ? val : Number(val)) : val;
+					this._activeFilter = { field, op, value: op === "contains" ? val : parsedVal };
+				} else {
+					return; // No value, no filter
+				}
+
+				this.renderTable();
+				closePanel();
+			});
+
+			clearBtn.addEventListener("click", () => {
+				this._activeFilter = null;
+				this.renderTable();
+				closePanel();
+			});
+		};
+
+		const toggleFilterPanel = () => {
+			if (filterPanel.classList.contains("ft-filter-open")) {
+				closePanel();
+			} else {
+				const r = filterBtn.getBoundingClientRect();
+				filterPanel.style.left = r.left + "px";
+				filterPanel.style.top = (r.bottom + 4) + "px";
+				buildFilterUI();
+				filterPanel.classList.add("ft-filter-open");
+				document.body.appendChild(filterPanel);
+			}
+		};
+
+		const closePanel = () => {
+			filterPanel.classList.remove("ft-filter-open");
+			if (filterPanel.parentNode) filterPanel.parentNode.removeChild(filterPanel);
+		};
+
+		const closeFilterPanelOnOutside = (e) => {
+			if (!filterPanel.contains(e.target) && e.target !== filterBtn) {
+				closePanel();
+			}
+		};
+		document.addEventListener("click", closeFilterPanelOnOutside, true);
+
+		filterBtn.addEventListener("click", (e) => {
+			e.stopPropagation();
+			toggleFilterPanel();
+		});
+
+		// ── Group By dropdowns ──
+		if (!this._groupConfig) this._groupConfig = { primary: null, secondary: null };
+
+		const groupLabel = toolbar.createEl("span", { text: "Group:", cls: "ft-group-label" });
+
+		const groupSel = toolbar.createEl("select", { cls: "ft-group-select" });
+		groupSel.createEl("option", { text: "None", value: "" });
+		groupSel.createEl("option", { text: "Bucket", value: "bucket" });
+		groupSel.createEl("option", { text: "Project", value: "project" });
+		groupSel.createEl("option", { text: "Date", value: "date" });
+		groupSel.createEl("option", { text: "Status", value: "status" });
+		if (this._groupConfig.primary) groupSel.value = this._groupConfig.primary;
+
+		const subLabel = toolbar.createEl("span", { text: "then:", cls: "ft-group-label" });
+		const subSel = toolbar.createEl("select", { cls: "ft-group-select" });
+		subSel.createEl("option", { text: "None", value: "" });
+		subSel.createEl("option", { text: "Bucket", value: "bucket" });
+		subSel.createEl("option", { text: "Project", value: "project" });
+		subSel.createEl("option", { text: "Date", value: "date" });
+		subSel.createEl("option", { text: "Status", value: "status" });
+		if (this._groupConfig.secondary) subSel.value = this._groupConfig.secondary;
+
+		const applyGroup = () => {
+			this._groupConfig.primary = groupSel.value || null;
+			this._groupConfig.secondary = subSel.value || null;
+			this.renderTable();
+		};
+
+		groupSel.addEventListener("change", applyGroup);
+		subSel.addEventListener("change", applyGroup);
+
+		// ── Save/Load View ──
+		const saveBtn = toolbar.createEl("button", { text: "💾 Save View", cls: "ft-view-btn" });
+		const loadBtn = toolbar.createEl("button", { text: "📂 Load View", cls: "ft-view-btn" });
+
+		// Save modal
+		saveBtn.addEventListener("click", () => {
+			const name = prompt("Save current view as:", "");
+			if (!name || !name.trim()) return;
+			const viewName = name.trim();
+
+			const savedViews = { ...(this.plugin?.settings?.savedViews || {}) };
+			savedViews[viewName] = {
+				filter: this._activeFilter || null,
+				sortConfig: this._sortConfig || [],
+				groupConfig: this._groupConfig || { primary: null, secondary: null },
+				columnVisibility: { ...(this._columnVisibility || {}) },
+			};
+
+			this.plugin.settings.savedViews = savedViews;
+			this.plugin.saveData(this.plugin.settings);
+			this.plugin.notify("✅ View saved: " + viewName);
+		});
+
+		// Load modal
+		loadBtn.addEventListener("click", () => {
+			const savedViews = this.plugin?.settings?.savedViews || {};
+			const names = Object.keys(savedViews);
+
+			if (names.length === 0) {
+				this.plugin.notify("No saved views found.", true);
+				return;
+			}
+
+			// Simple dropdown approach: use a prompt with names
+			const viewName = prompt("Load view:\n" + names.map((n, i) => `${i + 1}. ${n}`).join("\n"), names[0]);
+			if (!viewName || !viewName.trim()) return;
+
+			const view = savedViews[viewName.trim()];
+			if (!view) {
+				this.plugin.notify("❌ View not found: " + viewName, true);
+				return;
+			}
+
+			// Restore view config
+			this._activeFilter = view.filter || null;
+			this._sortConfig = view.sortConfig || [];
+			this._groupConfig = view.groupConfig || { primary: null, secondary: null };
+			this._columnVisibility = view.columnVisibility || {};
+
+			this.renderTable();
+			this.plugin.notify("✅ View loaded: " + viewName);
+		});
+
 		const table = this.containerEl.createEl("table", {
 			cls: "flowtime-table",
 		});
 		const hr = table.createEl("thead").createEl("tr");
+
+		const sortByColumn = (field) => (e) => {
+			if (e.shiftKey) {
+				const existing = this._sortConfig.findIndex(s => s.field === field);
+				if (existing >= 0) {
+					this._sortConfig.splice(existing, 1);
+				} else {
+					this._sortConfig.push({ field, direction: 'asc' });
+				}
+			} else {
+				if (this._sortConfig.length === 1 && this._sortConfig[0].field === field) {
+					this._sortConfig[0].direction = this._sortConfig[0].direction === 'asc' ? 'desc' : 'asc';
+				} else {
+					this._sortConfig = [{ field, direction: 'asc' }];
+				}
+			}
+			this._sortMode = 'custom';
+			this.loadTasks().then(() => {
+				const tbody = this.containerEl.querySelector("tbody");
+				if (tbody) this.buildRows(tbody);
+			});
+		};
+
+		const sortIndicator = (field) => {
+			const s = this._sortConfig.find(s => s.field === field);
+			if (!s) return "";
+			return s.direction === "asc" ? "▲" : "▼";
+		};
+
+		const makeSortableHeader = (label, field, cls) => {
+			const th = hr.createEl("th", { cls });
+			th.classList.add("ft-sortable");
+			th.createEl("span", { text: label });
+			if (field) {
+				th.createEl("span", { cls: "ft-sort-indicator", text: sortIndicator(field) });
+				th.addEventListener("click", sortByColumn(field));
+			}
+			return th;
+		};
+
 		if (isCompact) {
 			if (this._columnVisibility.check !== false)
-				hr.createEl("th", { text: "✓", cls: "col-check" });
+				makeSortableHeader("✓", "status", "col-check");
 			if (this._columnVisibility.task !== false)
-				hr.createEl("th", { text: "Task", cls: "col-task" });
+				makeSortableHeader("Task", "text", "col-task");
 			if (this._columnVisibility.project !== false)
-				hr.createEl("th", { text: "Project", cls: "col-project" });
+				makeSortableHeader("Project", "project", "col-project");
 			if (this._columnVisibility.bucket !== false)
-				hr.createEl("th", { text: "Bucket", cls: "col-bucket" });
+				makeSortableHeader("Bucket", "bucket", "col-bucket");
 			if (this._columnVisibility.source !== false)
-				hr.createEl("th", { text: "Source", cls: "col-source" });
+				makeSortableHeader("Source", "source", "col-source");
 			if (this._columnVisibility.date !== false)
-				hr.createEl("th", { text: dw ? "Due" : "Date", cls: "col-date" });
+				makeSortableHeader(dw ? "Due" : "Date", "date", "col-date");
 			if (this._columnVisibility.actions !== false)
 				hr.createEl("th", { cls: "col-actions" });
 		} else {
 			if (this._columnVisibility.time !== false)
-				hr.createEl("th", { text: "Time", cls: "col-time" });
+				makeSortableHeader("Time", "time", "col-time");
 			if (this._columnVisibility.check !== false)
-				hr.createEl("th", { text: "✓", cls: "col-check" });
+				makeSortableHeader("✓", "status", "col-check");
 			if (this._columnVisibility.task !== false)
-				hr.createEl("th", { text: "Task", cls: "col-task" });
+				makeSortableHeader("Task", "text", "col-task");
 			if (this._columnVisibility.project !== false)
-				hr.createEl("th", { text: "Project", cls: "col-project" });
+				makeSortableHeader("Project", "project", "col-project");
 			if (this._columnVisibility.bucket !== false)
-				hr.createEl("th", { text: "Bucket", cls: "col-bucket" });
+				makeSortableHeader("Bucket", "bucket", "col-bucket");
 			if (this._columnVisibility.source !== false)
-				hr.createEl("th", { text: "Source", cls: "col-source" });
+				makeSortableHeader("Source", "source", "col-source");
 			if (this._columnVisibility.date !== false)
-				hr.createEl("th", { text: "Date", cls: "col-date" });
+				makeSortableHeader("Date", "date", "col-date");
 			if (this._columnVisibility.timer !== false)
-				hr.createEl("th", { text: "⏱", cls: "col-timer" });
+				hr.createEl("th", { cls: "col-timer" });
 		}
 		const tbody = table.createEl("tbody");
 		this.bucketTotals = this._computeBucketTotals();
@@ -621,29 +929,49 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			pj = this.mode === "project";
 		const isCompact = od || _dw || wk;
 
-		// Weekly: group rows by project with header rows
-		if (wk) {
+		const { primary, secondary } = this._groupConfig || {};
+
+		if (primary) {
+			// Build groups
 			const groups = {};
 			for (const task of this.tasks) {
-				const key = task.project || "__none__";
-				if (!groups[key]) groups[key] = [];
-				groups[key].push(task);
+				const key = this._getGroupValue(task, primary);
+				const subKey = secondary ? this._getGroupValue(task, secondary) : "__all__";
+				if (!groups[key]) groups[key] = {};
+				if (!groups[key][subKey]) groups[key][subKey] = [];
+				groups[key][subKey].push(task);
 			}
-			for (const [proj, projTasks] of Object.entries(groups)) {
+
+			const keys = Object.keys(groups).sort();
+			for (const key of keys) {
+				// Primary group header
 				const gr = tbody.createEl("tr", { cls: "ft-project-group" });
 				gr.createEl("td", {
-					text: proj === "__none__" ? "Other" : proj,
-					attr: { colspan: String(this._visibleColCount(true)) },
+					text: key || "Other",
+					attr: { colspan: String(this._visibleColCount(isCompact)) },
 				});
-				for (const task of projTasks) {
-					this._renderTaskRow(tbody, task, tdy, od, _dw, wk, pj, isCompact);
+
+				const subGroups = groups[key];
+				const subKeys = Object.keys(subGroups).sort();
+				for (const subKey of subKeys) {
+					if (secondary) {
+						// Secondary group header
+						const sr = tbody.createEl("tr", { cls: "ft-subgroup-header" });
+						sr.createEl("td", {
+							text: "  " + (subKey || "Other"),
+							attr: { colspan: String(this._visibleColCount(isCompact)) },
+						});
+					}
+					for (const task of subGroups[subKey]) {
+						this._renderTaskRow(tbody, task, tdy, od, _dw, wk, pj, isCompact);
+					}
 				}
 			}
-			return;
-		}
-
-		for (const task of this.tasks) {
-			this._renderTaskRow(tbody, task, tdy, od, _dw, wk, pj, isCompact);
+		} else {
+			// Standard flat rendering
+			for (const task of this.tasks) {
+				this._renderTaskRow(tbody, task, tdy, od, _dw, wk, pj, isCompact);
+			}
 		}
 	}
 

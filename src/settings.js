@@ -37,6 +37,9 @@ const DEFAULT_SETTINGS = {
 		"## 📊 This Week\n```flowtime-weekly\n```\n\n## ⚠️ Due Next Week\n```flowtime-dueweek\n```\n\n## 📝 Review\n- [ ] Plan next week 🔁 every week @{{WEEK_END}}\n- [ ] Review goals 🔺 @{{WEEK_END}}\n",
 	projectTemplate:
 		"---\ntype: project\nname: {{NAME}}\nstatus: active\ntags: [project]\n---\n\n# {{NAME}}\n\n## 🎯 Goal\n\n## 📋 Tasks\n\n```flowtime-project\n```\n\n- [ ] Define scope 🔺 @{{DATE}}\n- [ ] First milestone @{{DATE}}\n- [ ] Daily check-in 🔁 every day @{{DATE}}\n\n## 📝 Notes\n",
+
+	// Saved Views
+	savedViews: {},
 };
 
 class FlowtimeSettingsTab extends PluginSettingTab {

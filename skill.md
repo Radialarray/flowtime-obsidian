@@ -1,8 +1,41 @@
+---
+name: flowtime
+description: Complete reference for managing Flowtime plugin data in Obsidian — projects (folder notes with frontmatter), buckets (time budget categories), tasks (markdown task lines with dates/durations/buckets), and sessions (NDJSON tracking history). Covers full CRUD operations on all entities by editing vault markdown files directly.
+---
+
 # Flowtime Skill — Agent Reference
 
 Use this skill when helping a user manage their Obsidian vault using the Flowtime plugin. Flowtime stores all data in plain markdown files — the agent operates on the vault directly, then the plugin renders it.
 
 ---
+
+## Vault Structure
+
+The vault follows a **project-centric layout** with a high-level overview document for daily and weekly planning.
+
+```
+vault/
+├── Dashboard.md              ← High-level overview (daily/weekly planning)
+├── YYYY-MM-DD.md             ← Daily notes
+├── ProjectA/                 ← Each project is a folder
+│   ├── ProjectA.md           ← Folder note / project home (type: project)
+│   ├── ProjectA Tasks.md     ← Task management, flowtime blocks, task lines
+│   └── ProjectA Wiki.md      ← Knowledge base / reference wiki
+├── ProjectB/
+│   ├── ProjectB.md
+│   ├── ProjectB Tasks.md
+│   └── ProjectB Wiki.md
+└── flowtime/
+    └── sessions/             ← Session NDJSON files
+```
+
+### Decision Gate
+
+| If the information is... | Put it in... | Format |
+|--------------------------|-------------|--------|
+| Something to DO with a deadline | **Project Management / Tasks doc** (or any task line) | `- [ ] description @date @bucket:name` |
+| Reference / knowledge / spec / decision | **Project Wiki** | Regular markdown in the project folder |
+| Daily/weekly overview and cross-project view | **Dashboard.md** | Flowtime code blocks at vault root |
 
 ## Data Model Overview
 
@@ -10,25 +43,85 @@ Flowtime has four entity types. All live in markdown files in the vault:
 
 | Entity | Storage | Format |
 |--------|---------|--------|
-| **Project** | Folder + folder note with frontmatter | `ProjectName/ProjectName.md` with `type: project` |
+| **Project** | Folder + folder note + management doc + wiki | `ProjectName/` with `type: project` frontmatter |
 | **Bucket** | Plugin settings (JSON) | `data.json` via `app.vault.readJson`/`app.vault.writeJson` |
 | **Task** | Inline markdown lines | `- [ ] description @date @1.5h @b:bucket-id #project/Name` |
 | **Session** | NDJSON files | `flowtime/sessions/YYYY-MM-DD.ndjson` |
 
 ---
 
+## 0. OVERVIEW DOCUMENT (Dashboard)
+
+The vault has a high-level overview document (typically `Dashboard.md` at the vault root) for daily and weekly planning. This is the central hub for:
+
+- **Daily planning** — `flowtime-today` and `flowtime-overdue` code blocks
+- **Weekly review** — `flowtime-weekly` and `flowtime-dueweek` code blocks
+- **Budget tracking** — `flowtime-buckets` block for weekly time budgets
+- **Session history** — `flowtime-sessions` block for time tracking review
+
+### Typical Dashboard Layout
+
+````markdown
+# Dashboard
+
+## 🔄 Carry Over
+```flowtime-overdue
+```
+
+## 🎯 Today
+```flowtime-today
+```
+
+## ⚠️ Due This Week
+```flowtime-dueweek
+```
+
+## 📊 Weekly Budget
+```flowtime-buckets
+```
+
+## 📈 Sessions
+```flowtime-sessions
+```
+````
+
+**Plugin shortcuts:**
+- `Cmd+P` → "Insert daily dashboard" — inserts today/overdue/due-week blocks
+- `Cmd+P` → "Insert weekly dashboard" — inserts weekly review blocks
+- Create it manually as a `Dashboard.md` file at the vault root
+
+### Agent's Role
+
+When a user asks about their day or week:
+1. Check if `Dashboard.md` exists. If not, offer to create it.
+2. Scan the vault for tasks matching the requested view (today, overdue, weekly, etc.)
+3. Present a structured summary grouped by project
+4. Offer to create/modify tasks, reschedule overdue items, or update budgets
+
+---
+
 ## 1. PROJECTS
 
-A project is a **folder** containing a **folder note** (same name as the folder) with frontmatter.
+A project is a **folder** containing a **folder note** (same name as the folder) with frontmatter, plus dedicated docs for task management and knowledge.
 
 ### Project Structure
 
 ```
-Website-Redesign/          ← folder
-  Website-Redesign.md      ← folder note (must match folder name)
+Website-Redesign/                     ← project folder
+  Website-Redesign.md                 ← folder note / project home (type: project)
+  Website-Redesign Tasks.md           ← TASK MANAGEMENT — tasks, sprints, flowtime blocks
+  Website-Redesign Wiki.md            ← WIKI / KNOWLEDGE BASE — specs, decisions, reference
   meeting-notes.md
   research.md
 ```
+
+**Three standard files inside each project:**
+
+| File | Purpose | Content |
+|------|---------|---------|
+| **`ProjectName.md`** (folder note) | Project home page | Frontmatter `type: project`, high-level goals, `flowtime-project` block |
+| **`ProjectName Tasks.md`** | Task management | Task lines, sprint planning, action items, flowtime code blocks |
+| **`ProjectName Wiki.md`** | Knowledge base | Architecture docs, meeting notes, specs, research, decisions |
 
 ### Folder Note Frontmatter
 
@@ -90,6 +183,52 @@ Alternatively, use `plugin.projectEngine.getAllProjects()` from within an Obsidi
 3. Replace `{{DATE}}` with `today`'s date (YYYY-MM-DD), `{{NAME}}` with the project name.
 
 **Plugin command:** Ask user to run `Cmd+P` → "Flowtime: New Project" → enter name.
+
+### Recommended: Scaffold Project Management Doc + Wiki
+
+After creating the project folder and folder note, scaffold two additional docs:
+
+**Project Management doc** (`ProjectName Tasks.md` — contains tasks and flowtime blocks):
+````markdown
+# ProjectName — Tasks
+
+## 🎯 Active Sprint
+
+```flowtime-project
+```
+
+- [ ] Define scope 🔺 @{{DATE}} @1h
+- [ ] First milestone @{{DATE}}
+- [ ] Daily check-in 🔁 every day @{{DATE}} @15m
+
+## 📋 Backlog
+
+- [ ] Future improvement
+- [ ] Long-term goal
+````
+
+**Wiki / Knowledge Base doc** (`ProjectName Wiki.md` — reference information):
+```markdown
+# ProjectName — Wiki
+
+## Overview
+
+## Architecture
+
+## Decisions
+
+## Reference Links
+
+## Meeting Notes
+```
+
+**Example project folder after scaffolding:**
+```
+Website-Redesign/
+  Website-Redesign.md              ← folder note / project home (type: project)
+  Website-Redesign Tasks.md        ← task management (flowtime blocks + task lines)
+  Website-Redesign Wiki.md         ← knowledge base (specs, decisions, notes)
+```
 
 ### DELETE Project
 
@@ -517,8 +656,9 @@ await plugin.saveData(plugin.settings)
 
 1. Create folder `X/`
 2. Create folder note `X/X.md` with frontmatter `type: project, name: X, status: active`
-3. Include a default ````flowtime-project```` block in the note
-4. Add a few starter tasks if user wants
+3. Create management doc `X.md` with ````flowtime-project```` block and starter tasks
+4. Create wiki doc `X Wiki.md` with standard knowledge base sections
+5. Offer to open the new project files
 
 ### "Add a task to X for tomorrow"
 

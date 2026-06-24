@@ -463,6 +463,7 @@ class TaskPlannerRenderer extends MarkdownRenderChild {
 						const newDisp = _dw ? task.dueDate || nd : nd;
 						ds2.setText(newDisp);
 						ds2.removeClass("tp-date-none");
+						await this._refreshSiblings();
 					} else {
 						row.remove();
 						this.tasks = this.tasks.filter((t) => t !== task);

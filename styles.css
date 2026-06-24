@@ -1272,3 +1272,15 @@ body.ft-wide .markdown-source-view .cm-content,
 body.ft-wide .markdown-reading-view .markdown-preview-sizer {
 	max-width: var(--ft-content-width) !important;
 }
+
+/* ── @-Completion Popup ── */
+.ft-at-completion-label {
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+	font-family: var(--font-monospace);
+}
+.ft-at-completion-desc {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	margin-left: 4px;
+}

@@ -48,6 +48,141 @@ class AddTaskSuggest extends EditorSuggest {
 	}
 }
 
+/**
+ * Autocomplete for @-directives inside task lines.
+ * Triggers on task lines (- [ ]) when typing @.
+ * Completions: dates, durations, buckets, @due:
+ */
+class AtCompletionsSuggest extends EditorSuggest {
+	constructor(app, plugin) {
+		super(app);
+		this.plugin = plugin;
+	}
+
+	onTrigger(cursor, editor, file) {
+		const line = editor.getLine(cursor.line);
+		// Only trigger on task lines
+		if (!line.match(/^\s*[-*+]\s*\[[^\]]*\]\s*/)) return null;
+
+		const before = line.slice(0, cursor.ch);
+		// Find the last @ before cursor
+		const atIndex = before.lastIndexOf("@");
+		if (atIndex < 0) return null;
+
+		const textAfterAt = before.slice(atIndex + 1);
+		// Don't trigger if there's a space before — isolated @ needs completions too
+		// Don't trigger if @ has trailing space already
+		if (textAfterAt.includes(" ")) return null;
+
+		return {
+			start: { line: cursor.line, ch: atIndex },
+			end: cursor,
+			query: textAfterAt,
+		};
+	}
+
+	getSuggestions(context) {
+		const q = context.query.toLowerCase();
+		const suggestions = [];
+
+		// Date keywords
+		const dates = [
+			{ label: "today", description: "Current date" },
+			{ label: "tomorrow", description: "Next day" },
+			{ label: "yesterday", description: "Previous day" },
+			{ label: "monday", description: "Next Monday" },
+			{ label: "tuesday", description: "Next Tuesday" },
+			{ label: "wednesday", description: "Next Wednesday" },
+			{ label: "thursday", description: "Next Thursday" },
+			{ label: "friday", description: "Next Friday" },
+			{ label: "saturday", description: "Next Saturday" },
+			{ label: "sunday", description: "Next Sunday" },
+			{ label: "next-week", description: "7 days from now" },
+			{ label: "next-monday", description: "Monday after next" },
+		];
+
+		// Duration presets
+		const durations = [
+			{ label: "15m", description: "15 minutes" },
+			{ label: "30m", description: "30 minutes" },
+			{ label: "45m", description: "45 minutes" },
+			{ label: "1h", description: "1 hour" },
+			{ label: "1.5h", description: "1 hour 30 minutes" },
+			{ label: "2h", description: "2 hours" },
+			{ label: "3h", description: "3 hours" },
+		];
+
+		// Buckets from settings
+		const buckets = (this.plugin?.settings?.buckets || []).map(b => ({
+			label: "b:" + b.id,
+			description: b.name + " — " + b.color,
+		}));
+
+		// @due: prefix
+		const dueDates = [
+			{ label: "due:today", description: "Due today" },
+			{ label: "due:tomorrow", description: "Due tomorrow" },
+		];
+
+		// Determine category based on query
+		if (q.startsWith("b:") || q.startsWith("bucket:")) {
+			// Bucket completions
+			const bucketQ = q.replace(/^(b:|bucket:)/, "");
+			for (const b of buckets) {
+				if (b.label.toLowerCase().includes(bucketQ) || b.description.toLowerCase().includes(bucketQ)) {
+					suggestions.push({ label: "@" + b.label, description: b.description, type: "bucket" });
+				}
+			}
+		} else if (q.startsWith("due:")) {
+			// @due: completions
+			const dueQ = q.slice(4);
+			for (const d of dueDates) {
+				if (d.label.toLowerCase().includes(dueQ)) {
+					suggestions.push({ label: "@" + d.label, description: d.description, type: "due" });
+				}
+			}
+		} else {
+			// Mixed: show dates, durations, buckets, due
+			for (const d of dates) {
+				if (d.label.toLowerCase().includes(q)) {
+					suggestions.push({ label: "@" + d.label, description: d.description, type: "date" });
+				}
+			}
+			for (const d of durations) {
+				if (d.label.toLowerCase().includes(q)) {
+					suggestions.push({ label: "@" + d.label, description: d.description, type: "duration" });
+				}
+			}
+			for (const b of buckets) {
+				if (b.label.toLowerCase().includes(q) || b.description.toLowerCase().includes(q)) {
+					suggestions.push({ label: "@" + b.label, description: b.description, type: "bucket" });
+				}
+			}
+			for (const d of dueDates) {
+				if (d.label.toLowerCase().includes(q)) {
+					suggestions.push({ label: "@" + d.label, description: d.description, type: "due" });
+				}
+			}
+		}
+
+		return suggestions.slice(0, 12);
+	}
+
+	renderSuggestion(suggestion, el) {
+		const icons = { date: "📅", duration: "⏱", bucket: "📊", due: "⏰" };
+		el.createEl("span", { text: (icons[suggestion.type] || "•") + " " + suggestion.label, cls: "ft-at-completion-label" });
+		el.createEl("small", { text: "  " + suggestion.description, cls: "ft-at-completion-desc" });
+	}
+
+	selectSuggestion(suggestion, event) {
+		if (!this.context) return;
+		const editor = this.context.editor;
+		const { start, end } = this.context;
+		// Replace @query with full completion + trailing space
+		editor.replaceRange(suggestion.label + " ", start, end);
+	}
+}
+
 module.exports = class FlowtimePlugin extends Plugin {
 	async onload() {
 		const savedData = await this.loadData();
@@ -138,6 +273,9 @@ module.exports = class FlowtimePlugin extends Plugin {
 
 		// Register /add-task slash command suggester
 		this.registerEditorSuggest(new AddTaskSuggest(this.app, this));
+
+		// v0.4.0: Register @-completions for task lines (dates, durations, buckets)
+		this.registerEditorSuggest(new AtCompletionsSuggest(this.app, this));
 
 		// Quick entry command
 		this.addCommand({

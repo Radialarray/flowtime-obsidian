@@ -21,13 +21,13 @@
 }
 
 .flowtime td {
-	padding: 6px 8px;
+	padding: 5px 8px;
 	border-bottom: 1px solid var(--background-modifier-border);
 	vertical-align: middle;
 }
 
 .flowtime tr {
-	height: 42px;
+	line-height: 1.5;
 }
 
 .flowtime tr:hover td {
@@ -35,7 +35,7 @@
 }
 
 .col-check {
-	width: 30px;
+	width: 36px;
 	text-align: center;
 }
 
@@ -63,14 +63,16 @@
 	width: 22%;
 }
 
-/* --- Top bar: heading + toolbar on same row --- */
+/* --- Top bar: callout-style heading + toolbar on same row --- */
 .tp-topbar {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	padding: 0 0 4px 0;
-	margin-bottom: 2px;
-	border-bottom: 1px solid var(--background-modifier-border);
+	padding: 8px 12px 8px 14px;
+	margin-bottom: 8px;
+	border-left: 4px solid var(--interactive-accent);
+	background: var(--background-secondary-alt);
+	border-radius: 0 4px 4px 0;
 }
 
 .tp-heading-text {
@@ -624,25 +626,33 @@
 /* --- Checkbox column --- */
 .tp-check-cell {
 	text-align: center;
-	width: 30px;
+	width: 34px;
 }
 
 .tp-checkbox {
 	cursor: pointer;
-	margin-right: 6px;
-	font-size: var(--font-ui-small);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	font-size: 15px;
+	line-height: 1;
+	color: var(--text-muted);
+	opacity: 0.6;
+	border-radius: 3px;
+	transition: opacity 120ms ease, color 120ms ease;
 	user-select: none;
-	opacity: 0.5;
-	transition: opacity 120ms ease;
 }
 
 .tp-checkbox:hover {
 	opacity: 1;
+	color: var(--interactive-accent);
+	background: var(--background-modifier-hover);
 }
 
 .tp-task-cell {
-	display: flex;
-	align-items: baseline;
+	/* let table td vertical-align handle alignment, no flex */
 }
 
 /* --- Completed task --- */

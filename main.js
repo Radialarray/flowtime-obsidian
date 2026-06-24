@@ -1,11 +1,8 @@
 const { Plugin, MarkdownRenderChild, Notice } = require("obsidian");
 
 module.exports = class TaskPlannerTablePlugin extends Plugin {
-	constructor() {
-		super();
-		this.renderers = [];
-	}
 	async onload() {
+		this.renderers = [];
 		for (const [name, mode] of [
 			["task-planner", "today"],
 			["task-planner-overdue", "overdue"],

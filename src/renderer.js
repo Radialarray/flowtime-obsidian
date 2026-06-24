@@ -1183,9 +1183,12 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				});
 			}
 		} else if (!isCompact && this._columnVisibility.timer !== false) {
+			// Check if there's an active status timer to resync with
+			const activeTimer = this.plugin?.statusTimer?.getState?.();
+			const matchActive = activeTimer && activeTimer.taskName === task.cleanText;
 			const ts = {
-				remaining: (dur || 0) * 60,
-				total: (dur || 0) * 60,
+				remaining: matchActive ? activeTimer.remaining : (dur || 0) * 60,
+				total: matchActive ? activeTimer.total : (dur || 0) * 60,
 				interval: null,
 				running: false,
 			};
@@ -1298,6 +1301,24 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				// Register stop callback AFTER start() so onTimerStop doesn't fire on ourselves
 				if (this.plugin) this.plugin._activeRowTimerStop = stp;
 			};
+
+			// If timer was running (from status bar), resume display without restarting
+			if (matchActive && activeTimer.isRunning) {
+				ts.running = true;
+				pb.setText("⏸");
+				ts.interval = setInterval(() => {
+					ts.remaining = this.plugin?.statusTimer?.currentTimer?.remaining ?? (ts.remaining - 1);
+					if (ts.remaining < 0) ts.remaining = 0;
+					ud();
+					if (ts.remaining <= 0) {
+						clearInterval(ts.interval);
+						ts.interval = null;
+						ts.running = false;
+						pb.setText("▶");
+					}
+				}, 1000);
+				if (this.plugin) this.plugin._activeRowTimerStop = stp;
+			}
 
 			pb.addEventListener("click", () => {
 				const dm = ds ? parseInt(ds.value, 10) : dur;

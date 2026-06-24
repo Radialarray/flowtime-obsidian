@@ -1,4 +1,4 @@
-const { PluginSettingTab, Setting, createFragment } = require("obsidian");
+const { PluginSettingTab, Setting } = require("obsidian");
 
 const DEFAULT_SETTINGS = {
 	// Project Detection
@@ -189,15 +189,7 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 		for (const bucket of buckets) {
 			new Setting(containerEl)
 				.setName(bucket.name)
-				.setDesc(
-					createFragment((frag) => {
-						const swatch = frag.createEl("span", {
-							cls: "ft-bucket-swatch",
-						});
-						swatch.style.backgroundColor = bucket.color;
-						frag.appendText(`Weekly limit: ${bucket.weeklyLimit}h`);
-					}),
-				)
+				.setDesc(`Weekly limit: ${bucket.weeklyLimit}h · Color: ${bucket.color}`)
 				.addText((text) =>
 					text
 						.setPlaceholder("Name")

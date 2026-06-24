@@ -97,6 +97,20 @@ class StatusTimer {
 		this.updateDisplay();
 	}
 
+	/**
+	 * Get current timer state for table resync after re-render.
+	 * Returns null if no timer is active.
+	 */
+	getState() {
+		if (!this.currentTimer) return null;
+		return {
+			taskName: this.currentTimer.taskName,
+			remaining: this.currentTimer.remaining,
+			total: this.currentTimer.total,
+			isRunning: !!this.currentTimer.interval,
+		};
+	}
+
 	updateDisplay() {
 		if (!this.settings.statusBarTimer) {
 			this.statusBarItem.setText("");

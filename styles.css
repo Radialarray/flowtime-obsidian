@@ -1316,3 +1316,508 @@ body.ft-wide .markdown-reading-view .markdown-preview-sizer {
 	font-size: var(--font-ui-smaller);
 	margin-left: 4px;
 }
+
+/* ═══════════════════════════════════════
+   Weekplan — List View (v0.5.0)
+   ═══════════════════════════════════════ */
+
+.ft-wp-header {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 0;
+	border-bottom: 2px solid var(--background-modifier-border);
+	margin-bottom: 12px;
+}
+
+.ft-wp-title {
+	flex: 1;
+	min-width: 200px;
+}
+
+.ft-wp-week-label {
+	font-size: var(--font-ui-medium);
+	font-weight: var(--font-semibold);
+}
+
+.ft-wp-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	align-items: center;
+}
+
+.ft-wp-btn {
+	font-size: var(--font-ui-small);
+	padding: 3px 10px;
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	cursor: pointer;
+	color: var(--text-normal);
+	white-space: nowrap;
+}
+
+.ft-wp-btn:hover {
+	background: var(--background-modifier-hover);
+}
+
+.ft-wp-btn-primary {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border-color: var(--interactive-accent);
+}
+
+.ft-wp-btn-primary:hover {
+	background: var(--interactive-accent-hover);
+}
+
+.ft-wp-vacation-on {
+	background: var(--background-modifier-error);
+	color: var(--text-on-accent);
+}
+
+.ft-wp-vacation-notice {
+	padding: 8px 12px;
+	margin: 8px 0;
+	background: var(--background-modifier-warning);
+	border-radius: var(--radius-s);
+	font-size: var(--font-ui-small);
+	color: var(--text-normal);
+}
+
+.ft-wp-day {
+	margin-bottom: 16px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	overflow: hidden;
+}
+
+.ft-wp-day-header {
+	display: flex;
+	align-items: center;
+	padding: 8px 12px;
+	background: var(--background-secondary);
+	border-bottom: 1px solid var(--background-modifier-border);
+	gap: 12px;
+}
+
+.ft-wp-day-label {
+	font-size: var(--font-ui-medium);
+	font-weight: var(--font-semibold);
+	min-width: 140px;
+}
+
+.ft-wp-today {
+	color: var(--interactive-accent);
+}
+
+.ft-wp-task {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 12px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	font-size: var(--font-ui-small);
+}
+
+.ft-wp-task:last-child {
+	border-bottom: none;
+}
+
+.ft-wp-task:hover {
+	background: var(--background-primary-alt);
+}
+
+.ft-wp-task-done {
+	opacity: 0.5;
+	text-decoration: line-through;
+}
+
+.ft-wp-time {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 160px;
+	flex-shrink: 0;
+}
+
+.ft-wp-start-input,
+.ft-wp-dur-input {
+	width: 58px;
+	font-size: var(--font-ui-small);
+	padding: 2px 4px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: transparent;
+	color: var(--text-normal);
+	text-align: center;
+}
+
+.ft-wp-start-input:focus,
+.ft-wp-dur-input:focus {
+	background: var(--background-primary);
+	border-color: var(--interactive-accent);
+}
+
+.ft-wp-end-preview {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	min-width: 48px;
+}
+
+.ft-wp-check {
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+}
+
+.ft-wp-text {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+	overflow: hidden;
+}
+
+.ft-wp-priority {
+	font-size: var(--font-ui-smaller);
+}
+
+.ft-wp-routine-badge {
+	font-size: var(--font-ui-smaller);
+	opacity: 0.6;
+}
+
+.ft-wp-project {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	background: var(--background-secondary);
+	padding: 0 4px;
+	border-radius: var(--radius-s);
+}
+
+.ft-wp-task-text {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ft-wp-source-link {
+	font-size: var(--font-ui-smaller);
+	cursor: pointer;
+	text-decoration: none;
+	opacity: 0.5;
+}
+
+.ft-wp-source-link:hover {
+	opacity: 1;
+}
+
+.ft-wp-actions {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	flex-shrink: 0;
+}
+
+.ft-wp-timer-btn {
+	font-size: var(--font-ui-smaller);
+	padding: 2px 6px;
+	border-radius: var(--radius-s);
+	border: 1px solid var(--background-modifier-border);
+	cursor: pointer;
+	background: transparent;
+	color: var(--text-muted);
+	min-width: 48px;
+	text-align: center;
+}
+
+.ft-wp-timer-btn:hover {
+	background: var(--background-modifier-hover);
+}
+
+.ft-wp-del-btn {
+	font-size: var(--font-ui-smaller);
+	padding: 2px 6px;
+	border: none;
+	cursor: pointer;
+	background: transparent;
+	opacity: 0.4;
+}
+
+.ft-wp-del-btn:hover {
+	opacity: 1;
+}
+
+.ft-wp-empty {
+	text-align: center;
+	padding: 40px 20px;
+	color: var(--text-muted);
+}
+
+.ft-wp-empty-hint {
+	font-size: var(--font-ui-smaller);
+	margin-top: 8px;
+}
+
+/* ═══════════════════════════════════════
+   Timeline Grid (v0.5.0)
+   ═══════════════════════════════════════ */
+
+.ft-tg-wrap {
+	overflow-x: auto;
+	overflow-y: visible;
+	max-width: 100%;
+	-webkit-overflow-scrolling: touch;
+	padding-bottom: 20px;
+}
+
+.ft-tg-grid {
+	display: grid;
+	grid-template-columns: 60px repeat(5, minmax(140px, 1fr));
+	grid-template-rows: 36px repeat(var(--tg-rows, 27), 28px);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	overflow: hidden;
+	min-width: 760px;
+	position: relative;
+}
+
+/* ── Grid header ── */
+
+.ft-tg-hc {
+	background: var(--background-secondary);
+	border-bottom: 2px solid var(--background-modifier-border);
+	border-right: 1px solid var(--background-modifier-border);
+}
+
+.ft-tg-hd {
+	background: var(--background-secondary);
+	border-bottom: 2px solid var(--background-modifier-border);
+	border-right: 1px solid var(--background-modifier-border);
+	padding: 4px 8px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	line-height: 1.2;
+	overflow: hidden;
+}
+
+.ft-tg-today {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.ft-tg-hd-day {
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-semibold);
+	text-transform: uppercase;
+}
+
+.ft-tg-hd-date {
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-bold);
+}
+
+/* ── Time labels ── */
+
+.ft-tg-time {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	padding: 1px 6px;
+	text-align: right;
+	border-right: 1px solid var(--background-modifier-border);
+	border-bottom: 1px solid transparent;
+	white-space: nowrap;
+	background: var(--background-primary);
+	z-index: 1;
+}
+
+/* ── Background cells ── */
+
+.ft-tg-cell {
+	border-right: 1px solid var(--background-modifier-border);
+	border-bottom: 1px solid var(--background-modifier-border);
+	background: var(--background-primary);
+}
+
+.ft-tg-cell:nth-child(2n) {
+	background: var(--background-primary-alt);
+}
+
+.ft-tg-now {
+	background: var(--background-modifier-success) !important;
+	opacity: 0.08;
+}
+
+/* ── Hour separators ── */
+
+.ft-tg-hsep {
+	border-bottom: 2px solid var(--background-modifier-border);
+	pointer-events: none;
+}
+
+/* ── Task cards ── */
+
+.ft-tg-card {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border-radius: var(--radius-s);
+	padding: 2px 6px;
+	font-size: var(--font-ui-smaller);
+	line-height: 1.3;
+	overflow: hidden;
+	cursor: pointer;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	margin: 1px;
+	transition: box-shadow 0.15s ease;
+	z-index: 2;
+}
+
+.ft-tg-card:hover {
+	box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+	z-index: 3;
+}
+
+.ft-tg-routine {
+	border-left: 3px solid var(--text-muted);
+	opacity: 0.85;
+}
+
+.ft-tg-done {
+	opacity: 0.4;
+	text-decoration: line-through;
+}
+
+.ft-tg-prio {
+	font-size: 10px;
+}
+
+.ft-tg-routine-badge {
+	font-size: 9px;
+	opacity: 0.7;
+}
+
+.ft-tg-text {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-weight: var(--font-medium);
+}
+
+.ft-tg-project {
+	font-size: 9px;
+	opacity: 0.8;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ft-tg-time-label {
+	font-size: 9px;
+	opacity: 0.7;
+	display: none; /* hidden by default, shown via data or hover */
+}
+
+.ft-tg-card:hover .ft-tg-time-label {
+	display: block;
+}
+
+/* Untimed task card */
+
+.ft-tg-untimed {
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	border: 1px dashed var(--background-modifier-border);
+	margin: 1px 2px;
+	flex-direction: row;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 6px;
+}
+
+.ft-tg-ut-dot::before {
+	content: "·";
+	font-weight: bold;
+}
+
+.ft-tg-ut-label {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	text-align: center;
+	padding: 2px;
+	border-top: 1px dashed var(--background-modifier-border);
+}
+
+/* ── Edit popup ── */
+
+.ft-tg-popup {
+	position: fixed;
+	z-index: 1000;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+	padding: 10px 14px;
+	min-width: 200px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.ft-tg-popup-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.ft-tg-popup-label {
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	white-space: nowrap;
+}
+
+.ft-tg-popup-input {
+	font-size: var(--font-ui-small);
+	padding: 3px 6px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-primary);
+	color: var(--text-normal);
+	width: 70px;
+}
+
+.ft-tg-popup-input:focus {
+	border-color: var(--interactive-accent);
+}
+
+.ft-tg-popup-cb {
+	cursor: pointer;
+}
+
+.ft-tg-popup-btn {
+	font-size: var(--font-ui-small);
+	padding: 4px 12px;
+	border-radius: var(--radius-s);
+	border: 1px solid var(--background-modifier-border);
+	cursor: pointer;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.ft-tg-popup-btn:hover {
+	opacity: 0.9;
+}
+
+.ft-tg-popup-del {
+	background: var(--background-modifier-error);
+	color: var(--text-on-accent);
+	border-color: transparent;
+	margin-left: auto;
+}

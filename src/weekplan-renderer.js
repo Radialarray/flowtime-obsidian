@@ -23,6 +23,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		this.dayTasks = {};     // dateStr → task[]
 		this.dayTotals = {};    // dateStr → total minutes
 		this.dailyCap = 12;
+		this.gridMode = false;  // toggle: false=list, true=timeline grid
 	}
 
 	async onload() {
@@ -283,6 +284,16 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			}
 		});
 
+		// v0.5.0: Toggle list/grid view
+		const toggleBtn = toolbar.createEl("button", {
+			text: this.gridMode ? "📋 List View" : "📅 Grid View",
+			cls: "ft-wp-btn ft-wp-btn-toggle",
+		});
+		toggleBtn.addEventListener("click", async () => {
+			this.gridMode = !this.gridMode;
+			this.renderView();
+		});
+
 		const addBtn = toolbar.createEl("button", { text: "➕ Add Task", cls: "ft-wp-btn ft-wp-btn-primary" });
 		addBtn.addEventListener("click", () => {
 			const { QuickEntryModal } = require("./quick-entry");
@@ -296,7 +307,346 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			notice.createEl("span", { text: "⏸ Vacation mode is ON — routines are paused" });
 		}
 
-		// ── Daily sections ──
+		if (this.gridMode) {
+			this.renderGridView(today);
+		} else {
+			this.renderListView(today);
+		}
+	}
+
+	/* ─── Timeline Grid View ─── */
+
+	/**
+	 * Convert a time string (HH:MM) to a grid row number.
+	 * Row 1 = header, Row 2 = START_H:00, each 30min = +1 row.
+	 */
+	_timeToRow(timeStr) {
+		if (!timeStr) return -1;
+		const parts = timeStr.split(":");
+		const h = parseInt(parts[0], 10);
+		const m = parseInt(parts[1], 10) || 0;
+		const totalMinutes = h * 60 + m;
+		const startMinutes = START_H * 60;
+		if (totalMinutes < startMinutes) return -1;
+		const slotIndex = Math.round((totalMinutes - startMinutes) / 30);
+		return 2 + slotIndex; // row 1 = header, row 2 = first slot
+	}
+
+	/**
+	 * Map day names (dateStr) to grid column indexes.
+	 * Column 1 = time labels, columns 2-6 = Mon-Fri.
+	 */
+	_dateToCol(dateStr) {
+		if (!this.dayOrder) return 2;
+		const idx = this.dayOrder.indexOf(dateStr);
+		return idx >= 0 ? idx + 2 : 2;
+	}
+
+	renderGridView(today) {
+		const days = Object.keys(this.dayTasks).sort();
+		this.dayOrder = days;
+		if (days.length === 0) {
+			const empty = this.containerEl.createEl("div", { cls: "ft-wp-empty" });
+			empty.createEl("p", { text: "📭 No tasks scheduled this week." });
+			return;
+		}
+
+		// ── Grid container ──
+		const wrap = this.containerEl.createEl("div", { cls: "ft-tg-wrap" });
+		const grid = wrap.createEl("div", { cls: "ft-tg-grid" });
+
+		// Build time slots (every 30min from START_H to START_END)
+		const slots = [];
+		for (let h = START_H; h <= START_END; h++) {
+			for (let m = 0; m < 60; m += 30) {
+				if (h === START_END && m > 0) break;
+				slots.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+			}
+		}
+
+		// Total grid rows = 1 header + slots length
+		grid.style.setProperty("--tg-rows", String(1 + slots.length));
+
+		// ── Header row ──
+		const hc = grid.createEl("div", { cls: "ft-tg-hc" });
+		hc.style.gridRow = "1";
+		hc.style.gridColumn = "1";
+
+		const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+		for (let di = 0; di < days.length; di++) {
+			const dateStr = days[di];
+			const d = new Date(dateStr + "T12:00:00");
+			const dayName = dayNames[d.getDay()];
+			const dayNum = d.getDate();
+			const isToday = dateStr === today;
+			const hd = grid.createEl("div", {
+				cls: "ft-tg-hd" + (isToday ? " ft-tg-today" : ""),
+			});
+			hd.style.gridRow = "1";
+			hd.style.gridColumn = String(di + 2);
+			hd.createEl("span", { text: dayName, cls: "ft-tg-hd-day" });
+			hd.createEl("span", { text: String(dayNum), cls: "ft-tg-hd-date" });
+		}
+
+		// ── Time labels + grid background cells ──
+		for (let si = 0; si < slots.length; si++) {
+			const rowNum = si + 2;
+			const timeLabel = slots[si];
+
+			// Time label (col 1)
+			const tl = grid.createEl("div", { cls: "ft-tg-time" });
+			tl.style.gridRow = String(rowNum);
+			tl.style.gridColumn = "1";
+			tl.setText(timeLabel);
+
+			// Background cells for each day at this time
+			for (let di = 0; di < days.length; di++) {
+				const cell = grid.createEl("div", { cls: "ft-tg-cell" });
+				cell.style.gridRow = String(rowNum);
+				cell.style.gridColumn = String(di + 2);
+				// Highlight current time slot on today
+				if (days[di] === today) {
+					const now = new Date();
+					const nowMin = now.getHours() * 60 + now.getMinutes();
+					const slotMin = parseInt(timeLabel.split(":")[0], 10) * 60 + parseInt(timeLabel.split(":")[1], 10);
+					if (nowMin >= slotMin && nowMin < slotMin + 30) {
+						cell.addClass("ft-tg-now");
+					}
+				}
+			}
+		}
+
+		// ── Hour separators (thicker lines at whole hours) ──
+		for (let h = START_H + 1; h <= START_END; h++) {
+			const rowNum = ((h - START_H) * 2) + 2;
+			for (let di = 0; di < days.length; di++) {
+				const sep = grid.createEl("div", { cls: "ft-tg-hsep" });
+				sep.style.gridRow = String(rowNum);
+				sep.style.gridColumn = String(di + 2);
+			}
+		}
+
+		// ── Task cards ──
+		this._tgEditPopup = null;
+
+		for (const dateStr of days) {
+			const tasks = this.dayTasks[dateStr];
+			const col = this._dateToCol(dateStr);
+
+			// First pass: render timed tasks
+			for (const task of tasks) {
+				if (!task.time) continue;
+				this._renderGridTask(grid, task, col, today);
+			}
+
+			// Second pass: untimed tasks listed at bottom of day column
+			const untimed = tasks.filter(t => !t.time);
+			if (untimed.length === 0) continue;
+
+			const bottomRow = 2 + slots.length;
+			for (const task of untimed) {
+				this._renderGridTask(grid, task, col, today);
+			}
+			// Untimed section label
+			const utLabel = grid.createEl("div", { cls: "ft-tg-ut-label" });
+			utLabel.style.gridRow = String(bottomRow + 1);
+			utLabel.style.gridColumn = String(col);
+			utLabel.setText("⋯");
+		}
+	}
+
+	/** Render a single task card on the timeline grid */
+	_renderGridTask(grid, task, col, today) {
+		const { start, dur } = this._parseStored(task.time);
+		if (start) {
+			const rowStart = this._timeToRow(start);
+			const endTime = this._calcEnd(start, dur);
+			let rowEnd = endTime ? this._timeToRow(endTime) : rowStart + 1;
+			if (rowEnd <= rowStart) rowEnd = rowStart + 1;
+			if (rowStart < 2) return; // outside visible range
+
+			const card = grid.createEl("div", {
+				cls: "ft-tg-card" + (task.status === "x" ? " ft-tg-done" : "") + (task.isRoutine ? " ft-tg-routine" : ""),
+			});
+			card.style.gridRow = `${rowStart} / ${rowEnd}`;
+			card.style.gridColumn = String(col);
+
+			// Priority dot
+			if (task.priority) {
+				card.createEl("span", { text: task.priority, cls: "ft-tg-prio" });
+			}
+			// Routine badge
+			if (task.isRoutine) {
+				card.createEl("span", { text: "🔁", cls: "ft-tg-routine-badge" });
+			}
+			// Task text
+			card.createEl("span", { text: task.cleanText, cls: "ft-tg-text" });
+
+			// Project label (below text)
+			if (task.project) {
+				card.createEl("span", { text: task.project, cls: "ft-tg-project" });
+			}
+
+			// Time tooltip
+			const timeStr = dur ? `${start}—${endTime}` : start;
+			card.createEl("span", { text: timeStr, cls: "ft-tg-time-label" });
+
+			// Click to edit popup
+			card.addEventListener("click", (e) => {
+				e.stopPropagation();
+				this._openTaskEditPopup(card, task, start, dur);
+			});
+		} else {
+			// Untimed task — rendered at the bottom of the day column
+			const card = grid.createEl("div", {
+				cls: "ft-tg-card ft-tg-untimed" + (task.status === "x" ? " ft-tg-done" : "") + (task.isRoutine ? " ft-tg-routine" : ""),
+			});
+			card.style.gridColumn = String(col);
+			card.style.gridRow = "-1"; // auto place at end of column
+
+			const dot = card.createEl("span", { cls: "ft-tg-ut-dot" });
+			card.createEl("span", { text: task.cleanText, cls: "ft-tg-text" });
+			if (task.project) {
+				card.createEl("span", { text: task.project, cls: "ft-tg-project" });
+			}
+			card.addEventListener("click", (e) => {
+				e.stopPropagation();
+				this._openTaskEditPopup(card, task, "", 0);
+			});
+		}
+	}
+
+	/** Open an edit popup for a grid task card */
+	_openTaskEditPopup(card, task, start, dur) {
+		// Close any existing popup
+		if (this._tgEditPopup) {
+			this._tgEditPopup.remove();
+			this._tgEditPopup = null;
+		}
+
+		const popup = document.createElement("div");
+		popup.className = "ft-tg-popup";
+
+		// Position near the card
+		const rect = card.getBoundingClientRect();
+		popup.style.left = rect.left + "px";
+		popup.style.top = (rect.bottom + 4) + "px";
+
+		// ── Time input ──
+		const timeRow = popup.createEl("div", { cls: "ft-tg-popup-row" });
+		timeRow.createEl("label", { text: "Time: ", cls: "ft-tg-popup-label" });
+		const startInput = timeRow.createEl("input", {
+			type: "text", value: start || "", placeholder: "09:00", cls: "ft-tg-popup-input",
+		});
+		const durInput = timeRow.createEl("input", {
+			type: "text", value: dur ? formatDuration(dur) : "", placeholder: "30m", cls: "ft-tg-popup-input",
+		});
+
+		// ── Checkbox ──
+		const checkRow = popup.createEl("div", { cls: "ft-tg-popup-row" });
+		const cb = checkRow.createEl("input", { type: "checkbox", cls: "ft-tg-popup-cb" });
+		cb.checked = task.status === "x";
+		checkRow.createEl("span", { text: " Done", cls: "ft-tg-popup-label" });
+
+		// ── Save button ──
+		const btnRow = popup.createEl("div", { cls: "ft-tg-popup-row" });
+		const saveBtn = btnRow.createEl("button", { text: "Save", cls: "ft-tg-popup-btn" });
+		const delBtn = btnRow.createEl("button", { text: "🗑 Remove", cls: "ft-tg-popup-btn ft-tg-popup-del" });
+
+		saveBtn.addEventListener("click", async () => {
+			// Update time
+			task.time = startInput.value.trim()
+				? (() => {
+					const s = startInput.value.trim();
+					const d = this._parseDurStr(durInput.value.trim());
+					return d > 0 ? s + "—" + this._calcEnd(s, d) : s;
+				})()
+				: "";
+			task.durationMinutes = this._parseDurStr(durInput.value.trim());
+
+			// Persist to vault
+			await this._saveTaskInline(task, startInput.value.trim(), durInput.value.trim());
+
+			// Toggle check
+			if (cb.checked !== (task.status === "x")) {
+				await this._toggleCheck(task, null);
+			}
+
+			popup.remove();
+			this._tgEditPopup = null;
+			await this.loadWeek();
+			this.renderView();
+		});
+
+		delBtn.addEventListener("click", async () => {
+			await this._removeTask(task);
+			popup.remove();
+			this._tgEditPopup = null;
+			await this.loadWeek();
+			this.renderView();
+		});
+
+		// Close on outside click
+		const closeHandler = (e) => {
+			if (!popup.contains(e.target) && e.target !== card) {
+				popup.remove();
+				this._tgEditPopup = null;
+				document.removeEventListener("click", closeHandler, true);
+			}
+		};
+		setTimeout(() => document.addEventListener("click", closeHandler, true), 0);
+
+		document.body.appendChild(popup);
+		this._tgEditPopup = popup;
+	}
+
+	/** Save time changes from the grid edit popup to the vault file */
+	async _saveTaskInline(task, startStr, durStr) {
+		if (!task.file) return;
+		const durMinutes = this._parseDurStr(durStr);
+		const end = startStr && durMinutes > 0 ? this._calcEnd(startStr, durMinutes) : "";
+		let timeBlock = startStr;
+		if (end) timeBlock += "—" + end;
+
+		const content = await this.app.vault.read(task.file);
+		const lines = content.split("\n");
+		let line = lines[task.line];
+		if (!line) return;
+
+		const hasTime = line.match(/^\s*[-*+]\s*\[[^\]]*\]\s*\d{1,2}:\d{2}/);
+		if (hasTime && timeBlock) {
+			line = line.replace(
+				/^(\s*[-*+]\s*\[[^\]]*\]\s*)\d{1,2}:\d{2}(?:\s*[—\-–]\s*\d{1,2}:\d{2})?/,
+				"$1" + timeBlock,
+			);
+		} else if (timeBlock) {
+			line = line.replace(
+				/^(\s*[-*+]\s*\[[^\]]*\]\s*)/,
+				"$1" + timeBlock + " ",
+			);
+		} else {
+			line = line.replace(
+				/^(\s*[-*+]\s*\[[^\]]*\]\s*)\d{1,2}:\d{2}(?:\s*[—\-–]\s*\d{1,2}:\d{2})?\s*/,
+				"$1",
+			);
+		}
+
+		if (durMinutes > 0) {
+			const durStr2 = durMinutes < 60 ? durMinutes + "m" : (durMinutes / 60) + "h";
+			if (line.match(/@\d+(?:\.\d+)?[hm]/)) {
+				line = line.replace(/@\d+(?:\.\d+)?[hm]/, "@" + durStr2);
+			} else {
+				line += " @" + durStr2;
+			}
+		} else {
+			line = line.replace(/@\d+(?:\.\d+)?[hm]\s*/, "");
+		}
+
+		lines[task.line] = line;
+		await this.app.vault.modify(task.file, lines.join("\n"));
+	}
+
+	renderListView(today) {
 		let hasAnyTasks = false;
 		const days = Object.keys(this.dayTasks).sort();
 

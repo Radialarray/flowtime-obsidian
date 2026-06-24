@@ -669,6 +669,7 @@ These are Obsidian code blocks the plugin renders. Add them to any markdown note
 ````markdown
 ```flowtime-today       # Tasks scheduled for today (with inline timer)
 ```flowtime-overdue     # Tasks past their date
+```flowtime-soon        # Tasks tagged with @soon (up next / backlog)
 ```flowtime-dueweek     # Tasks due tomorrow through Sunday
 ```flowtime-weekly      # This week's tasks grouped by project
 ```flowtime-project     # Tasks for the note's containing project

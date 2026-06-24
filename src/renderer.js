@@ -149,12 +149,27 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		} catch (_) {}
 	}
 
+	/** v0.4.0: Map priority emoji to sort weight (higher = first) */
+	_priorityWeight(p) {
+		const w = { "🔺": 5, "⏫": 4, "🔼": 3, "🔽": 2, "⏬": 1 };
+		return w[p] || 0;
+	}
+
+	/** v0.4.0: Default sort = priority (desc) → time (asc) → date (asc) */
 	_sort() {
 		this.tasks.sort((a, b) => {
+			const pa = this._priorityWeight(a.priority);
+			const pb = this._priorityWeight(b.priority);
+			if (pa !== pb) return pb - pa; // higher priority first
 			if (!a.time && !b.time) return 0;
 			if (!a.time) return 1;
 			if (!b.time) return -1;
-			return a.time.localeCompare(b.time);
+			const tc = a.time.localeCompare(b.time);
+			if (tc !== 0) return tc;
+			// Same time: sort by date (earliest first)
+			const da = a.taskDate || "";
+			const db = b.taskDate || "";
+			return da.localeCompare(db);
 		});
 	}
 
@@ -190,6 +205,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			case "bucket": return task.bucket || "";
 			case "source": return task.file?.basename || "";
 			case "date": return task.taskDate || "";
+			case "priority": return this._priorityWeight(task.priority);
+			case "soon": return task.isSoon ? 1 : 0;
 			default: return "";
 		}
 	}
@@ -236,6 +253,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		let count = 0;
 		if (isCompact) {
 			if (v.check !== false) count++;
+			if (v.priority !== false && v.priority) count++;  // v0.4.0
+			if (v.soon !== false && v.soon) count++;           // v0.4.0
 			if (v.task !== false) count++;
 			if (v.project !== false) count++;
 			if (v.bucket !== false) count++;
@@ -245,6 +264,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		} else {
 			if (v.time !== false) count++;
 			if (v.check !== false) count++;
+			if (v.priority !== false && v.priority) count++;  // v0.4.0
+			if (v.soon !== false && v.soon) count++;           // v0.4.0
 			if (v.task !== false) count++;
 			if (v.project !== false) count++;
 			if (v.bucket !== false) count++;
@@ -348,6 +369,36 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 					_bucketDef: b,
 				});
 			}
+			return;
+		}
+
+		// v0.4.0: "soon" mode — show all @soon tasks
+		if (this.mode === "soon") {
+			this.tasks = [];
+			for (const file of this.app.vault.getMarkdownFiles()) {
+				if (!this._isFileInScope(file.path)) continue;
+				const fileTasks = await this._getFileTasks(file);
+				for (const parsed of fileTasks) {
+					if (parsed.status === "x" || parsed.status === "-" || parsed.status === "X") continue;
+					if (!parsed.isSoon) continue;
+					const { taskDate, rawText, time, status, priority, cleanText, bucket, durationMinutes, projectTag } = parsed;
+					const project = this.projectEngine ? await this.projectEngine.resolve(file.path) : null;
+					let projName = project?.name || null;
+					let projPath = project?.path || null;
+					let projSource = project?.source || null;
+					if (!projName && this.projectEngine) {
+						if (projectTag) { projName = projectTag; projSource = "tag"; }
+						if (!projName && rawText) {
+							const tp = this.plugin?.settings?.tagPrefix || "project/";
+							const tj = this.projectEngine.resolveFromTag(rawText, tp);
+							if (tj) { projName = tj; projSource = "tag"; }
+						}
+					}
+					this.tasks.push({ file, line: parsed.line, rawLine: parsed.rawLine, time, taskDate, rawText, cleanText, status, priority, bucket, durationMinutes, project: projName, projectPath: projPath, projectSource: projSource, isSoon: true });
+				}
+			}
+			if (this._activeFilter) this.tasks = this.tasks.filter(t => evaluateFilter(this._activeFilter, t));
+			if (this._sortConfig?.length > 0) this._applySort(); else this._sort();
 			return;
 		}
 
@@ -466,6 +517,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			this._columnVisibility = {
 				check: true,
 				task: true,
+				priority: false,  // v0.4.0: priority emoji column, hidden by default
+				soon: false,       // v0.4.0: @soon badge column, hidden by default
 				project: false,
 				bucket: false,
 				source: false,
@@ -493,6 +546,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				overdue: "🎉 No overdue tasks!",
 				dueweek: "🎉 No tasks due this week!",
 				weekly: "🎉 No tasks scheduled this week!",
+				soon: "📭 No tasks tagged with @soon. Add @soon to backlog items.",
 				project: "📭 No tasks for this project.",
 				today: "📭 No tasks scheduled for today.",
 			};
@@ -523,6 +577,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			overdue: "📋 Tasks past their scheduled date — reassign or backlog",
 			dueweek: "⚠️ Tasks due this week — schedule or defer",
 			weekly: "📊 This week's tasks grouped by project",
+			soon: "📋 Up next — backlog items surfaced for attention",
 			project: "📁 Tasks for this project",
 		};
 		const heading = headings[this.mode];
@@ -566,6 +621,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		const colDefs = [
 			{ id: "time", label: "Time" },
 			{ id: "check", label: "✓" },
+			{ id: "priority", label: "Prio" },
+			{ id: "soon", label: "Soon" },
 			{ id: "task", label: "Task" },
 			{ id: "project", label: "Project" },
 			{ id: "bucket", label: "Bucket" },
@@ -814,6 +871,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		if (isCompact) {
 			if (this._columnVisibility.check !== false)
 				makeSortableHeader("✓", "status", "col-check", "36px");
+			if (this._columnVisibility.priority !== false && this._columnVisibility.priority)
+				makeSortableHeader("!", "priority", "col-priority", "28px");
+			if (this._columnVisibility.soon !== false && this._columnVisibility.soon)
+				makeSortableHeader("~", "soon", "col-soon", "36px");
 			if (this._columnVisibility.task !== false)
 				makeSortableHeader("Task", "text", "col-task", "auto");
 			if (this._columnVisibility.project !== false)
@@ -831,6 +892,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				makeSortableHeader("Time", "time", "col-time", "22%");
 			if (this._columnVisibility.check !== false)
 				makeSortableHeader("✓", "status", "col-check", "36px");
+			if (this._columnVisibility.priority !== false && this._columnVisibility.priority)
+				makeSortableHeader("!", "priority", "col-priority", "28px");
+			if (this._columnVisibility.soon !== false && this._columnVisibility.soon)
+				makeSortableHeader("~", "soon", "col-soon", "36px");
 			if (this._columnVisibility.task !== false)
 				makeSortableHeader("Task", "text", "col-task", "auto");
 			if (this._columnVisibility.project !== false)
@@ -1059,6 +1124,22 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		// Checkbox column
 		if (this._columnVisibility.check !== false)
 			this._buildCheckCell(row, task);
+
+		// v0.4.0: Priority column (hidden by default)
+		if (this._columnVisibility.priority !== false && this._columnVisibility.priority) {
+			const pc = row.createEl("td", { cls: "ft-priority-cell", attr: { style: "text-align:center" } });
+			if (task.priority) {
+				pc.createEl("span", { text: task.priority, cls: "ft-priority-badge" });
+			}
+		}
+
+		// v0.4.0: Soon badge column (hidden by default)
+		if (this._columnVisibility.soon !== false && this._columnVisibility.soon) {
+			const sc = row.createEl("td", { cls: "ft-soon-cell", attr: { style: "text-align:center" } });
+			if (task.isSoon) {
+				sc.createEl("span", { text: "📋", cls: "ft-soon-badge" });
+			}
+		}
 
 		// Task cell: priority + text
 		if (this._columnVisibility.task !== false)

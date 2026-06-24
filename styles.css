@@ -1266,6 +1266,31 @@
 	background: var(--background-modifier-hover);
 }
 
+/* ── Priority + Soon Columns ── */
+.ft-priority-cell {
+	text-align: center;
+	vertical-align: middle;
+	width: 28px;
+	min-width: 28px;
+}
+.ft-priority-badge {
+	font-size: var(--font-ui-medium);
+	cursor: default;
+	user-select: none;
+}
+.ft-soon-cell {
+	text-align: center;
+	vertical-align: middle;
+	width: 36px;
+	min-width: 36px;
+}
+.ft-soon-badge {
+	font-size: var(--font-ui-small);
+	cursor: default;
+	user-select: none;
+	opacity: 0.7;
+}
+
 /* ── Wide Mode ── */
 body.ft-wide .markdown-source-view .cm-sizer,
 body.ft-wide .markdown-source-view .cm-content,

@@ -35,14 +35,12 @@
 }
 
 .col-check {
-	width: 32px;
-	max-width: 32px;
+	width: 1px;
 	text-align: center;
 }
 
 .ft-check-cell {
 	width: 32px;
-	max-width: 32px;
 	padding: 0;
 	text-align: center;
 	vertical-align: middle;
@@ -52,16 +50,17 @@
 	display: inline-block;
 	width: 16px;
 	height: 16px;
-	border: 2px solid var(--text-muted);
-	border-radius: 3px;
+	border: 2px solid var(--checkbox-border-color, var(--background-modifier-border));
+	border-radius: var(--checkbox-radius, 3px);
 	cursor: pointer;
 	vertical-align: middle;
 	box-sizing: border-box;
-	transition: background 0.1s, border-color 0.1s;
+	background: transparent;
+	transition: background 0.15s, border-color 0.15s;
 }
 
 .ft-checkbox:hover {
-	border-color: var(--interactive-accent);
+	border-color: var(--checkbox-border-color-hover, var(--interactive-accent));
 }
 
 .ft-checkbox.ft-checked {
@@ -74,17 +73,22 @@
 	content: "";
 	position: absolute;
 	left: 3px;
-	top: 0px;
+	top: 1px;
 	width: 6px;
-	height: 10px;
-	border: solid var(--text-on-accent);
+	height: 9px;
+	border: solid var(--checkbox-mark-color, var(--text-on-accent));
 	border-width: 0 2px 2px 0;
-	transform: rotate(45deg);
+	transform: rotate(40deg);
+	box-sizing: border-box;
 }
 
 .ft-task-done .ft-checkbox.ft-checked {
 	background: var(--interactive-success);
 	border-color: var(--interactive-success);
+}
+
+.ft-task-done .ft-checkbox.ft-checked::after {
+	border-color: var(--checkbox-mark-color, var(--text-on-accent));
 }
 
 .col-time {

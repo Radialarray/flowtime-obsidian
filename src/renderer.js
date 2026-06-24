@@ -732,13 +732,6 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		const table = this.containerEl.createEl("table", {
 			cls: "flowtime-table",
 		});
-		// Force fixed table layout for reliable column widths
-		table.style.tableLayout = "fixed";
-		// Colgroup for column widths
-		const colgroup = table.createEl("colgroup");
-		const colCheck = colgroup.createEl("col", { cls: "col-check" });
-		colCheck.width = 32;
-		const colTask = colgroup.createEl("col", { cls: "col-task" });
 		const hr = table.createEl("thead").createEl("tr");
 
 		const sortByColumn = (field) => (e) => {
@@ -771,9 +764,6 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		const makeSortableHeader = (label, field, cls) => {
 			const th = hr.createEl("th", { cls });
 			th.classList.add("ft-sortable");
-			// Set width attribute for fixed table layout (CSS width is ignored for table cells)
-			if (cls === "col-check") th.setAttribute("width", "32");
-			if (cls === "col-timer") th.setAttribute("width", "60");
 			th.createEl("span", { text: label });
 			if (field) {
 				th.createEl("span", { cls: "ft-sort-indicator", text: sortIndicator(field) });
@@ -812,10 +802,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				makeSortableHeader("Source", "source", "col-source");
 			if (this._columnVisibility.date !== false)
 				makeSortableHeader("Date", "date", "col-date");
-			if (this._columnVisibility.timer !== false) {
-				const th = hr.createEl("th", { cls: "col-timer" });
-				th.setAttribute("width", "60");
-			}
+			if (this._columnVisibility.timer !== false)
+				hr.createEl("th", { cls: "col-timer" });
 		}
 		const tbody = table.createEl("tbody");
 		this.bucketTotals = this._computeBucketTotals();

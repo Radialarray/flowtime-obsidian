@@ -1432,20 +1432,28 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 	 * Show floating detail popup for a task (hidden fields).
 	 */
 	_showTaskDetail(task, anchorBtn, tdy) {
-		// Close any existing popup
 		document.querySelectorAll(".ft-detail-popup").forEach(e => e.remove());
 
 		const popup = document.createElement("div");
 		popup.className = "ft-detail-popup";
 
-		// Position near the button
 		const r = anchorBtn.getBoundingClientRect();
 		popup.style.left = Math.min(r.left, window.innerWidth - 320) + "px";
 		popup.style.top = (r.bottom + 4) + "px";
 
-		// Task text (readonly)
+		// Task text
 		const taskRow = popup.createEl("div", { cls: "ft-detail-row" });
 		taskRow.createEl("span", { text: task.cleanText, cls: "ft-detail-task-text" });
+
+		// Refresh helper: invalidate cache, close popup, full re-render
+		const refreshAfterEdit = async () => {
+			if (this.plugin?.taskCache && task.file) {
+				this.plugin.taskCache.invalid(task.file.path);
+			}
+			popup.remove();
+			await this.loadTasks();
+			this.renderTable();
+		};
 
 		// Date
 		const dateRow = popup.createEl("div", { cls: "ft-detail-row" });
@@ -1456,10 +1464,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		dateInput.addEventListener("change", async () => {
 			await this.updateDate(task, dateInput.value || "");
 			task.taskDate = dateInput.value || "";
-			// Refresh
-			this.containerEl.querySelectorAll(".ft-detail-popup").forEach(e => e.remove());
-			const tbody = this.containerEl.querySelector("tbody");
-			if (tbody) this.buildRows(tbody);
+			await refreshAfterEdit();
 		});
 
 		// Bucket
@@ -1474,21 +1479,17 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		}
 		bucketSel.addEventListener("change", async () => {
 			const newBucket = bucketSel.value || "";
-			// Update the task line in source to change bucket directive
 			const lines = (await this.app.vault.read(task.file)).split("\n");
 			const line = lines[task.line];
-			const updated = line
+			lines[task.line] = line
 				.replace(/@(?:bucket|b):[^\s]+/g, newBucket ? `@b:${newBucket}` : "")
 				.replace(/\s+$/, "");
-			lines[task.line] = updated;
 			await this.app.vault.modify(task.file, lines.join("\n"));
 			task.bucket = newBucket || null;
-			this.containerEl.querySelectorAll(".ft-detail-popup").forEach(e => e.remove());
-			const tbody = this.containerEl.querySelector("tbody");
-			if (tbody) this.buildRows(tbody);
+			await refreshAfterEdit();
 		});
 
-		// Project (clickable link — search vault if no projectPath)
+		// Project
 		const projRow = popup.createEl("div", { cls: "ft-detail-row" });
 		projRow.createEl("label", { text: "Project: ", cls: "ft-detail-label" });
 		if (task.project) {
@@ -1521,14 +1522,17 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		const closeBtn = popup.createEl("button", { text: "✕", cls: "ft-detail-close" });
 		closeBtn.addEventListener("click", () => popup.remove());
 
-		// Close on outside click
+		// Close on outside click — use mousedown to catch clicks on date picker overlay
+		let ignoreNextClick = false;
+		popup.addEventListener("pointerdown", () => { ignoreNextClick = false; });
 		const closeOnOutside = (e) => {
-			if (!popup.contains(e.target) && e.target !== anchorBtn) {
-				popup.remove();
-				document.removeEventListener("click", closeOnOutside, true);
-			}
+			if (ignoreNextClick) return;
+			if (popup.contains(e.target)) return;
+			popup.remove();
+			document.removeEventListener("click", closeOnOutside, true);
 		};
-		setTimeout(() => document.addEventListener("click", closeOnOutside, true), 0);
+		// Delay registration to avoid the click that opened the popup from closing it
+		setTimeout(() => document.addEventListener("click", closeOnOutside, true), 100);
 
 		document.body.appendChild(popup);
 	}

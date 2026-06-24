@@ -818,7 +818,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		// ── Save/Load View (placeholder — needs Modal, prompt() unavailable in Obsidian) ──
 		// To be re-implemented with Obsidian Modal API in future release
 
-		const table = this.containerEl.createEl("table", {
+		const tableWrap = this.containerEl.createEl("div", {
+			cls: "ft-table-wrap",
+		});
+		const table = tableWrap.createEl("table", {
 			cls: "flowtime-table",
 		});
 		const hr = table.createEl("thead").createEl("tr");

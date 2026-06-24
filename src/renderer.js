@@ -87,8 +87,9 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 	}
 	_computeBucketTotals() {
 		const totals = {};
-		const mon = this._getMonday(new Date().toISOString().split("T")[0]);
-		const sun = this._getSunday(new Date().toISOString().split("T")[0]);
+		const ref = this._refDate();
+		const mon = this._getMonday(ref);
+		const sun = this._getSunday(ref);
 		for (const task of this.tasks) {
 			if (!task.bucket) continue;
 			if (task.taskDate && task.taskDate >= mon && task.taskDate <= sun) {
@@ -112,7 +113,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 	}
 
 	async _computeDailyTotal() {
-		const today = new Date().toISOString().split("T")[0];
+		const today = this._refDate();
 		let total = 0;
 		for (const file of this.app.vault.getMarkdownFiles()) {
 			if (!this._isFileInScope(file.path)) continue;
@@ -306,14 +307,29 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 	}
 
 	/* ─── load ─── */
+
+	/**
+	 * v0.4.0: Derive reference date from source file or fall back to today.
+	 * If the source file is a daily note (e.g. Daily/2026-06-25.md),
+	 * use that date as "today" so the view is relative to the file's date.
+	 */
+	_refDate() {
+		if (this.sourcePath) {
+			const dateMatch = this.sourcePath.match(/(\d{4}-\d{2}-\d{2})\.md$/);
+			if (dateMatch) return dateMatch[1];
+		}
+		return new Date().toISOString().split("T")[0];
+	}
+
 	async loadTasks() {
 		if (this.mode === "sessions") {
 			this.tasks = [];
 			return;
 		}
 
-		const today = new Date().toISOString().split("T")[0];
-		const eow = new Date();
+		const today = this._refDate();
+		const refDt = new Date(today + "T00:00:00");
+		const eow = new Date(refDt);
 		eow.setDate(eow.getDate() + ((7 - eow.getDay()) % 7));
 		const eowStr = eow.toISOString().split("T")[0];
 		const mon = this._getMonday(today);
@@ -581,7 +597,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			project: "📁 Tasks for this project",
 		};
 		const heading = headings[this.mode];
-		const tdy = new Date().toISOString().split("T")[0];
+		const tdy = this._refDate();
 
 		const bar = this.containerEl.createEl("div", { cls: "ft-topbar" });
 		if (heading) {
@@ -919,8 +935,9 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		// Daily cap summary (today mode only)
 		if (this.mode === "today" && this.plugin?.settings?.dailyCap > 0) {
 			const dailyCap = this.plugin.settings.dailyCap;
+			const refTdy = this._refDate();
 			const totalToday = this.tasks.reduce((sum, t) => {
-				if (t.taskDate === new Date().toISOString().split("T")[0]) {
+				if (t.taskDate === refTdy) {
 					return sum + (t.durationMinutes || 0);
 				}
 				return sum;
@@ -993,7 +1010,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			document.removeEventListener("click", this._closePopups, true);
 			this._closePopups = null;
 		}
-		const tdy = new Date().toISOString().split("T")[0];
+		const tdy = this._refDate();
 		const od = this.mode === "overdue",
 			_dw = this.mode === "dueweek",
 			wk = this.mode === "weekly",

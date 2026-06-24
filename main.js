@@ -67,6 +67,7 @@ class AtCompletionsSuggest extends EditorSuggest {
 	constructor(app, plugin) {
 		super(app);
 		this.plugin = plugin;
+		this.limit = 30; // Ensure all suggestions are visible (default ~10 clips the list)
 	}
 
 	onTrigger(cursor, editor, file) {
@@ -80,12 +81,13 @@ class AtCompletionsSuggest extends EditorSuggest {
 
 		// Detect COMMAND MODE: @ is the first non-whitespace char
 		const lineLead = line.slice(0, atIndex);
-		const isCommandMode = lineLead.trim() === "" && !line.match(/^\s*[-*+]\s*\[[^\]]*\]/);
+		const isCommandMode =
+			lineLead.trim() === "" && !line.match(/^\s*[-*+]\s*\[[^\]]*\]/);
 
 		return {
 			start: isCommandMode
-				? { line: cursor.line, ch: 0 }           // Replace whole line
-				: { line: cursor.line, ch: atIndex },     // Replace from @
+				? { line: cursor.line, ch: 0 } // Replace whole line
+				: { line: cursor.line, ch: atIndex }, // Replace from @
 			end: cursor,
 			query: textAfterAt,
 			isCommandMode,
@@ -100,25 +102,86 @@ class AtCompletionsSuggest extends EditorSuggest {
 			// ── COMMAND MODE: task macros & code blocks ──
 			const macros = [
 				{ label: "@td", insert: "- [ ]  @today ", desc: "Today task skeleton" },
-				{ label: "@tm", insert: "- [ ]  @tomorrow ", desc: "Tomorrow task skeleton" },
-				{ label: "@inbox", insert: "- [ ]  ", desc: "Inbox task skeleton (no date)" },
+				{
+					label: "@tm",
+					insert: "- [ ]  @tomorrow ",
+					desc: "Tomorrow task skeleton",
+				},
 				{ label: "@tk", insert: "- [ ]  ", desc: "Task skeleton (no date)" },
-				{ label: "@now", insert: "- [ ]  @today @15m ", desc: "Quick 15m task now" },
-				{ label: "@1h", insert: "- [ ]  @today @1h ", desc: "Quick 1h task today" },
-				{ label: "@rec", insert: "- [ ]  🔁 every day @today ", desc: "Recurring daily task" },
-				{ label: "@rep", insert: "- [ ]  🔁 every week @monday ", desc: "Recurring weekly task" },
-				{ label: "@today", insert: "```flowtime-today\n```", desc: "Today tasks code block" },
-				{ label: "@overdue", insert: "```flowtime-overdue\n```", desc: "Overdue tasks code block" },
-				{ label: "@soon", insert: "```flowtime-soon\n```", desc: "Up next tasks code block" },
-				{ label: "@weekly", insert: "```flowtime-weekly\n```", desc: "Weekly view code block" },
-				{ label: "@budget", insert: "```flowtime-buckets\n```", desc: "Budget overview code block" },
-				{ label: "@sessions", insert: "```flowtime-sessions\n```", desc: "Session history code block" },
-				{ label: "@proj", insert: "```flowtime-project\n```", desc: "Project tasks code block" },
-				{ label: "@dueweek", insert: "```flowtime-dueweek\n```", desc: "Due this week code block" },
+				{
+					label: "@now",
+					insert: "- [ ]  @today @15m ",
+					desc: "Quick 15m task now",
+				},
+				{
+					label: "@1h",
+					insert: "- [ ]  @today @1h ",
+					desc: "Quick 1h task today",
+				},
+				{
+					label: "@rec",
+					insert: "- [ ]  🔁 every day @today ",
+					desc: "Recurring daily task",
+				},
+				{
+					label: "@rep",
+					insert: "- [ ]  🔁 every week @monday ",
+					desc: "Recurring weekly task",
+				},
+				{
+					label: "@today",
+					insert: "```flowtime-today\n```",
+					desc: "Today tasks code block",
+				},
+				{
+					label: "@overdue",
+					insert: "```flowtime-overdue\n```",
+					desc: "Overdue tasks code block",
+				},
+				{
+					label: "@soon",
+					insert: "```flowtime-soon\n```",
+					desc: "Up next tasks code block",
+				},
+				{
+					label: "@weekly",
+					insert: "```flowtime-weekly\n```",
+					desc: "Weekly view code block",
+				},
+				{
+					label: "@budget",
+					insert: "```flowtime-buckets\n```",
+					desc: "Budget overview code block",
+				},
+				{
+					label: "@sessions",
+					insert: "```flowtime-sessions\n```",
+					desc: "Session history code block",
+				},
+				{
+					label: "@proj",
+					insert: "```flowtime-project\n```",
+					desc: "Project tasks code block",
+				},
+				{
+					label: "@dueweek",
+					insert: "```flowtime-dueweek\n```",
+					desc: "Due this week code block",
+				},
 			];
-			return macros
-				.filter(m => m.label.slice(1).includes(q)) // match after @
-				.map(m => ({ ...m, type: "macro" }));
+			const matched = macros
+				.filter((m) => m.label.slice(1).includes(q))
+				.map((m) => ({ ...m, type: "macro" }));
+			// Always inject @inbox at the front when query matches
+			if ("inbox".includes(q || "")) {
+				matched.unshift({
+					label: "@inbox",
+					insert: "- [ ]  @today ",
+					desc: "Inbox task with today date",
+					type: "macro",
+				});
+			}
+			return matched;
 		}
 
 		// ── DIRECTIVE MODE: normal @ completions ──
@@ -147,7 +210,7 @@ class AtCompletionsSuggest extends EditorSuggest {
 			{ label: "2h", description: "2 hours" },
 			{ label: "3h", description: "3 hours" },
 		];
-		const buckets = (this.plugin?.settings?.buckets || []).map(b => ({
+		const buckets = (this.plugin?.settings?.buckets || []).map((b) => ({
 			label: "b:" + b.id,
 			description: b.name,
 		}));
@@ -168,7 +231,7 @@ class AtCompletionsSuggest extends EditorSuggest {
 		try {
 			if (this.plugin?.projectEngine) {
 				const projList = await this.plugin.projectEngine.getAllProjects();
-				projects = projList.map(p => ({
+				projects = projList.map((p) => ({
 					label: "p:" + p.name,
 					description: "Project",
 				}));
@@ -178,48 +241,122 @@ class AtCompletionsSuggest extends EditorSuggest {
 		if (q.startsWith("b:") || q.startsWith("bucket:")) {
 			const bucketQ = q.replace(/^(b:|bucket:)/, "");
 			for (const b of buckets) {
-				if (b.label.toLowerCase().includes(bucketQ) || b.description.toLowerCase().includes(bucketQ))
-					suggestions.push({ label: "@" + b.label, description: b.description, type: "bucket" });
+				if (
+					b.label.toLowerCase().includes(bucketQ) ||
+					b.description.toLowerCase().includes(bucketQ)
+				)
+					suggestions.push({
+						label: "@" + b.label,
+						description: b.description,
+						type: "bucket",
+					});
 			}
 		} else if (q.startsWith("due:")) {
 			const dueQ = q.slice(4);
 			for (const d of dueDates) {
 				if (d.label.toLowerCase().includes(dueQ))
-					suggestions.push({ label: "@" + d.label, description: d.description, type: "due" });
+					suggestions.push({
+						label: "@" + d.label,
+						description: d.description,
+						type: "due",
+					});
 			}
 		} else if (q.startsWith("p:")) {
 			const pQ = q.slice(2);
 			for (const p of projects) {
-				if (p.label.toLowerCase().includes(pQ) || p.description.toLowerCase().includes(pQ))
-					suggestions.push({ label: "@" + p.label, description: p.description, type: "project" });
+				if (
+					p.label.toLowerCase().includes(pQ) ||
+					p.description.toLowerCase().includes(pQ)
+				)
+					suggestions.push({
+						label: "@" + p.label,
+						description: p.description,
+						type: "project",
+					});
 			}
 		} else {
 			for (const d of dates)
-				if (d.label.toLowerCase().includes(q)) suggestions.push({ label: "@" + d.label, description: d.description, type: "date" });
+				if (d.label.toLowerCase().includes(q))
+					suggestions.push({
+						label: "@" + d.label,
+						description: d.description,
+						type: "date",
+					});
 			for (const d of durations)
-				if (d.label.toLowerCase().includes(q)) suggestions.push({ label: "@" + d.label, description: d.description, type: "duration" });
+				if (d.label.toLowerCase().includes(q))
+					suggestions.push({
+						label: "@" + d.label,
+						description: d.description,
+						type: "duration",
+					});
 			for (const b of buckets)
-				if (b.label.toLowerCase().includes(q) || b.description.toLowerCase().includes(q)) suggestions.push({ label: "@" + b.label, description: b.description, type: "bucket" });
+				if (
+					b.label.toLowerCase().includes(q) ||
+					b.description.toLowerCase().includes(q)
+				)
+					suggestions.push({
+						label: "@" + b.label,
+						description: b.description,
+						type: "bucket",
+					});
 			for (const d of dueDates)
-				if (d.label.toLowerCase().includes(q)) suggestions.push({ label: "@" + d.label, description: d.description, type: "due" });
+				if (d.label.toLowerCase().includes(q))
+					suggestions.push({
+						label: "@" + d.label,
+						description: d.description,
+						type: "due",
+					});
 			for (const p of projects)
-				if (p.label.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)) suggestions.push({ label: "@" + p.label, description: p.description, type: "project" });
+				if (
+					p.label.toLowerCase().includes(q) ||
+					p.description.toLowerCase().includes(q)
+				)
+					suggestions.push({
+						label: "@" + p.label,
+						description: p.description,
+						type: "project",
+					});
 			for (const s of statusTags)
-				if (s.label.toLowerCase().includes(q)) suggestions.push({ label: "@" + s.label, description: s.description, type: "status" });
+				if (s.label.toLowerCase().includes(q))
+					suggestions.push({
+						label: "@" + s.label,
+						description: s.description,
+						type: "status",
+					});
 		}
 
 		return suggestions.slice(0, 14);
 	}
 
 	renderSuggestion(suggestion, el) {
-		const icons = { date: "📅", duration: "⏱", bucket: "📊", due: "⏰", project: "📁", macro: "⚡", status: "🏷" };
+		const icons = {
+			date: "📅",
+			duration: "⏱",
+			bucket: "📊",
+			due: "⏰",
+			project: "📁",
+			macro: "⚡",
+			status: "🏷",
+		};
 		const icon = icons[suggestion.type] || "•";
 		if (suggestion.type === "macro") {
-			el.createEl("span", { text: icon + " " + suggestion.label, cls: "ft-at-completion-label" });
-			el.createEl("small", { text: "  → " + (suggestion.insert || "").replace(/\n/g, "↵ "), cls: "ft-at-completion-desc" });
+			el.createEl("span", {
+				text: icon + " " + suggestion.label,
+				cls: "ft-at-completion-label",
+			});
+			el.createEl("small", {
+				text: "  → " + (suggestion.insert || "").replace(/\n/g, "↵ "),
+				cls: "ft-at-completion-desc",
+			});
 		} else {
-			el.createEl("span", { text: icon + " " + suggestion.label, cls: "ft-at-completion-label" });
-			el.createEl("small", { text: "  " + suggestion.description, cls: "ft-at-completion-desc" });
+			el.createEl("span", {
+				text: icon + " " + suggestion.label,
+				cls: "ft-at-completion-label",
+			});
+			el.createEl("small", {
+				text: "  " + suggestion.description,
+				cls: "ft-at-completion-desc",
+			});
 		}
 	}
 
@@ -257,7 +394,10 @@ module.exports = class FlowtimePlugin extends Plugin {
 		// Apply content width if set
 		if (this.settings.contentWidth > 0) {
 			document.body.classList.add("ft-wide");
-			document.body.style.setProperty("--ft-content-width", this.settings.contentWidth + "px");
+			document.body.style.setProperty(
+				"--ft-content-width",
+				this.settings.contentWidth + "px",
+			);
 		}
 
 		this.projectEngine = new ProjectEngine(this.app, this.settings);
@@ -267,7 +407,8 @@ module.exports = class FlowtimePlugin extends Plugin {
 
 		// ── v0.4.0: Cache persistence in separate file ──
 		this._cacheSaveTimer = null;
-		this._cacheFilePath = () => this.app.vault.configDir + "/plugins/flowtime/task-cache.json";
+		this._cacheFilePath = () =>
+			this.app.vault.configDir + "/plugins/flowtime/task-cache.json";
 
 		this._loadTaskCache = async () => {
 			try {
@@ -296,7 +437,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 
 		// v0.4.0: Auto-evict stale cache entries (files that no longer exist)
 		const evicted = await this.taskCache.autoEvict(async (path) => {
-			return !!(this.app.vault.getAbstractFileByPath(path));
+			return !!this.app.vault.getAbstractFileByPath(path);
 		});
 		if (evicted > 0) {
 			this.notify(`🧹 Task cache cleaned: ${evicted} stale entries removed`);
@@ -381,9 +522,17 @@ module.exports = class FlowtimePlugin extends Plugin {
 						textarea.style.minHeight = "80px";
 						textarea.focus();
 
-						const btnRow = contentEl.createEl("div", { cls: "flowtime-btn-row" });
-						const cancelBtn = btnRow.createEl("button", { text: "Cancel", cls: "flowtime-btn-cancel" });
-						const submitBtn = btnRow.createEl("button", { text: "Append", cls: "flowtime-btn-submit" });
+						const btnRow = contentEl.createEl("div", {
+							cls: "flowtime-btn-row",
+						});
+						const cancelBtn = btnRow.createEl("button", {
+							text: "Cancel",
+							cls: "flowtime-btn-cancel",
+						});
+						const submitBtn = btnRow.createEl("button", {
+							text: "Append",
+							cls: "flowtime-btn-submit",
+						});
 
 						cancelBtn.addEventListener("click", () => this.close());
 						submitBtn.addEventListener("click", async () => {
@@ -397,21 +546,24 @@ module.exports = class FlowtimePlugin extends Plugin {
 								let content = "";
 								if (await this.plugin.app.vault.adapter.exists(path)) {
 									content = await this.plugin.app.vault.read(
-										this.plugin.app.vault.getAbstractFileByPath(path)
+										this.plugin.app.vault.getAbstractFileByPath(path),
 									);
 								}
 								// Split into lines, add the new text, write back
-								const lines = text.split("\n").filter(l => l.trim());
-								const newContent = content.trimEnd() + "\n" + lines.join("\n") + "\n";
+								const lines = text.split("\n").filter((l) => l.trim());
+								const newContent =
+									content.trimEnd() + "\n" + lines.join("\n") + "\n";
 								if (await this.plugin.app.vault.adapter.exists(path)) {
 									await this.plugin.app.vault.modify(
 										this.plugin.app.vault.getAbstractFileByPath(path),
-										newContent
+										newContent,
 									);
 								} else {
 									await this.plugin.app.vault.create(path, newContent);
 								}
-								this.plugin.notify(`\u{1F4E5} ${lines.length} line(s) added to inbox`);
+								this.plugin.notify(
+									`\u{1F4E5} ${lines.length} line(s) added to inbox`,
+								);
 								this.close();
 							} catch (e) {
 								this.plugin.notify("Failed to append: " + e.message, true);
@@ -425,7 +577,9 @@ module.exports = class FlowtimePlugin extends Plugin {
 							}
 						});
 					}
-					onClose() { this.contentEl.empty(); }
+					onClose() {
+						this.contentEl.empty();
+					}
 				}
 				new AppendToInboxModal(this.app, this).open();
 			},
@@ -458,10 +612,14 @@ module.exports = class FlowtimePlugin extends Plugin {
 		this.registerDomEvent(this.statusTimer.statusBarItem, "click", () => {
 			this.statusTimer.toggle();
 		});
-		this.registerDomEvent(this.statusTimer.statusBarItem, "contextmenu", (e) => {
-			e.preventDefault();
-			this.statusTimer.stop();
-		});
+		this.registerDomEvent(
+			this.statusTimer.statusBarItem,
+			"contextmenu",
+			(e) => {
+				e.preventDefault();
+				this.statusTimer.stop();
+			},
+		);
 
 		this.renderers = [];
 		for (const [name, mode] of [
@@ -475,7 +633,13 @@ module.exports = class FlowtimePlugin extends Plugin {
 			["flowtime-sessions", "sessions"],
 		]) {
 			this.registerMarkdownCodeBlockProcessor(name, (_src, el, ctx) => {
-				const r = new FlowtimeRenderer(this.app, el, mode, this.projectEngine, ctx.sourcePath);
+				const r = new FlowtimeRenderer(
+					this.app,
+					el,
+					mode,
+					this.projectEngine,
+					ctx.sourcePath,
+				);
 				r.plugin = this;
 				this.renderers.push(r);
 				ctx.addChild(r);
@@ -529,21 +693,33 @@ module.exports = class FlowtimePlugin extends Plugin {
 
 						// Scaffold options
 						contentEl.createEl("hr", { style: "margin: 12px 0" });
-						const tasksCb = contentEl.createEl("label", { cls: "flowtime-label" });
+						const tasksCb = contentEl.createEl("label", {
+							cls: "flowtime-label",
+						});
 						const tasksCheck = tasksCb.createEl("input", { type: "checkbox" });
 						tasksCheck.checked = this.scaffoldTasks;
 						tasksCheck.style.marginRight = "6px";
-						tasksCheck.addEventListener("change", () => { this.scaffoldTasks = tasksCheck.checked; });
-						tasksCb.append(" Create Tasks.md (with flowtime-project block + starter tasks)");
+						tasksCheck.addEventListener("change", () => {
+							this.scaffoldTasks = tasksCheck.checked;
+						});
+						tasksCb.append(
+							" Create Tasks.md (with flowtime-project block + starter tasks)",
+						);
 
-						const wikiCb = contentEl.createEl("label", { cls: "flowtime-label" });
+						const wikiCb = contentEl.createEl("label", {
+							cls: "flowtime-label",
+						});
 						const wikiCheck = wikiCb.createEl("input", { type: "checkbox" });
 						wikiCheck.checked = this.scaffoldWiki;
 						wikiCheck.style.marginRight = "6px";
-						wikiCheck.addEventListener("change", () => { this.scaffoldWiki = wikiCheck.checked; });
+						wikiCheck.addEventListener("change", () => {
+							this.scaffoldWiki = wikiCheck.checked;
+						});
 						wikiCb.append(" Create Wiki.md (with template sections)");
 
-						const btnRow = contentEl.createEl("div", { cls: "flowtime-btn-row" });
+						const btnRow = contentEl.createEl("div", {
+							cls: "flowtime-btn-row",
+						});
 						const cancelBtn = btnRow.createEl("button", {
 							text: "Cancel",
 							cls: "flowtime-btn-cancel",
@@ -557,7 +733,10 @@ module.exports = class FlowtimePlugin extends Plugin {
 						createBtn.addEventListener("click", () => {
 							const name = input.value.trim();
 							if (name) {
-								this.onSubmit(name, { scaffoldTasks: this.scaffoldTasks, scaffoldWiki: this.scaffoldWiki });
+								this.onSubmit(name, {
+									scaffoldTasks: this.scaffoldTasks,
+									scaffoldWiki: this.scaffoldWiki,
+								});
 								this.close();
 							}
 						});
@@ -565,7 +744,10 @@ module.exports = class FlowtimePlugin extends Plugin {
 							if (e.key === "Enter") {
 								const name = input.value.trim();
 								if (name) {
-									this.onSubmit(name, { scaffoldTasks: this.scaffoldTasks, scaffoldWiki: this.scaffoldWiki });
+									this.onSubmit(name, {
+										scaffoldTasks: this.scaffoldTasks,
+										scaffoldWiki: this.scaffoldWiki,
+									});
 									this.close();
 								}
 							}
@@ -582,7 +764,9 @@ module.exports = class FlowtimePlugin extends Plugin {
 						const parts = [result.notePath];
 						if (result.tasksPath) parts.push(result.tasksPath);
 						if (result.wikiPath) parts.push(result.wikiPath);
-						this.notify("✅ Project created: " + name + " (" + parts.length + " files)");
+						this.notify(
+							"✅ Project created: " + name + " (" + parts.length + " files)",
+						);
 					} catch (e) {
 						this.notify("❌ Failed to create project: " + e.message, true);
 					}
@@ -608,45 +792,86 @@ module.exports = class FlowtimePlugin extends Plugin {
 							cls: "flowtime-label",
 						});
 
-						contentEl.createEl("label", { text: "Name", cls: "flowtime-label" });
+						contentEl.createEl("label", {
+							text: "Name",
+							cls: "flowtime-label",
+						});
 						const nameInput = contentEl.createEl("input", {
-							type: "text", placeholder: "e.g. Deep Work", cls: "flowtime-input",
+							type: "text",
+							placeholder: "e.g. Deep Work",
+							cls: "flowtime-input",
 						});
 
-						contentEl.createEl("label", { text: "Color", cls: "flowtime-label" });
+						contentEl.createEl("label", {
+							text: "Color",
+							cls: "flowtime-label",
+						});
 						const colorInput = contentEl.createEl("input", {
-							type: "color", value: "#4a9eff", cls: "flowtime-input",
+							type: "color",
+							value: "#4a9eff",
+							cls: "flowtime-input",
 						});
 						colorInput.style.padding = "2px";
 						colorInput.style.width = "60px";
 
-						contentEl.createEl("label", { text: "Weekly limit (hours)", cls: "flowtime-label" });
+						contentEl.createEl("label", {
+							text: "Weekly limit (hours)",
+							cls: "flowtime-label",
+						});
 						const limitInput = contentEl.createEl("input", {
-							type: "number", value: "10", min: "1", cls: "flowtime-input",
+							type: "number",
+							value: "10",
+							min: "1",
+							cls: "flowtime-input",
 						});
 
-						const btnRow = contentEl.createEl("div", { cls: "flowtime-btn-row" });
-						const cancelBtn = btnRow.createEl("button", { text: "Cancel", cls: "flowtime-btn-cancel" });
-						const createBtn = btnRow.createEl("button", { text: "Create", cls: "flowtime-btn-submit" });
+						const btnRow = contentEl.createEl("div", {
+							cls: "flowtime-btn-row",
+						});
+						const cancelBtn = btnRow.createEl("button", {
+							text: "Cancel",
+							cls: "flowtime-btn-cancel",
+						});
+						const createBtn = btnRow.createEl("button", {
+							text: "Create",
+							cls: "flowtime-btn-submit",
+						});
 
 						cancelBtn.addEventListener("click", () => this.close());
 						createBtn.addEventListener("click", async () => {
 							const name = nameInput.value.trim();
-							if (!name) { this.plugin.notify("Name is required", true); return; }
+							if (!name) {
+								this.plugin.notify("Name is required", true);
+								return;
+							}
 							const color = colorInput.value;
 							const limit = parseInt(limitInput.value, 10);
-							if (!limit || limit <= 0) { this.plugin.notify("Limit must be > 0", true); return; }
+							if (!limit || limit <= 0) {
+								this.plugin.notify("Limit must be > 0", true);
+								return;
+							}
 
 							const buckets = this.plugin.settings.buckets || [];
-							const id = name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-							buckets.push({ id, name, color, weeklyLimit: limit, sortOrder: buckets.length });
+							const id = name
+								.toLowerCase()
+								.replace(/\s+/g, "-")
+								.replace(/[^a-z0-9-]/g, "");
+							buckets.push({
+								id,
+								name,
+								color,
+								weeklyLimit: limit,
+								sortOrder: buckets.length,
+							});
 							this.plugin.settings.buckets = buckets;
 							await this.plugin.saveData(this.plugin.settings);
 							this.plugin.notify("✅ Bucket created: " + name);
 							this.close();
 						});
 					}
-					onClose() { this.contentEl.empty(); }
+					onClose() {
+						this.contentEl.empty();
+					}
 				}
 				new BucketModal(this.app, this).open();
 			},
@@ -687,14 +912,27 @@ module.exports = class FlowtimePlugin extends Plugin {
 							text: "This will clear all settings, buckets, and the task cache. Project files and session data will NOT be affected.",
 							cls: "flowtime-label",
 						});
-						const btnRow = contentEl.createEl("div", { cls: "flowtime-btn-row" });
-						const cancelBtn = btnRow.createEl("button", { text: "Cancel", cls: "flowtime-btn-cancel" });
-						const confirmBtn = btnRow.createEl("button", { text: "Reset", cls: "flowtime-btn-submit" });
+						const btnRow = contentEl.createEl("div", {
+							cls: "flowtime-btn-row",
+						});
+						const cancelBtn = btnRow.createEl("button", {
+							text: "Cancel",
+							cls: "flowtime-btn-cancel",
+						});
+						const confirmBtn = btnRow.createEl("button", {
+							text: "Reset",
+							cls: "flowtime-btn-submit",
+						});
 						confirmBtn.style.background = "var(--text-error)";
 						cancelBtn.addEventListener("click", () => this.close());
-						confirmBtn.addEventListener("click", () => { this.onConfirm(); this.close(); });
+						confirmBtn.addEventListener("click", () => {
+							this.onConfirm();
+							this.close();
+						});
 					}
-					onClose() { this.contentEl.empty(); }
+					onClose() {
+						this.contentEl.empty();
+					}
 				}
 				new ConfirmModal(this.app, async () => {
 					this.settings = Object.assign({}, DEFAULT_SETTINGS);
@@ -731,18 +969,21 @@ module.exports = class FlowtimePlugin extends Plugin {
 				this._cacheSaveTimer = null;
 			}
 			if (this._cacheSaveTimer) return;
-			this._cacheSaveTimer = setTimeout(async () => {
-				this._cacheSaveTimer = null;
-				try {
-					await this._saveTaskCache();
-					// Also strip legacy _taskCache from data.json if present
-					const data = (await this.loadData()) || {};
-					if (data._taskCache) {
-						delete data._taskCache;
-						await this.saveData(data);
-					}
-				} catch (_) {}
-			}, force ? 0 : 2000);
+			this._cacheSaveTimer = setTimeout(
+				async () => {
+					this._cacheSaveTimer = null;
+					try {
+						await this._saveTaskCache();
+						// Also strip legacy _taskCache from data.json if present
+						const data = (await this.loadData()) || {};
+						if (data._taskCache) {
+							delete data._taskCache;
+							await this.saveData(data);
+						}
+					} catch (_) {}
+				},
+				force ? 0 : 2000,
+			);
 		};
 
 		// Save cache on unload as well
@@ -784,7 +1025,12 @@ module.exports = class FlowtimePlugin extends Plugin {
 			const folder = config.folder;
 			if (!folder) return;
 			if (!(await this.app.vault.adapter.exists(folder))) {
-				this.notify("⚠️ Daily notes folder '" + folder + "' not found. Check Settings → Daily Notes.", true);
+				this.notify(
+					"⚠️ Daily notes folder '" +
+						folder +
+						"' not found. Check Settings → Daily Notes.",
+					true,
+				);
 			}
 		} catch (_) {}
 	}

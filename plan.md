@@ -182,11 +182,11 @@ Project resolution (folder traversal + frontmatter read) is expensive. Cache res
 
 | Code block | Mode | Shows |
 |------------|------|-------|
-| `task-planner` | today | Tasks with ⏳ today |
-| `task-planner-overdue` | overdue | Tasks with ⏳ before today |
-| `task-planner-dueweek` | dueweek | Tasks with 📅 or ⏳ this week |
-| `task-planner-weekly` | weekly | All tasks this week, grouped by project |
-| `task-planner-project` | project | All tasks for the project of the current note |
+| `flowtime-today` | today | Tasks with ⏳ today |
+| `flowtime-overdue` | overdue | Tasks with ⏳ before today |
+| `flowtime-dueweek` | dueweek | Tasks with 📅 or ⏳ this week |
+| `flowtime-weekly` | weekly | All tasks this week, grouped by project |
+| `flowtime-project` | project | All tasks for the project of the current note |
 
 **New columns added to all tables:**
 - **Project** — resolved project name, linked to project folder note
@@ -226,15 +226,15 @@ Inserted via "Flowtime: Insert daily dashboard" command. Embeds all table code b
 
 ```markdown
 ## 🔄 Carry Over
-\`\`\`task-planner-overdue
+\`\`\`flowtime-overdue
 \`\`\`
 
 ## 🎯 Today
-\`\`\`task-planner
+\`\`\`flowtime-today
 \`\`\`
 
 ## ⚠️ Due This Week
-\`\`\`task-planner-dueweek
+\`\`\`flowtime-dueweek
 \`\`\`
 
 ## 📝 Notes
@@ -246,11 +246,11 @@ Inserted via "Flowtime: Insert weekly dashboard" command.
 
 ```markdown
 ## 📊 This Week (by project)
-\`\`\`task-planner-weekly
+\`\`\`flowtime-weekly
 \`\`\`
 
 ## ⚠️ Due Next Week
-\`\`\`task-planner-dueweek
+\`\`\`flowtime-dueweek
 \`\`\`
 
 ## 📝 Review
@@ -320,8 +320,8 @@ Weekly review:
 - [ ] Show task name in status bar
 
 ### Sprint 5: Dashboards & Templates
-- [ ] `task-planner-weekly` code block (this week, grouped by project)
-- [ ] `task-planner-project` code block (project-scoped tasks)
+- [ ] `flowtime-weekly` code block (this week, grouped by project)
+- [ ] `flowtime-project` code block (project-scoped tasks)
 - [ ] Template engine: load/save/insert templates
 - [ ] "Insert daily dashboard" command
 - [ ] "Insert weekly dashboard" command
@@ -342,7 +342,7 @@ Weekly review:
 Users currently rely on:
 - Tasks Plugin emoji format (⏳ 📅 🔁 🔺) → **kept, parsed natively**
 - Day Planner time format (HH:mm—HH:mm) → **kept, parsed natively**
-- Existing code blocks (`task-planner`, etc.) → **kept, extended with new types**
+- Existing code blocks (`flowtime-today`, etc.) → **kept, extended with new types**
 
 **Goal**: Users can uninstall Tasks Plugin, Day Planner, nldates, QuickAdd. Flowtime handles all task management.
 

@@ -150,11 +150,11 @@ module.exports = class FlowtimePlugin extends Plugin {
 
 		this.renderers = [];
 		for (const [name, mode] of [
-			["task-planner", "today"],
-			["task-planner-overdue", "overdue"],
-			["task-planner-dueweek", "dueweek"],
-			["task-planner-weekly", "weekly"],
-			["task-planner-project", "project"],
+			["flowtime-today", "today"],
+			["flowtime-overdue", "overdue"],
+			["flowtime-dueweek", "dueweek"],
+			["flowtime-weekly", "weekly"],
+			["flowtime-project", "project"],
 		]) {
 			this.registerMarkdownCodeBlockProcessor(name, (_src, el, ctx) => {
 				const r = new FlowtimeRenderer(this.app, el, mode, this.projectEngine, ctx.sourcePath);

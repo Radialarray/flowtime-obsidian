@@ -12,11 +12,11 @@ Six code blocks give you different views of your task database:
 
 | Block | ID | Scope |
 |-------|-----|-------|
-| ```` ```task-planner ```` | today | Tasks scheduled for today (`⏳ today`) |
-| ```` ```task-planner-overdue ```` | overdue | Tasks with `⏳` before today |
-| ```` ```task-planner-dueweek ```` | dueweek | Tasks due this week (tomorrow through Sunday) |
-| ```` ```task-planner-weekly ```` | weekly | Grouped by project, all tasks for the week |
-| ```` ```task-planner-project ```` | project | Tasks belonging to a specific project folder |
+| ```` ```flowtime-today ```` | today | Tasks scheduled for today (`⏳ today`) |
+| ```` ```flowtime-overdue ```` | overdue | Tasks with `⏳` before today |
+| ```` ```flowtime-dueweek ```` | dueweek | Tasks due this week (tomorrow through Sunday) |
+| ```` ```flowtime-weekly ```` | weekly | Grouped by project, all tasks for the week |
+| ```` ```flowtime-project ```` | project | Tasks belonging to a specific project folder |
 
 ### Quick Entry (Cmd+Shift+T)
 
@@ -78,8 +78,8 @@ When a recurring task is completed, it automatically reschedules to the next occ
 
 Three commands available from the command palette:
 
-- **Insert daily dashboard** — inserts ```` ```task-planner ``` ```` and ```` ```task-planner-overdue ``` ```` blocks
-- **Insert weekly dashboard** — inserts ```` ```task-planner-weekly ``` ```` block
+- **Insert daily dashboard** — inserts ```` ```flowtime-today ``` ```` and ```` ```flowtime-overdue ``` ```` blocks
+- **Insert weekly dashboard** — inserts ```` ```flowtime-weekly ``` ```` block
 - **New Project** — creates a folder with a project note (frontmatter marker included)
 
 ### Configurable Settings
@@ -147,15 +147,15 @@ Add these code blocks to your daily note template:
 
 ````markdown
 ## 🔄 Carry Over
-```task-planner-overdue
+```flowtime-overdue
 ```
 
 ## 🎯 Today
-```task-planner
+```flowtime-today
 ```
 
 ## ⚠️ Due This Week
-```task-planner-dueweek
+```flowtime-dueweek
 ```
 ````
 
@@ -164,7 +164,7 @@ Add these code blocks to your daily note template:
 Add to your weekly note template:
 
 ````markdown
-```task-planner-weekly
+```flowtime-weekly
 ```
 ````
 

@@ -1,11 +1,11 @@
-.flowtime {
+.flowtime-table {
 	width: 100%;
 	border-collapse: collapse;
 	margin: 0.5em 0;
 	font-size: var(--font-ui-small);
 }
 
-.flowtime th {
+.flowtime-table th {
 	text-align: left;
 	padding: 6px 8px;
 	border-bottom: 2px solid var(--background-modifier-border);
@@ -13,24 +13,24 @@
 	color: var(--text-muted);
 }
 
-.flowtime,
-.flowtime tbody,
-.flowtime tr,
-.flowtime td {
+.flowtime-table,
+.flowtime-table tbody,
+.flowtime-table tr,
+.flowtime-table td {
 	overflow: visible;
 }
 
-.flowtime td {
+.flowtime-table td {
 	padding: 5px 8px;
 	border-bottom: 1px solid var(--background-modifier-border);
 	vertical-align: middle;
 }
 
-.flowtime tr {
+.flowtime-table tr {
 	line-height: 1.5;
 }
 
-.flowtime tr:hover td {
+.flowtime-table tr:hover td {
 	background-color: var(--background-primary-alt);
 }
 
@@ -485,7 +485,7 @@
 }
 
 /* --- Empty state --- */
-.task-planner-empty {
+.flowtime-empty {
 	color: var(--text-muted);
 	font-style: italic;
 	padding: 1em 0;

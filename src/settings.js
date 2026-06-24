@@ -23,11 +23,11 @@ const DEFAULT_SETTINGS = {
 
 	// Templates
 	dailyTemplate:
-		"## 🔄 Carry Over\n```task-planner-overdue\n```\n\n## 🎯 Today\n```task-planner\n```\n\n## ⚠️ Due This Week\n```task-planner-dueweek\n```\n\n## 📝 Notes\n",
+		"## 🔄 Carry Over\n```flowtime-overdue\n```\n\n## 🎯 Today\n```flowtime-today\n```\n\n## ⚠️ Due This Week\n```flowtime-dueweek\n```\n\n## 📝 Notes\n",
 	weeklyTemplate:
-		"## 📊 This Week\n```task-planner-weekly\n```\n\n## ⚠️ Due Next Week\n```task-planner-dueweek\n```\n\n## 📝 Review\n",
+		"## 📊 This Week\n```flowtime-weekly\n```\n\n## ⚠️ Due Next Week\n```flowtime-dueweek\n```\n\n## 📝 Review\n",
 	projectTemplate:
-		"---\ntype: project\nname: {{NAME}}\nstatus: active\ntags: [project]\n---\n\n# {{NAME}}\n\n## 🎯 Goal\n\n## 📋 Tasks\n\n```task-planner-project\n```\n\n## 📝 Notes\n",
+		"---\ntype: project\nname: {{NAME}}\nstatus: active\ntags: [project]\n---\n\n# {{NAME}}\n\n## 🎯 Goal\n\n## 📋 Tasks\n\n```flowtime-project\n```\n\n## 📝 Notes\n",
 };
 
 class FlowtimeSettingsTab extends PluginSettingTab {

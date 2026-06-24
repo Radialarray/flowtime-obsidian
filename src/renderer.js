@@ -24,7 +24,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		} catch (e) {
 			this.containerEl.createEl("p", {
 				text: "⚠️ Error: " + e.message,
-				cls: "task-planner-empty",
+				cls: "flowtime-empty",
 			});
 			console.error("TP error:", e);
 		}
@@ -274,7 +274,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			};
 			this.containerEl.createEl("p", {
 				text: msgs[this.mode] || msgs.today,
-				cls: "task-planner-empty",
+				cls: "flowtime-empty",
 			});
 			return;
 		}
@@ -359,7 +359,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		}
 
 		const table = this.containerEl.createEl("table", {
-			cls: "flowtime",
+			cls: "flowtime-table",
 		});
 		const hr = table.createEl("thead").createEl("tr");
 		if (isCompact) {

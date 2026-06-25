@@ -123,6 +123,8 @@ Delete an instance and it stays gone — the engine won't recreate it. Vacation 
 
 On plugin load, the engine generates instances for today and the rest of the week. It also watches the routines folder for changes.
 
+To support long-running Obsidian sessions, the engine re-generates automatically at **6 AM and 6 PM** each day. This ensures new routine tasks appear without needing a restart, even if Obsidian stays open for days or weeks at a time.
+
 ## Weekplan view
 
 ````markdown

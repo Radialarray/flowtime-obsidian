@@ -580,6 +580,13 @@ module.exports = class FlowtimePlugin extends Plugin {
 			this.taskCache.size,
 		);
 
+		// Cross-session staleness: files modified while Obsidian was closed
+		const staleCount = await this.taskCache.evictStale(this.app.vault.adapter);
+		if (staleCount > 0) {
+			console.log("Flowtime cache: evicted stale =", staleCount);
+			await this._saveTaskCache();
+		}
+
 		// v0.4.0: Auto-evict stale cache entries (files that no longer exist)
 		const evicted = await this.taskCache.autoEvict(async (path) => {
 			return !!this.app.vault.getAbstractFileByPath(path);
@@ -634,6 +641,10 @@ module.exports = class FlowtimePlugin extends Plugin {
 					console.warn("Flowtime: Routine generation error:", e.message),
 				);
 		}
+
+		// v0.8.0: Schedule twice-daily generation (morning 6 AM + evening 6 PM)
+		// so long-running Obsidian sessions still get new routine tasks each day.
+		this._scheduleDailyGenerations();
 
 		// Track old projectsRoot to detect changes
 		this._previousProjectsRoot = this.settings.projectsRoot;
@@ -1407,6 +1418,10 @@ module.exports = class FlowtimePlugin extends Plugin {
 				clearTimeout(this._cacheSaveTimer);
 				this._cacheSaveTimer = null;
 			}
+			if (this._dailyGenTimer) {
+				clearTimeout(this._dailyGenTimer);
+				this._dailyGenTimer = null;
+			}
 			// Clean up wide mode body class
 			document.body.classList.remove("ft-wide");
 		});
@@ -1478,6 +1493,58 @@ module.exports = class FlowtimePlugin extends Plugin {
 				await this.app.vault.adapter.rmdir(root, false);
 			}
 		} catch (_) {}
+	}
+
+	/**
+	 * v0.8.0: Schedule twice-daily routine generation at 6 AM and 6 PM.
+	 *
+	 * Uses a self-rescheduling setTimeout chain. Each fire calculates ms until
+	 * the next target time so long-running Obsidian sessions still get new
+	 * routine tasks every day without requiring a restart.
+	 */
+	_scheduleDailyGenerations() {
+		if (this._dailyGenTimer) {
+			clearTimeout(this._dailyGenTimer);
+		}
+
+		const now = new Date();
+		const hour = now.getHours();
+		const target = new Date(now);
+
+		if (hour < 6) {
+			// Next is 6 AM today
+			target.setHours(6, 0, 0, 0);
+		} else if (hour < 18) {
+			// Next is 6 PM today
+			target.setHours(18, 0, 0, 0);
+		} else {
+			// Next is 6 AM tomorrow
+			target.setDate(target.getDate() + 1);
+			target.setHours(6, 0, 0, 0);
+		}
+
+		const delay = Math.max(0, target.getTime() - now.getTime());
+
+		this._dailyGenTimer = setTimeout(() => {
+			this._dailyGenTimer = null;
+			this.routineEngine
+				.generateAllDue()
+				.then((count) => {
+					if (count > 0 && !this.settings.quietMode) {
+						this.notify(
+							"🔁 Generated " +
+								count +
+								" routine task" +
+								(count === 1 ? "" : "s"),
+						);
+					}
+				})
+				.catch((e) =>
+					console.warn("Flowtime: Daily gen error:", e.message),
+				);
+			// Re-schedule for the next 6 AM or 6 PM
+			this._scheduleDailyGenerations();
+		}, delay);
 	}
 
 	/**

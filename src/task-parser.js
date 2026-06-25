@@ -48,6 +48,11 @@ function parseTaskLine(line, file, lineIndex) {
 	// v0.4.0: @soon tag — marks task as upcoming backlog
 	const isSoon = !!rest.match(/@soon\b/);
 
+	// v0.6.0: Extract sprint: @sprint:<id>
+	let sprint = null;
+	const sprintMatch = rest.match(/@sprint:([^\s]+)/);
+	if (sprintMatch) sprint = sprintMatch[1];
+
 	// Extract bucket: @bucket:<name> or @b:<name>
 	let bucket = null;
 	const bucketMatch = rest.match(/@(?:bucket|b):([^\s]+)/);
@@ -91,6 +96,7 @@ function parseTaskLine(line, file, lineIndex) {
 		projectTag,     // v0.4.0: @p:Name or null
 		isSoon,         // v0.4.0: @soon tag
 		indent,         // v0.6.0: leading whitespace length for subtask hierarchy
+		sprint,         // v0.6.0: @sprint:id or null
 	};
 }
 
@@ -104,6 +110,7 @@ function cleanTaskText(text) {
 		.replace(/@(?:bucket|b):[^\s]+/g, "") // bucket directive
 		.replace(/@p:[^\s]+/g, "")             // v0.4.0: project directive
 		.replace(/@(?:high|med|low|soon)\b/gi, "") // v0.4.0: priority/status tags
+		.replace(/@sprint:[^\s]+/g, "")             // v0.6.0: sprint tag
 		.replace(/[🟥🟨🟩]/g, "")
 		.replace(/🔁 every .+$/gm, "") // v0.5.0: all recurrence markers
 		.replace(/#\S+/g, "")

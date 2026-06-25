@@ -1949,6 +1949,20 @@ body.ft-wide .markdown-reading-view .markdown-preview-sizer {
 	color: var(--text-normal);
 }
 
+/* ── Sprint Badge ── */
+.ft-sprint-badge {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: var(--radius-s);
+	font-size: var(--font-ui-small);
+	background: var(--background-modifier-hover);
+	border-left: 3px solid var(--interactive-accent);
+	max-width: 120px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .ft-sub-progress {
 	font-size: var(--font-ui-smaller);
 	color: var(--text-muted);

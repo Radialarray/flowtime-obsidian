@@ -222,6 +222,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				return task.project || "";
 			case "bucket":
 				return task.bucket || "";
+			case "sprint":
+				return task.sprint || ""; // v0.6.0
 			case "source":
 				return task.file?.basename || "";
 			case "date":
@@ -235,12 +237,22 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		}
 	}
 
+	/** v0.6.0: Resolve sprint ID to display name from settings */
+	_sprintName(id) {
+		if (!id) return "";
+		const sprints = this.plugin?.settings?.sprints || [];
+		const def = sprints.find((s) => s.id === id);
+		return def?.name || id;
+	}
+
 	_getGroupValue(task, field) {
 		switch (field) {
 			case "bucket":
 				return task.bucket || "Unassigned";
 			case "project":
 				return task.project || "Other";
+			case "sprint":
+				return this._sprintName(task.sprint) || "No sprint"; // v0.6.0
 			case "date":
 				return task.taskDate || "No date";
 			case "status":
@@ -356,6 +368,39 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 	async loadTasks() {
 		if (this.mode === "sessions") {
 			this.tasks = [];
+			return;
+		}
+
+		// v0.6.0: Sprints mode — collect all tasks with @sprint:id
+		if (this.mode === "sprints") {
+			this.tasks = [];
+			for (const file of this.app.vault.getMarkdownFiles()) {
+				if (!this._isFileInScope(file.path)) continue;
+				const fileTasks = await this._getFileTasks(file);
+				for (const parsed of fileTasks) {
+					if (!parsed.sprint) continue;
+					const project = this.projectEngine
+						? await this.projectEngine.resolve(file.path)
+						: null;
+					let projName = project?.name || null;
+					this.tasks.push({
+						file,
+						line: parsed.line,
+						rawLine: parsed.rawLine,
+						time: parsed.time,
+						taskDate: parsed.taskDate,
+						rawText: parsed.rawText,
+						cleanText: parsed.cleanText,
+						status: parsed.status,
+						priority: parsed.priority,
+						bucket: parsed.bucket,
+						durationMinutes: parsed.durationMinutes,
+						project: projName,
+						isSoon: parsed.isSoon,
+						sprint: parsed.sprint, // v0.6.0
+					});
+				}
+			}
 			return;
 		}
 
@@ -489,6 +534,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 						projectPath: projPath,
 						projectSource: projSource,
 						isSoon: true,
+						sprint: parsed.sprint,
 					});
 				}
 			}
@@ -579,6 +625,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 					projectPath: projPath,
 					projectSource: projSource,
 					isSoon: isSoonTask, // v0.4.0: @soon tag
+					sprint: parsed.sprint, // v0.6.0: @sprint:id
 				});
 			}
 		}
@@ -651,6 +698,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		}
 		if (this.mode === "budget") {
 			this._renderBudgetView();
+			return;
+		}
+		if (this.mode === "sprints") {
+			this._renderSprintOverview();
 			return;
 		}
 		if (this.tasks.length === 0) {
@@ -746,6 +797,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			{ id: "task", label: "Task" },
 			{ id: "project", label: "Project" },
 			{ id: "bucket", label: "Bucket" },
+			{ id: "sprint", label: "Sprint" }, // v0.6.0
 			{ id: "source", label: "Source" },
 			{ id: "date", label: "Date" },
 			{ id: "actions", label: "Actions" },
@@ -809,6 +861,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			const fieldOpts = [
 				{ id: "bucket", label: "Bucket" },
 				{ id: "project", label: "Project" },
+				{ id: "sprint", label: "Sprint" }, // v0.6.0
 				{ id: "date", label: "Date" },
 				{ id: "text", label: "Task Text" },
 				{ id: "duration", label: "Duration" },
@@ -939,6 +992,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		groupSel.createEl("option", { text: "None", value: "" });
 		groupSel.createEl("option", { text: "Bucket", value: "bucket" });
 		groupSel.createEl("option", { text: "Project", value: "project" });
+		groupSel.createEl("option", { text: "Sprint", value: "sprint" }); // v0.6.0
 		groupSel.createEl("option", { text: "Date", value: "date" });
 		groupSel.createEl("option", { text: "Status", value: "status" });
 		if (this._groupConfig.primary) groupSel.value = this._groupConfig.primary;
@@ -951,6 +1005,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		subSel.createEl("option", { text: "None", value: "" });
 		subSel.createEl("option", { text: "Bucket", value: "bucket" });
 		subSel.createEl("option", { text: "Project", value: "project" });
+		subSel.createEl("option", { text: "Sprint", value: "sprint" }); // v0.6.0
 		subSel.createEl("option", { text: "Date", value: "date" });
 		subSel.createEl("option", { text: "Status", value: "status" });
 		if (this._groupConfig.secondary) subSel.value = this._groupConfig.secondary;
@@ -1070,6 +1125,11 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				makeSortableHeader("Project", "project", "col-project", "auto");
 			if (this._columnVisibility.bucket !== false)
 				makeSortableHeader("Bucket", "bucket", "col-bucket", "auto");
+			if (
+				this._columnVisibility.sprint !== false &&
+				this._columnVisibility.sprint
+			)
+				makeSortableHeader("Sprint", "sprint", "col-sprint", "auto");
 			if (this._columnVisibility.source !== false)
 				makeSortableHeader("Source", "source", "col-source", "auto");
 			if (this._columnVisibility.date !== false)
@@ -1094,6 +1154,11 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				makeSortableHeader("Project", "project", "col-project", "auto");
 			if (this._columnVisibility.bucket !== false)
 				makeSortableHeader("Bucket", "bucket", "col-bucket", "auto");
+			if (
+				this._columnVisibility.sprint !== false &&
+				this._columnVisibility.sprint
+			)
+				makeSortableHeader("Sprint", "sprint", "col-sprint", "auto");
 			if (this._columnVisibility.source !== false)
 				makeSortableHeader("Source", "source", "col-source", "auto");
 			if (this._columnVisibility.date !== false)
@@ -1199,6 +1264,117 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				text: "No buckets configured. Add buckets in Settings.",
 				cls: "ft-budget-empty",
 			});
+		}
+	}
+
+	/**
+	 * v0.6.0: Render sprint overview — cards per sprint with progress.
+	 */
+	_renderSprintOverview() {
+		this.containerEl.empty();
+
+		const sprints = this.plugin?.settings?.sprints || [];
+		if (sprints.length === 0) {
+			this.containerEl.createEl("p", {
+				text: "No sprints configured. Add sprints in Settings.",
+				cls: "ft-budget-empty",
+			});
+			return;
+		}
+
+		// Collect all tasks grouped by sprint
+		const sprintTasks = {};
+		for (const task of this.tasks) {
+			if (task.sprint) {
+				if (!sprintTasks[task.sprint]) sprintTasks[task.sprint] = [];
+				sprintTasks[task.sprint].push(task);
+			}
+		}
+
+		for (const def of sprints) {
+			const tasks = sprintTasks[def.id] || [];
+
+			// Sprint card header
+			const card = this.containerEl.createEl("div", {
+				cls: "ft-budget-section",
+			});
+
+			const header = card.createEl("div", {
+				cls: "ft-budget-section-title ft-sprint-card-header",
+			});
+			const nameEl = header.createEl("span", {
+				text: def.name,
+				cls: "ft-sprint-name",
+			});
+			if (def.color) {
+				nameEl.style.borderLeft = "3px solid " + def.color;
+				nameEl.style.paddingLeft = "8px";
+			}
+
+			// Goal & dates
+			if (def.goal) {
+				card.createEl("div", {
+					text: def.goal,
+					cls: "ft-sprint-goal",
+				});
+			}
+			if (def.start || def.end) {
+				card.createEl("div", {
+					text: `${def.start || "?"} → ${def.end || "?"}`,
+					cls: "ft-sprint-dates",
+				});
+			}
+
+			// Progress bars
+			if (tasks.length > 0) {
+				const done = tasks.filter(
+					(t) => t.status === "x" || t.status === "X",
+				).length;
+				const total = tasks.length;
+
+				// Task progress
+				const taskRow = card.createEl("div", { cls: "ft-budget-row" });
+				taskRow.createEl("span", {
+					text: `Tasks: ${done}/${total}`,
+					cls: "ft-sprint-stat",
+				});
+				const taskBar = renderProgressBar(
+					done,
+					total,
+					`${Math.round((done / total) * 100)}%`,
+				);
+				taskBar.style.minWidth = "200px";
+				taskRow.appendChild(taskBar);
+
+				// Time progress
+				const totalMinutes = tasks.reduce(
+					(sum, t) => sum + (t.durationMinutes || 0),
+					0,
+				);
+				const doneMinutes = tasks
+					.filter((t) => t.status === "x" || t.status === "X")
+					.reduce((sum, t) => sum + (t.durationMinutes || 0), 0);
+
+				if (totalMinutes > 0) {
+					const timeRow = card.createEl("div", { cls: "ft-budget-row" });
+					timeRow.createEl("span", {
+						text: `Time: ${formatHours(doneMinutes / 60)}h / ${formatHours(totalMinutes / 60)}h`,
+						cls: "ft-sprint-stat",
+					});
+					const timeBar = renderProgressBar(
+						doneMinutes,
+						totalMinutes,
+						`${Math.round((doneMinutes / totalMinutes) * 100)}%`,
+					);
+					timeBar.style.minWidth = "200px";
+					timeRow.appendChild(timeBar);
+				}
+			} else {
+				card.createEl("p", {
+					text: "No tasks tagged with @sprint:" + def.id,
+					cls: "ft-sprint-empty",
+				});
+			}
 		}
 	}
 
@@ -1469,6 +1645,28 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				}
 			} else {
 				bc.createEl("span", { text: "—", cls: "ft-bucket-none" });
+			}
+		}
+
+		// v0.6.0: Sprint column (hidden by default)
+		if (
+			this._columnVisibility.sprint !== false &&
+			this._columnVisibility.sprint
+		) {
+			const spc = row.createEl("td", { cls: "ft-bucket-cell" });
+			if (task.sprint) {
+				const badge = spc.createEl("span", {
+					text: this._sprintName(task.sprint),
+					cls: "ft-sprint-badge",
+				});
+				// Color the badge from sprint config
+				const sprints = this.plugin?.settings?.sprints || [];
+				const def = sprints.find((s) => s.id === task.sprint);
+				if (def?.color) {
+					badge.style.borderLeftColor = def.color;
+				}
+			} else {
+				spc.createEl("span", { text: "—", cls: "ft-bucket-none" });
 			}
 		}
 

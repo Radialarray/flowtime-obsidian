@@ -224,7 +224,9 @@ class AtCompletionsSuggest extends EditorSuggest {
 		];
 
 		// v0.4.0: Status & priority tags
-		const inboxAction = [{ label: "inbox", description: "Capture line to inbox" }];
+		const inboxAction = [
+			{ label: "inbox", description: "Capture line to inbox" },
+		];
 
 		// v0.4.0: Status & priority tags
 		const statusTags = [
@@ -284,7 +286,11 @@ class AtCompletionsSuggest extends EditorSuggest {
 		} else {
 			for (const i of inboxAction)
 				if (i.label.toLowerCase().includes(q))
-					suggestions.push({ label: "@" + i.label, description: i.description, type: "status" });
+					suggestions.push({
+						label: "@" + i.label,
+						description: i.description,
+						type: "status",
+					});
 			for (const d of dates)
 				if (d.label.toLowerCase().includes(q))
 					suggestions.push({

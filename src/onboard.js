@@ -103,8 +103,9 @@ const BUCKET_PRESETS = {
  */
 async function runOnboard(app, plugin) {
 	const state = {
+		step: 0,
 		projectsRoot: "",
-		layoutType: "flat", // "flat" | "nested"
+		layoutType: "flat",
 		createDailyDashboard: true,
 		createWeeklyDashboard: false,
 		bucketPreset: "default",
@@ -113,46 +114,27 @@ async function runOnboard(app, plugin) {
 		scaffoldFirstProject: false,
 		scaffoldTasks: true,
 		scaffoldWiki: true,
+		createRoutines: true,
 	};
 
-	// ── Step 1: Workspace Layout ──
-	await new Promise((resolve) => {
-		new LayoutStepModal(app, state, resolve).open();
-	});
-	if (!state.proceed) return;
+	const steps = [
+		LayoutStepModal,
+		DashboardStepModal,
+		BucketStepModal,
+		DailyNotesStepModal,
+		RoutineStepModal,
+		ProjectStepModal,
+	];
 
-	// ── Step 2: Dashboard Templates ──
-	await new Promise((resolve) => {
-		new DashboardStepModal(app, state, resolve).open();
-	});
-	if (!state.proceed) return;
+	while (state.step >= 0 && state.step < steps.length) {
+		const ModalClass = steps[state.step];
+		await new Promise((resolve) => {
+			new ModalClass(app, state, resolve).open();
+		});
+	}
 
-	// ── Step 3: Buckets ──
-	await new Promise((resolve) => {
-		new BucketStepModal(app, state, resolve).open();
-	});
-	if (!state.proceed) return;
+	if (state.step < 0) return; // cancelled
 
-	// ── Step 4: Daily Notes ──
-	await new Promise((resolve) => {
-		new DailyNotesStepModal(app, state, resolve).open();
-	});
-	if (!state.proceed) return;
-
-	// ── Step 5: Routines (v0.5.0) ──
-	state.createRoutines = true;
-	await new Promise((resolve) => {
-		new RoutineStepModal(app, state, resolve).open();
-	});
-	if (!state.proceed) return;
-
-	// ── Step 6: First Project ──
-	await new Promise((resolve) => {
-		new ProjectStepModal(app, state, resolve).open();
-	});
-	if (!state.proceed) return;
-
-	// ── Apply All Settings ──
 	try {
 		await applySettings(plugin, state);
 		plugin.notify("✅ Flowtime workspace ready!");
@@ -183,55 +165,44 @@ class LayoutStepModal extends Modal {
 			cls: "flowtime-label",
 		});
 
-		const flatRadio = contentEl.createEl("label", { cls: "flowtime-label" });
-		const flatInput = flatRadio.createEl("input", {
-			type: "radio",
-			value: "flat",
-			attr: { name: "layout" },
-		});
-		flatInput.checked = true;
-		flatRadio.append(
-			" Flat layout — projects at vault root (/ProjectA, /ProjectB)",
-		);
+		const mkRadio = (label, group, value, checked) => {
+			const lbl = contentEl.createEl("label", { cls: "flowtime-label" });
+			const input = lbl.createEl("input", { type: "radio", value: value });
+			if (checked) input.checked = true;
+			lbl.append(" " + label);
+			// Click handler to ensure single-select within group
+			lbl.addEventListener("click", () => {
+				contentEl.querySelectorAll("input[type='radio']").forEach(r => {
+					if (r !== input && r.getAttribute("data-radio-group") === group) r.checked = false;
+				});
+				input.checked = true;
+			});
+			input.setAttribute("data-radio-group", group);
+			return input;
+		};
 
-		const nestedRadio = contentEl.createEl("label", { cls: "flowtime-label" });
-		const nestedInput = nestedRadio.createEl("input", {
-			type: "radio",
-			value: "nested",
-			attr: { name: "layout" },
-		});
-		nestedRadio.append(
-			" Nested layout — projects under a folder (/Projects/ProjectA)",
-		);
+		mkRadio("Flat layout — projects at vault root (/ProjectA, /ProjectB)", "layout", "flat", true);
+		mkRadio("Nested layout — projects under a folder (/Projects/ProjectA)", "layout", "nested");
 
 		const btnRow = contentEl.createEl("div", { cls: "flowtime-btn-row" });
-		const cancelBtn = btnRow.createEl("button", {
-			text: "Cancel",
-			cls: "flowtime-btn-cancel",
-		});
-		const nextBtn = btnRow.createEl("button", {
-			text: "Next →",
-			cls: "flowtime-btn-submit",
-		});
+		const cancelBtn = btnRow.createEl("button", { text: "Cancel", cls: "flowtime-btn-cancel" });
+		const nextBtn = btnRow.createEl("button", { text: "Next →", cls: "flowtime-btn-submit" });
 
 		cancelBtn.addEventListener("click", () => {
-			this.state.proceed = false;
+			this.state.step = -1;
 			this.close();
 			this.onDone();
 		});
 		nextBtn.addEventListener("click", () => {
-			this.state.proceed = true;
-			this.state.layoutType =
-				document.querySelector('input[name="layout"]:checked')?.value || "flat";
-			this.state.projectsRoot =
-				this.state.layoutType === "nested" ? "Projects" : "";
+			const sel = contentEl.querySelector("input[data-radio-group='layout']:checked");
+			this.state.layoutType = sel ? sel.value : "flat";
+			this.state.projectsRoot = this.state.layoutType === "nested" ? "Projects" : "";
+			this.state.step++;
 			this.close();
 			this.onDone();
 		});
 	}
-	onClose() {
-		this.contentEl.empty();
-	}
+	onClose() { this.contentEl.empty(); }
 }
 
 class DashboardStepModal extends Modal {
@@ -243,7 +214,6 @@ class DashboardStepModal extends Modal {
 	onOpen() {
 		const { contentEl } = this;
 		contentEl.createEl("h3", { text: "Step 2: Dashboard Templates" });
-
 		contentEl.createEl("p", {
 			text: "Create overview files at vault root with Flowtime code blocks already in place.",
 			cls: "flowtime-label",
@@ -253,52 +223,37 @@ class DashboardStepModal extends Modal {
 		const dailyCheck = dailyCb.createEl("input", { type: "checkbox" });
 		dailyCheck.checked = true;
 		dailyCheck.style.marginRight = "6px";
-		dailyCb.append(
-			" Dashboard.md — daily overview (overdue + today + due this week)",
-		);
+		dailyCb.append(" Dashboard.md — daily overview (overdue + today + due this week)");
 
 		const weeklyCb = contentEl.createEl("label", { cls: "flowtime-label" });
 		const weeklyCheck = weeklyCb.createEl("input", { type: "checkbox" });
 		weeklyCheck.style.marginRight = "6px";
-		weeklyCb.append(
-			" Dashboard Weekly.md — full overview (+ weekly view + budget + sessions)",
-		);
+		weeklyCb.append(" Dashboard Weekly.md — full overview (+ weekly + budget + sessions + weekplan)");
 
 		contentEl.createEl("p", {
 			text: "Tip: Start with the daily dashboard. You can add the weekly one later.",
 			cls: "flowtime-label",
-			attr: {
-				style:
-					"color: var(--text-muted); font-size: var(--font-ui-smaller); margin-top: 12px;",
-			},
+			attr: { style: "color: var(--text-muted); font-size: var(--font-ui-smaller); margin-top: 12px;" },
 		});
 
 		const btnRow = contentEl.createEl("div", { cls: "flowtime-btn-row" });
-		const backBtn = btnRow.createEl("button", {
-			text: "← Back",
-			cls: "flowtime-btn-cancel",
-		});
-		const nextBtn = btnRow.createEl("button", {
-			text: "Next →",
-			cls: "flowtime-btn-submit",
-		});
+		const backBtn = btnRow.createEl("button", { text: "← Back", cls: "flowtime-btn-cancel" });
+		const nextBtn = btnRow.createEl("button", { text: "Next →", cls: "flowtime-btn-submit" });
 
 		backBtn.addEventListener("click", () => {
-			this.state.proceed = false;
+			this.state.step--;
 			this.close();
 			this.onDone();
 		});
 		nextBtn.addEventListener("click", () => {
-			this.state.proceed = true;
 			this.state.createDailyDashboard = dailyCheck.checked;
 			this.state.createWeeklyDashboard = weeklyCheck.checked;
+			this.state.step++;
 			this.close();
 			this.onDone();
 		});
 	}
-	onClose() {
-		this.contentEl.empty();
-	}
+	onClose() { this.contentEl.empty(); }
 }
 
 class BucketStepModal extends Modal {
@@ -310,60 +265,52 @@ class BucketStepModal extends Modal {
 	onOpen() {
 		const { contentEl } = this;
 		contentEl.createEl("h3", { text: "Step 3: Time Budgets (Buckets)" });
-
 		contentEl.createEl("p", {
 			text: "Choose a bucket preset, or skip to keep your current configuration.",
 			cls: "flowtime-label",
 		});
 
+		let firstPreset = null;
 		for (const [key, preset] of Object.entries(BUCKET_PRESETS)) {
-			const radio = contentEl.createEl("label", { cls: "flowtime-label" });
-			const input = radio.createEl("input", {
-				type: "radio",
-				name: "buckets",
-				value: key,
+			const groupId = "buckets-" + Math.random().toString(36).slice(2, 6);
+			const lbl = contentEl.createEl("label", { cls: "flowtime-label" });
+			const input = lbl.createEl("input", { type: "radio", value: key });
+			if (!firstPreset) firstPreset = input;
+			input.checked = key === "default";
+			lbl.append(" " + preset.label);
+			lbl.addEventListener("click", () => {
+				contentEl.querySelectorAll("input[type='radio']").forEach(r => r.checked = false);
+				input.checked = true;
 			});
-			if (key === "default") input.checked = true;
-			radio.append(" " + preset.label);
 		}
 
-		// "Skip" option
-		const skipRadio = contentEl.createEl("label", { cls: "flowtime-label" });
-		const skipInput = skipRadio.createEl("input", {
-			type: "radio",
-			attr: { name: "buckets" },
-			value: "keep",
+		// Skip option
+		const skipLbl = contentEl.createEl("label", { cls: "flowtime-label" });
+		const skipInput = skipLbl.createEl("input", { type: "radio", value: "keep" });
+		skipLbl.append(" Skip — keep my current buckets");
+		skipLbl.addEventListener("click", () => {
+			contentEl.querySelectorAll("input[type='radio']").forEach(r => r.checked = false);
+			skipInput.checked = true;
 		});
-		skipRadio.append(" Skip — keep my current buckets");
 
 		const btnRow = contentEl.createEl("div", { cls: "flowtime-btn-row" });
-		const backBtn = btnRow.createEl("button", {
-			text: "← Back",
-			cls: "flowtime-btn-cancel",
-		});
-		const nextBtn = btnRow.createEl("button", {
-			text: "Next →",
-			cls: "flowtime-btn-submit",
-		});
+		const backBtn = btnRow.createEl("button", { text: "← Back", cls: "flowtime-btn-cancel" });
+		const nextBtn = btnRow.createEl("button", { text: "Next →", cls: "flowtime-btn-submit" });
 
 		backBtn.addEventListener("click", () => {
-			this.state.proceed = false;
+			this.state.step--;
 			this.close();
 			this.onDone();
 		});
 		nextBtn.addEventListener("click", () => {
-			this.state.proceed = true;
-			const sel =
-				document.querySelector('input[name="buckets"]:checked')?.value ||
-				"keep";
-			this.state.bucketPreset = sel;
+			const sel = contentEl.querySelector("input[type='radio']:checked");
+			this.state.bucketPreset = sel ? sel.value : "keep";
+			this.state.step++;
 			this.close();
 			this.onDone();
 		});
 	}
-	onClose() {
-		this.contentEl.empty();
-	}
+	onClose() { this.contentEl.empty(); }
 }
 
 class DailyNotesStepModal extends Modal {
@@ -375,60 +322,39 @@ class DailyNotesStepModal extends Modal {
 	onOpen() {
 		const { contentEl } = this;
 		contentEl.createEl("h3", { text: "Step 4: Daily Notes" });
-
 		contentEl.createEl("p", {
 			text: "Set the folder for daily notes (YYYY-MM-DD.md files).",
 			cls: "flowtime-label",
 		});
-
-		contentEl.createEl("label", {
-			text: "Daily notes folder:",
-			cls: "flowtime-label",
-		});
+		contentEl.createEl("label", { text: "Daily notes folder:", cls: "flowtime-label" });
 		const folderInput = contentEl.createEl("input", {
-			type: "text",
-			value: this.state.dailyNotesFolder,
-			placeholder: "Daily",
-			cls: "flowtime-input",
+			type: "text", value: this.state.dailyNotesFolder,
+			placeholder: "Daily", cls: "flowtime-input",
 		});
-
 		contentEl.createEl("p", {
 			text: "This will update .obsidian/daily-notes.json and create the folder if needed.",
 			cls: "flowtime-label",
-			attr: {
-				style:
-					"color: var(--text-muted); font-size: var(--font-ui-smaller); margin-top: 8px;",
-			},
+			attr: { style: "color: var(--text-muted); font-size: var(--font-ui-smaller); margin-top: 8px;" },
 		});
 
 		const btnRow = contentEl.createEl("div", { cls: "flowtime-btn-row" });
-		const backBtn = btnRow.createEl("button", {
-			text: "← Back",
-			cls: "flowtime-btn-cancel",
-		});
-		const nextBtn = btnRow.createEl("button", {
-			text: "Next →",
-			cls: "flowtime-btn-submit",
-		});
+		const backBtn = btnRow.createEl("button", { text: "← Back", cls: "flowtime-btn-cancel" });
+		const nextBtn = btnRow.createEl("button", { text: "Next →", cls: "flowtime-btn-submit" });
 
 		backBtn.addEventListener("click", () => {
-			this.state.proceed = false;
+			this.state.step--;
 			this.close();
 			this.onDone();
 		});
 		nextBtn.addEventListener("click", () => {
-			this.state.proceed = true;
 			this.state.dailyNotesFolder = folderInput.value.trim() || "Daily";
+			this.state.step++;
 			this.close();
 			this.onDone();
 		});
 	}
-	onClose() {
-		this.contentEl.empty();
-	}
+	onClose() { this.contentEl.empty(); }
 }
-
-/* ─── Step 5: Routines (v0.5.0) ─── */
 
 class RoutineStepModal extends Modal {
 	constructor(app, state, onDone) {
@@ -438,67 +364,46 @@ class RoutineStepModal extends Modal {
 	}
 	onOpen() {
 		const { contentEl } = this;
-		contentEl.createEl("h3", { text: "Step 5: Routines" });
-
+		contentEl.createEl("h3", { text: "Step 5: Routines (v0.5.0)" });
 		contentEl.createEl("p", {
-			text:
-				"Routines auto-generate recurring tasks into your daily notes. " +
-				"Create a template file with 🔁 markers and the engine handles the rest.",
+			text: "Routines auto-generate recurring tasks into your daily notes. Create a template file with 🔁 markers and the engine handles the rest.",
 			cls: "flowtime-label",
 		});
-
 		contentEl.createEl("p", {
 			text: "Sample routine files will be created at flowtime/routines/Daily.md and Weekly.md",
 			cls: "flowtime-label",
-			attr: {
-				style: "color: var(--text-muted); font-size: var(--font-ui-smaller);",
-			},
+			attr: { style: "color: var(--text-muted); font-size: var(--font-ui-smaller);" },
 		});
 
-		// Preview of the template
 		const preview = contentEl.createEl("div", {
 			cls: "flowtime-preview",
-			attr: {
-				style:
-					"background: var(--background-secondary); padding: 8px; border-radius: var(--radius-s); margin-top: 8px; max-height: 200px; overflow-y: auto; font-size: var(--font-ui-smaller); white-space: pre; font-family: var(--font-monospace);",
-			},
+			attr: { style: "background: var(--background-secondary); padding: 8px; border-radius: var(--radius-s); margin-top: 8px; max-height: 200px; overflow-y: auto; font-size: var(--font-ui-smaller); white-space: pre; font-family: var(--font-monospace);" },
 		});
 		preview.setText(ROUTINE_DAILY_TEMPLATE.replace(/\t/g, "  "));
 
-		const createCb = contentEl.createEl("label", {
-			cls: "flowtime-label",
-			attr: { style: "margin-top: 12px;" },
-		});
+		const createCb = contentEl.createEl("label", { cls: "flowtime-label", attr: { style: "margin-top: 12px;" } });
 		const createCheck = createCb.createEl("input", { type: "checkbox" });
 		createCheck.checked = true;
 		createCheck.style.marginRight = "6px";
 		createCb.append(" Create sample routine files (recommended)");
 
 		const btnRow = contentEl.createEl("div", { cls: "flowtime-btn-row" });
-		const backBtn = btnRow.createEl("button", {
-			text: "← Back",
-			cls: "flowtime-btn-cancel",
-		});
-		const nextBtn = btnRow.createEl("button", {
-			text: "Next →",
-			cls: "flowtime-btn-submit",
-		});
+		const backBtn = btnRow.createEl("button", { text: "← Back", cls: "flowtime-btn-cancel" });
+		const nextBtn = btnRow.createEl("button", { text: "Next →", cls: "flowtime-btn-submit" });
 
 		backBtn.addEventListener("click", () => {
-			this.state.proceed = false;
+			this.state.step--;
 			this.close();
 			this.onDone();
 		});
 		nextBtn.addEventListener("click", () => {
-			this.state.proceed = true;
 			this.state.createRoutines = createCheck.checked;
+			this.state.step++;
 			this.close();
 			this.onDone();
 		});
 	}
-	onClose() {
-		this.contentEl.empty();
-	}
+	onClose() { this.contentEl.empty(); }
 }
 
 class ProjectStepModal extends Modal {
@@ -510,23 +415,17 @@ class ProjectStepModal extends Modal {
 	onOpen() {
 		const { contentEl } = this;
 		contentEl.createEl("h3", { text: "Step 6: First Project (optional)" });
-
 		contentEl.createEl("p", {
 			text: "Scaffold your first project? You can always create more later.",
 			cls: "flowtime-label",
 		});
 
 		const nameInput = contentEl.createEl("input", {
-			type: "text",
-			placeholder: "Project name (leave empty to skip)",
-			cls: "flowtime-input",
+			type: "text", placeholder: "Project name (leave empty to skip)", cls: "flowtime-input",
 		});
 		nameInput.focus();
 
-		const tasksCb = contentEl.createEl("label", {
-			cls: "flowtime-label",
-			attr: { style: "margin-top: 12px;" },
-		});
+		const tasksCb = contentEl.createEl("label", { cls: "flowtime-label", attr: { style: "margin-top: 12px;" } });
 		const tasksCheck = tasksCb.createEl("input", { type: "checkbox" });
 		tasksCheck.checked = true;
 		tasksCheck.style.marginRight = "6px";
@@ -539,17 +438,11 @@ class ProjectStepModal extends Modal {
 		wikiCb.append(" Create Wiki.md");
 
 		const btnRow = contentEl.createEl("div", { cls: "flowtime-btn-row" });
-		const backBtn = btnRow.createEl("button", {
-			text: "← Back",
-			cls: "flowtime-btn-cancel",
-		});
-		const finishBtn = btnRow.createEl("button", {
-			text: "🎉 Finish Setup",
-			cls: "flowtime-btn-submit",
-		});
+		const backBtn = btnRow.createEl("button", { text: "← Back", cls: "flowtime-btn-cancel" });
+		const finishBtn = btnRow.createEl("button", { text: "🎉 Finish Setup", cls: "flowtime-btn-submit" });
 
 		backBtn.addEventListener("click", () => {
-			this.state.proceed = false;
+			this.state.step--;
 			this.close();
 			this.onDone();
 		});
@@ -558,15 +451,15 @@ class ProjectStepModal extends Modal {
 			this.state.scaffoldFirstProject = !!this.state.firstProjectName;
 			this.state.scaffoldTasks = tasksCheck.checked;
 			this.state.scaffoldWiki = wikiCheck.checked;
-			this.state.proceed = true;
+			this.state.step = steps.length; // exit loop
 			this.close();
 			this.onDone();
 		});
 	}
-	onClose() {
-		this.contentEl.empty();
-	}
+	onClose() { this.contentEl.empty(); }
 }
+
+/* ─── Apply Settings ─── */
 
 /* ─── Apply Settings ─── */
 

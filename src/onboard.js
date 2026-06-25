@@ -1,12 +1,21 @@
 const { Modal, Notice } = require("obsidian");
 
-/** v0.5.0: Default routine template content */
-const ROUTINE_TEMPLATE = `## 🌅 Morning
+/** v0.5.0: Default daily routine template — regenerates every workday */
+const ROUTINE_DAILY_TEMPLATE = `## 🌅 Morning
 - [ ] Morning pages @06:00—06:30 @b:deep-work 🔁 every workday
 - [ ] Review today's goals @06:30—06:45 🔁 every workday
 - [ ] Check email & messages @06:45—07:00 @b:admin 🔁 every workday
 
-## 📅 Weekly
+## 🌙 Evening
+- [ ] Daily review & tomorrow prep @16:30—17:00 @b:admin 🔁 every workday
+
+## Notes
+- This file runs every workday (Mon-Fri by default)
+- See also Weekly.md for weekly/monthly routines
+`;
+
+/** v0.5.0: Default weekly routine template — weekly/monthly intervals */
+const ROUTINE_WEEKLY_TEMPLATE = `## 📅 Weekly
 - [ ] Sprint planning @09:00—10:00 🔁 every Mon
 - [ ] Weekly review @15:00—16:00 🔁 every Fri
 - [ ] Team standup @09:00—09:15 🔁 every Mon Wed Fri
@@ -16,32 +25,74 @@ const ROUTINE_TEMPLATE = `## 🌅 Morning
 - [ ] Review goals 🔁 every month on 15th
 
 ## Notes
-- Tasks with 🔁 are automatically generated into your daily notes
-- Delete any of these examples or add your own routines
-- Use 🔁 every day | workday | Mon | Mon Wed Fri | 2nd Sun | month on 15th | etc.
+- This file handles weekly (Mon, Mon Wed Fri) and monthly tasks
+- Combined with Daily.md, all routines generate into your daily notes automatically
+- Syntax: 🔁 every day | workday | Mon | Mon Wed Fri | 2nd Sun | last Fri | month on 15th | 3 days
 `;
 
 const BUCKET_PRESETS = {
 	default: {
 		label: "Default (Deep Work + Admin + Meetings)",
 		buckets: [
-			{ id: "deep-work", name: "Deep Work", color: "#4a9eff", weeklyLimit: 20, sortOrder: 0 },
-			{ id: "admin", name: "Admin", color: "#a8a8a8", weeklyLimit: 5, sortOrder: 1 },
-			{ id: "meetings", name: "Meetings", color: "#e6a700", weeklyLimit: 5, sortOrder: 2 },
+			{
+				id: "deep-work",
+				name: "Deep Work",
+				color: "#4a9eff",
+				weeklyLimit: 20,
+				sortOrder: 0,
+			},
+			{
+				id: "admin",
+				name: "Admin",
+				color: "#a8a8a8",
+				weeklyLimit: 5,
+				sortOrder: 1,
+			},
+			{
+				id: "meetings",
+				name: "Meetings",
+				color: "#e6a700",
+				weeklyLimit: 5,
+				sortOrder: 2,
+			},
 		],
 	},
 	minimal: {
 		label: "Minimal (Deep Work only)",
 		buckets: [
-			{ id: "deep-work", name: "Deep Work", color: "#4a9eff", weeklyLimit: 40, sortOrder: 0 },
+			{
+				id: "deep-work",
+				name: "Deep Work",
+				color: "#4a9eff",
+				weeklyLimit: 40,
+				sortOrder: 0,
+			},
 		],
 	},
 	creative: {
 		label: "Creative (Deep Work + Design + Admin)",
 		buckets: [
-			{ id: "deep-work", name: "Deep Work", color: "#4a9eff", weeklyLimit: 15, sortOrder: 0 },
-			{ id: "design", name: "Design", color: "#ff6b6b", weeklyLimit: 15, sortOrder: 1 },
-			{ id: "admin", name: "Admin", color: "#a8a8a8", weeklyLimit: 5, sortOrder: 2 },
+			{
+				id: "deep-work",
+				name: "Deep Work",
+				color: "#4a9eff",
+				weeklyLimit: 15,
+				sortOrder: 0,
+			},
+			{
+				id: "design",
+				name: "Design",
+				color: "#ff6b6b",
+				weeklyLimit: 15,
+				sortOrder: 1,
+			},
+			{
+				id: "admin",
+				name: "Admin",
+				color: "#a8a8a8",
+				weeklyLimit: 5,
+				sortOrder: 2,
+			},
 		],
 	},
 };
@@ -133,17 +184,35 @@ class LayoutStepModal extends Modal {
 		});
 
 		const flatRadio = contentEl.createEl("label", { cls: "flowtime-label" });
-		const flatInput = flatRadio.createEl("input", { type: "radio", name: "layout", value: "flat" });
+		const flatInput = flatRadio.createEl("input", {
+			type: "radio",
+			name: "layout",
+			value: "flat",
+		});
 		flatInput.checked = true;
-		flatRadio.append(" Flat layout — projects at vault root (/ProjectA, /ProjectB)");
+		flatRadio.append(
+			" Flat layout — projects at vault root (/ProjectA, /ProjectB)",
+		);
 
 		const nestedRadio = contentEl.createEl("label", { cls: "flowtime-label" });
-		const nestedInput = nestedRadio.createEl("input", { type: "radio", name: "layout", value: "nested" });
-		nestedRadio.append(" Nested layout — projects under a folder (/Projects/ProjectA)");
+		const nestedInput = nestedRadio.createEl("input", {
+			type: "radio",
+			name: "layout",
+			value: "nested",
+		});
+		nestedRadio.append(
+			" Nested layout — projects under a folder (/Projects/ProjectA)",
+		);
 
 		const btnRow = contentEl.createEl("div", { cls: "flowtime-btn-row" });
-		const cancelBtn = btnRow.createEl("button", { text: "Cancel", cls: "flowtime-btn-cancel" });
-		const nextBtn = btnRow.createEl("button", { text: "Next →", cls: "flowtime-btn-submit" });
+		const cancelBtn = btnRow.createEl("button", {
+			text: "Cancel",
+			cls: "flowtime-btn-cancel",
+		});
+		const nextBtn = btnRow.createEl("button", {
+			text: "Next →",
+			cls: "flowtime-btn-submit",
+		});
 
 		cancelBtn.addEventListener("click", () => {
 			this.state.proceed = false;
@@ -151,13 +220,17 @@ class LayoutStepModal extends Modal {
 			this.onDone();
 		});
 		nextBtn.addEventListener("click", () => {
-			this.state.layoutType = document.querySelector('input[name="layout"]:checked')?.value || "flat";
-			this.state.projectsRoot = this.state.layoutType === "nested" ? "Projects" : "";
+			this.state.layoutType =
+				document.querySelector('input[name="layout"]:checked')?.value || "flat";
+			this.state.projectsRoot =
+				this.state.layoutType === "nested" ? "Projects" : "";
 			this.close();
 			this.onDone();
 		});
 	}
-	onClose() { this.contentEl.empty(); }
+	onClose() {
+		this.contentEl.empty();
+	}
 }
 
 class DashboardStepModal extends Modal {
@@ -179,22 +252,35 @@ class DashboardStepModal extends Modal {
 		const dailyCheck = dailyCb.createEl("input", { type: "checkbox" });
 		dailyCheck.checked = true;
 		dailyCheck.style.marginRight = "6px";
-		dailyCb.append(' Dashboard.md — daily overview (overdue + today + due this week)');
+		dailyCb.append(
+			" Dashboard.md — daily overview (overdue + today + due this week)",
+		);
 
 		const weeklyCb = contentEl.createEl("label", { cls: "flowtime-label" });
 		const weeklyCheck = weeklyCb.createEl("input", { type: "checkbox" });
 		weeklyCheck.style.marginRight = "6px";
-		weeklyCb.append(' Dashboard Weekly.md — full overview (+ weekly view + budget + sessions)');
+		weeklyCb.append(
+			" Dashboard Weekly.md — full overview (+ weekly view + budget + sessions)",
+		);
 
 		contentEl.createEl("p", {
 			text: "Tip: Start with the daily dashboard. You can add the weekly one later.",
 			cls: "flowtime-label",
-			attr: { style: "color: var(--text-muted); font-size: var(--font-ui-smaller); margin-top: 12px;" },
+			attr: {
+				style:
+					"color: var(--text-muted); font-size: var(--font-ui-smaller); margin-top: 12px;",
+			},
 		});
 
 		const btnRow = contentEl.createEl("div", { cls: "flowtime-btn-row" });
-		const backBtn = btnRow.createEl("button", { text: "← Back", cls: "flowtime-btn-cancel" });
-		const nextBtn = btnRow.createEl("button", { text: "Next →", cls: "flowtime-btn-submit" });
+		const backBtn = btnRow.createEl("button", {
+			text: "← Back",
+			cls: "flowtime-btn-cancel",
+		});
+		const nextBtn = btnRow.createEl("button", {
+			text: "Next →",
+			cls: "flowtime-btn-submit",
+		});
 
 		backBtn.addEventListener("click", () => {
 			this.state.proceed = false;
@@ -208,7 +294,9 @@ class DashboardStepModal extends Modal {
 			this.onDone();
 		});
 	}
-	onClose() { this.contentEl.empty(); }
+	onClose() {
+		this.contentEl.empty();
+	}
 }
 
 class BucketStepModal extends Modal {
@@ -228,19 +316,33 @@ class BucketStepModal extends Modal {
 
 		for (const [key, preset] of Object.entries(BUCKET_PRESETS)) {
 			const radio = contentEl.createEl("label", { cls: "flowtime-label" });
-			const input = radio.createEl("input", { type: "radio", name: "buckets", value: key });
+			const input = radio.createEl("input", {
+				type: "radio",
+				name: "buckets",
+				value: key,
+			});
 			if (key === "default") input.checked = true;
 			radio.append(" " + preset.label);
 		}
 
 		// "Skip" option
 		const skipRadio = contentEl.createEl("label", { cls: "flowtime-label" });
-		const skipInput = skipRadio.createEl("input", { type: "radio", name: "buckets", value: "keep" });
+		const skipInput = skipRadio.createEl("input", {
+			type: "radio",
+			name: "buckets",
+			value: "keep",
+		});
 		skipRadio.append(" Skip — keep my current buckets");
 
 		const btnRow = contentEl.createEl("div", { cls: "flowtime-btn-row" });
-		const backBtn = btnRow.createEl("button", { text: "← Back", cls: "flowtime-btn-cancel" });
-		const nextBtn = btnRow.createEl("button", { text: "Next →", cls: "flowtime-btn-submit" });
+		const backBtn = btnRow.createEl("button", {
+			text: "← Back",
+			cls: "flowtime-btn-cancel",
+		});
+		const nextBtn = btnRow.createEl("button", {
+			text: "Next →",
+			cls: "flowtime-btn-submit",
+		});
 
 		backBtn.addEventListener("click", () => {
 			this.state.proceed = false;
@@ -248,13 +350,17 @@ class BucketStepModal extends Modal {
 			this.onDone();
 		});
 		nextBtn.addEventListener("click", () => {
-			const sel = document.querySelector('input[name="buckets"]:checked')?.value || "keep";
+			const sel =
+				document.querySelector('input[name="buckets"]:checked')?.value ||
+				"keep";
 			this.state.bucketPreset = sel;
 			this.close();
 			this.onDone();
 		});
 	}
-	onClose() { this.contentEl.empty(); }
+	onClose() {
+		this.contentEl.empty();
+	}
 }
 
 class DailyNotesStepModal extends Modal {
@@ -272,7 +378,10 @@ class DailyNotesStepModal extends Modal {
 			cls: "flowtime-label",
 		});
 
-		contentEl.createEl("label", { text: "Daily notes folder:", cls: "flowtime-label" });
+		contentEl.createEl("label", {
+			text: "Daily notes folder:",
+			cls: "flowtime-label",
+		});
 		const folderInput = contentEl.createEl("input", {
 			type: "text",
 			value: this.state.dailyNotesFolder,
@@ -283,12 +392,21 @@ class DailyNotesStepModal extends Modal {
 		contentEl.createEl("p", {
 			text: "This will update .obsidian/daily-notes.json and create the folder if needed.",
 			cls: "flowtime-label",
-			attr: { style: "color: var(--text-muted); font-size: var(--font-ui-smaller); margin-top: 8px;" },
+			attr: {
+				style:
+					"color: var(--text-muted); font-size: var(--font-ui-smaller); margin-top: 8px;",
+			},
 		});
 
 		const btnRow = contentEl.createEl("div", { cls: "flowtime-btn-row" });
-		const backBtn = btnRow.createEl("button", { text: "← Back", cls: "flowtime-btn-cancel" });
-		const nextBtn = btnRow.createEl("button", { text: "Next →", cls: "flowtime-btn-submit" });
+		const backBtn = btnRow.createEl("button", {
+			text: "← Back",
+			cls: "flowtime-btn-cancel",
+		});
+		const nextBtn = btnRow.createEl("button", {
+			text: "Next →",
+			cls: "flowtime-btn-submit",
+		});
 
 		backBtn.addEventListener("click", () => {
 			this.state.proceed = false;
@@ -301,7 +419,9 @@ class DailyNotesStepModal extends Modal {
 			this.onDone();
 		});
 	}
-	onClose() { this.contentEl.empty(); }
+	onClose() {
+		this.contentEl.empty();
+	}
 }
 
 /* ─── Step 5: Routines (v0.5.0) ─── */
@@ -317,33 +437,48 @@ class RoutineStepModal extends Modal {
 		contentEl.createEl("h3", { text: "Step 5: Routines" });
 
 		contentEl.createEl("p", {
-			text: "Routines auto-generate recurring tasks into your daily notes. " +
+			text:
+				"Routines auto-generate recurring tasks into your daily notes. " +
 				"Create a template file with 🔁 markers and the engine handles the rest.",
 			cls: "flowtime-label",
 		});
 
 		contentEl.createEl("p", {
-			text: "A sample routine file will be created at flowtime/routines/Daily.md",
+			text: "Sample routine files will be created at flowtime/routines/Daily.md and Weekly.md",
 			cls: "flowtime-label",
-			attr: { style: "color: var(--text-muted); font-size: var(--font-ui-smaller);" },
+			attr: {
+				style: "color: var(--text-muted); font-size: var(--font-ui-smaller);",
+			},
 		});
 
 		// Preview of the template
 		const preview = contentEl.createEl("div", {
 			cls: "flowtime-preview",
-			attr: { style: "background: var(--background-secondary); padding: 8px; border-radius: var(--radius-s); margin-top: 8px; max-height: 200px; overflow-y: auto; font-size: var(--font-ui-smaller); white-space: pre; font-family: var(--font-monospace);" },
+			attr: {
+				style:
+					"background: var(--background-secondary); padding: 8px; border-radius: var(--radius-s); margin-top: 8px; max-height: 200px; overflow-y: auto; font-size: var(--font-ui-smaller); white-space: pre; font-family: var(--font-monospace);",
+			},
 		});
-		preview.setText(ROUTINE_TEMPLATE.replace(/\t/g, "  "));
+		preview.setText(ROUTINE_DAILY_TEMPLATE.replace(/\t/g, "  "));
 
-		const createCb = contentEl.createEl("label", { cls: "flowtime-label", attr: { style: "margin-top: 12px;" } });
+		const createCb = contentEl.createEl("label", {
+			cls: "flowtime-label",
+			attr: { style: "margin-top: 12px;" },
+		});
 		const createCheck = createCb.createEl("input", { type: "checkbox" });
 		createCheck.checked = true;
 		createCheck.style.marginRight = "6px";
-		createCb.append(" Create sample routine file (recommended)");
+		createCb.append(" Create sample routine files (recommended)");
 
 		const btnRow = contentEl.createEl("div", { cls: "flowtime-btn-row" });
-		const backBtn = btnRow.createEl("button", { text: "← Back", cls: "flowtime-btn-cancel" });
-		const nextBtn = btnRow.createEl("button", { text: "Next →", cls: "flowtime-btn-submit" });
+		const backBtn = btnRow.createEl("button", {
+			text: "← Back",
+			cls: "flowtime-btn-cancel",
+		});
+		const nextBtn = btnRow.createEl("button", {
+			text: "Next →",
+			cls: "flowtime-btn-submit",
+		});
 
 		backBtn.addEventListener("click", () => {
 			this.state.proceed = false;
@@ -356,7 +491,9 @@ class RoutineStepModal extends Modal {
 			this.onDone();
 		});
 	}
-	onClose() { this.contentEl.empty(); }
+	onClose() {
+		this.contentEl.empty();
+	}
 }
 
 class ProjectStepModal extends Modal {
@@ -381,7 +518,10 @@ class ProjectStepModal extends Modal {
 		});
 		nameInput.focus();
 
-		const tasksCb = contentEl.createEl("label", { cls: "flowtime-label", attr: { style: "margin-top: 12px;" } });
+		const tasksCb = contentEl.createEl("label", {
+			cls: "flowtime-label",
+			attr: { style: "margin-top: 12px;" },
+		});
 		const tasksCheck = tasksCb.createEl("input", { type: "checkbox" });
 		tasksCheck.checked = true;
 		tasksCheck.style.marginRight = "6px";
@@ -394,8 +534,14 @@ class ProjectStepModal extends Modal {
 		wikiCb.append(" Create Wiki.md");
 
 		const btnRow = contentEl.createEl("div", { cls: "flowtime-btn-row" });
-		const backBtn = btnRow.createEl("button", { text: "← Back", cls: "flowtime-btn-cancel" });
-		const finishBtn = btnRow.createEl("button", { text: "🎉 Finish Setup", cls: "flowtime-btn-submit" });
+		const backBtn = btnRow.createEl("button", {
+			text: "← Back",
+			cls: "flowtime-btn-cancel",
+		});
+		const finishBtn = btnRow.createEl("button", {
+			text: "🎉 Finish Setup",
+			cls: "flowtime-btn-submit",
+		});
 
 		backBtn.addEventListener("click", () => {
 			this.state.proceed = false;
@@ -412,7 +558,9 @@ class ProjectStepModal extends Modal {
 			this.onDone();
 		});
 	}
-	onClose() { this.contentEl.empty(); }
+	onClose() {
+		this.contentEl.empty();
+	}
 }
 
 /* ─── Apply Settings ─── */
@@ -450,7 +598,10 @@ async function applySettings(plugin, state) {
 		} catch (_) {}
 		existingConfig.folder = folder;
 		if (!existingConfig.format) existingConfig.format = "YYYY-MM-DD";
-		await plugin.app.vault.adapter.write(dailyNotesPath, JSON.stringify(existingConfig, null, 2));
+		await plugin.app.vault.adapter.write(
+			dailyNotesPath,
+			JSON.stringify(existingConfig, null, 2),
+		);
 		results.push("daily notes set to " + folder);
 	} catch (e) {
 		console.warn("Flowtime: Could not configure daily notes:", e.message);
@@ -487,15 +638,25 @@ async function applySettings(plugin, state) {
 		}
 
 		if (state.createRoutines) {
-			const routinePath = routinesFolder + "Daily.md";
-			if (!plugin.app.vault.getAbstractFileByPath(routinePath)) {
-				// Use today's date in the template
-				const today = new Date().toISOString().split("T")[0];
-				const template = ROUTINE_TEMPLATE.replace(/@today/g, "@" + today);
-				await plugin.app.vault.create(routinePath, template);
-				results.push("created " + routinePath);
+			const dailyPath = routinesFolder + "Daily.md";
+			const weeklyPath = routinesFolder + "Weekly.md";
+			const today = new Date().toISOString().split("T")[0];
+			// Replace @today placeholders with actual date
+			const dailyContent = ROUTINE_DAILY_TEMPLATE;  // daily template has no @today
+			const weeklyContent = ROUTINE_WEEKLY_TEMPLATE; // weekly template has no @today
+
+			if (!plugin.app.vault.getAbstractFileByPath(dailyPath)) {
+				await plugin.app.vault.create(dailyPath, dailyContent);
+				results.push("created " + dailyPath);
 			} else {
-				results.push(routinePath + " already exists");
+				results.push(dailyPath + " already exists");
+			}
+
+			if (!plugin.app.vault.getAbstractFileByPath(weeklyPath)) {
+				await plugin.app.vault.create(weeklyPath, weeklyContent);
+				results.push("created " + weeklyPath);
+			} else {
+				results.push(weeklyPath + " already exists");
 			}
 		}
 	} catch (e) {

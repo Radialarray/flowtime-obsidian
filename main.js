@@ -103,11 +103,6 @@ class AtCompletionsSuggest extends EditorSuggest {
 		if (isCommandMode) {
 			// ── COMMAND MODE: task macros & code blocks ──
 			const macros = [
-				{
-					label: "@inbox",
-					insert: "- [ ]  @today ",
-					desc: "Inbox task with today date",
-				},
 				{ label: "@td", insert: "- [ ]  @today ", desc: "Today task skeleton" },
 				{
 					label: "@tm",

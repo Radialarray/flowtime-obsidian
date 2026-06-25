@@ -136,9 +136,10 @@ class TemplateEngine {
 		const exists = this.app.vault.getAbstractFileByPath(path);
 		if (exists) return null;
 
-		const content = mode === "weekly"
-			? this.getDashboardWeeklyTemplate()
-			: this.getDashboardDailyTemplate();
+		const content =
+			mode === "weekly"
+				? this.getDashboardWeeklyTemplate()
+				: this.getDashboardDailyTemplate();
 
 		await this.app.vault.create(path, content);
 		return path;
@@ -191,10 +192,9 @@ class TemplateEngine {
 		}
 
 		// Create folder note from template
-		const content = this.render(
-			this.plugin.settings.projectTemplate,
-			{ NAME: name },
-		);
+		const content = this.render(this.plugin.settings.projectTemplate, {
+			NAME: name,
+		});
 
 		const noteExists = this.app.vault.getAbstractFileByPath(notePath);
 		if (!noteExists) {
@@ -205,7 +205,10 @@ class TemplateEngine {
 		if (scaffoldTasks) {
 			const tasksExists = this.app.vault.getAbstractFileByPath(tasksPath);
 			if (!tasksExists) {
-				await this.app.vault.create(tasksPath, this.getProjectTasksTemplate(name));
+				await this.app.vault.create(
+					tasksPath,
+					this.getProjectTasksTemplate(name),
+				);
 			}
 		}
 
@@ -213,7 +216,10 @@ class TemplateEngine {
 		if (scaffoldWiki) {
 			const wikiExists = this.app.vault.getAbstractFileByPath(wikiPath);
 			if (!wikiExists) {
-				await this.app.vault.create(wikiPath, this.getProjectWikiTemplate(name));
+				await this.app.vault.create(
+					wikiPath,
+					this.getProjectWikiTemplate(name),
+				);
 			}
 		}
 

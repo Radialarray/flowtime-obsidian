@@ -754,20 +754,13 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		const colDD = document.createElement("div");
 		colDD.className = "ft-col-dd";
 
-		const colDefs = [
-			{ id: "time", label: "Time" },
-			{ id: "check", label: "✓" },
-			{ id: "priority", label: "Prio" },
-			{ id: "soon", label: "Soon" },
-			{ id: "task", label: "Task" },
-			{ id: "project", label: "Project" },
-			{ id: "bucket", label: "Bucket" },
-			{ id: "sprint", label: "Sprint" }, // v0.6.0
-			{ id: "source", label: "Source" },
-			{ id: "date", label: "Date" },
-			{ id: "actions", label: "Actions" },
-			{ id: "timer", label: "⏱" },
-		];
+		const dropdownLabels = {
+			time: "Time", check: "✓", priority: "Prio", soon: "Soon",
+			task: "Task", project: "Project", bucket: "Bucket",
+			sprint: "Sprint", source: "Source", date: "Date",
+			actions: "Actions", timer: "⏱",
+		};
+		const colDefs = COLUMNS.map(c => ({ id: c.id, label: dropdownLabels[c.id] }));
 
 		for (const def of colDefs) {
 			if (isCompact && (def.id === "time" || def.id === "timer")) continue;
@@ -1667,7 +1660,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				document.body.appendChild(dp);
 				// Then rAF to trigger transition
 				requestAnimationFrame(() => {
-					dp.classList.add("ft-dp-open");
+					if (dp.parentNode) dp.classList.add("ft-dp-open");
 				});
 			};
 			const cp = () => {

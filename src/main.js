@@ -793,6 +793,15 @@ module.exports = class FlowtimePlugin extends Plugin {
 			},
 		});
 
+		// ── Process Inbox command ──
+		this.addCommand({
+			id: "process-inbox",
+			name: "Process Inbox",
+			callback: () => {
+				new ProcessInboxModal(this.app, this).open();
+			},
+		});
+
 		// ── Status bar timer ──
 		this.statusTimer = new StatusTimer({
 			statusBarItem: this.addStatusBarItem(),
@@ -894,6 +903,45 @@ module.exports = class FlowtimePlugin extends Plugin {
 			name: "Open Today Note",
 			callback: () => {
 				this._openTodayNote();
+			},
+		});
+
+		// ── Create Dashboard commands ──
+		this.addCommand({
+			id: "create-daily-dashboard",
+			name: "Create Daily Dashboard",
+			callback: async () => {
+				try {
+					const result = await this.templateEngine.createDashboard("daily");
+					if (result) {
+						const file = this.app.vault.getAbstractFileByPath(result);
+						if (file) await this.app.workspace.getLeaf().openFile(file);
+						this.notify("📋 Created Daily Dashboard");
+					} else {
+						this.notify("📋 Daily Dashboard already exists", true);
+					}
+				} catch (e) {
+					this.notify("Could not create dashboard: " + e.message, true);
+				}
+			},
+		});
+
+		this.addCommand({
+			id: "create-weekly-dashboard",
+			name: "Create Weekly Dashboard",
+			callback: async () => {
+				try {
+					const result = await this.templateEngine.createDashboard("weekly");
+					if (result) {
+						const file = this.app.vault.getAbstractFileByPath(result);
+						if (file) await this.app.workspace.getLeaf().openFile(file);
+						this.notify("📋 Created Weekly Dashboard");
+					} else {
+						this.notify("📋 Weekly Dashboard already exists", true);
+					}
+				} catch (e) {
+					this.notify("Could not create dashboard: " + e.message, true);
+				}
 			},
 		});
 
@@ -1146,6 +1194,102 @@ module.exports = class FlowtimePlugin extends Plugin {
 				this.notify(
 					"🗑 Routine tracking cleared. Regenerate to recreate instances.",
 				);
+			},
+		});
+
+		// ── Timer Commands ──
+		this.addCommand({
+			id: "start-timer",
+			name: "Start Timer",
+			callback: () => {
+				class StartTimerModal extends Modal {
+					constructor(app, statusTimer, notify) {
+						super(app);
+						this.statusTimer = statusTimer;
+						this.notify = notify;
+					}
+					onOpen() {
+						const { contentEl } = this;
+						contentEl.createEl("h2", { text: "\u23F1 Start Timer" });
+
+						contentEl.createEl("label", {
+							text: "Task name",
+							cls: "flowtime-label",
+						});
+						const nameInput = contentEl.createEl("input", {
+							type: "text",
+							placeholder: "What are you working on?",
+							cls: "flowtime-input",
+						});
+						nameInput.style.width = "100%";
+						nameInput.focus();
+
+						contentEl.createEl("label", {
+							text: "Duration (minutes)",
+							cls: "flowtime-label",
+						});
+						const durInput = contentEl.createEl("input", {
+							type: "number",
+							value: "25",
+							min: "1",
+							cls: "flowtime-input",
+						});
+						durInput.style.width = "100px";
+
+						const btnRow = contentEl.createEl("div", {
+							cls: "flowtime-btn-row",
+						});
+						const cancelBtn = btnRow.createEl("button", {
+							text: "Cancel",
+							cls: "flowtime-btn-cancel",
+						});
+						const startBtn = btnRow.createEl("button", {
+							text: "Start",
+							cls: "flowtime-btn-submit",
+						});
+
+						cancelBtn.addEventListener("click", () => this.close());
+						startBtn.addEventListener("click", () => {
+							const name = nameInput.value.trim();
+							if (!name) {
+								this.notify("Task name is required", true);
+								return;
+							}
+							const minutes = parseInt(durInput.value, 10);
+							if (!minutes || minutes < 1) {
+								this.notify("Duration must be at least 1 minute", true);
+								return;
+							}
+							this.statusTimer.start(name, minutes * 60);
+							this.notify(
+								"\u23F1 Started timer: " + name + " (" + minutes + "m)",
+							);
+							this.close();
+						});
+
+						nameInput.addEventListener("keydown", (e) => {
+							if (e.key === "Enter") startBtn.click();
+						});
+					}
+					onClose() {
+						this.contentEl.empty();
+					}
+				}
+				new StartTimerModal(this.app, this.statusTimer, this.notify).open();
+			},
+		});
+
+		this.addCommand({
+			id: "stop-timer",
+			name: "Stop Timer",
+			callback: () => {
+				if (this.statusTimer.currentTimer) {
+					const name = this.statusTimer.currentTimer.taskName;
+					this.statusTimer.stop();
+					this.notify("\u23F1 Timer stopped: " + name);
+				} else {
+					this.notify("\u23F1 No active timer", true);
+				}
 			},
 		});
 

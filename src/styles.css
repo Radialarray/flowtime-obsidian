@@ -75,7 +75,7 @@
 	background: transparent;
 	position: relative;
 	flex-shrink: 0;
-	transition: box-shadow 0.15s ease-in-out;
+	transition: box-shadow 150ms ease-out;
 }
 
 .ft-checkbox:hover {
@@ -501,7 +501,7 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	transition: all 0.12s ease;
+	transition: transform 120ms ease-out, border-color 120ms ease-out, background 120ms ease-out;
 }
 
 .ft-timer-play:hover,
@@ -524,17 +524,31 @@
 
 .ft-timer-expired {
 	color: var(--text-error);
-	animation: ft-blink 0.8s ease-in-out infinite;
+	font-weight: var(--font-semibold);
 }
 
-@keyframes ft-blink {
-	0%,
-	100% {
-		opacity: 1;
-	}
-	50% {
-		opacity: 0.3;
-	}
+/* Press feedback for all interactive elements */
+.ft-timer-play:active,
+.ft-timer-reset:active,
+.ft-tg-card:active {
+	transform: scale(0.95);
+	transition: transform 120ms ease-out;
+}
+
+.ft-checkbox:active {
+	transform: scale(0.92);
+	transition: transform 120ms ease-out;
+}
+
+.ft-act-btn:active,
+.ft-bulk-btn:active,
+.ft-empty-btn:active,
+.ft-dp-btn:active,
+.ft-view-btn:active,
+.ft-col-btn:active,
+.ft-filter-btn:active {
+	transform: scale(0.97);
+	transition: transform 120ms ease-out;
 }
 
 /* --- Empty state --- */
@@ -746,15 +760,15 @@
 
 /* --- Weekly group headers --- */
 .ft-project-group {
-	background: var(--background-primary-alt);
+	background: var(--background-modifier-hover);
 	font-weight: var(--font-semibold);
-	font-size: var(--font-ui-smaller);
+	font-size: var(--font-ui-small);
 	color: var(--text-muted);
 }
 
 .ft-project-group td {
-	padding: 6px 8px;
-	border-bottom: 1px solid var(--background-modifier-border);
+	padding: 8px 8px;
+	border-bottom: 2px solid var(--background-modifier-border);
 }
 
 /* --- Status Bar Timer --- */
@@ -838,7 +852,7 @@
 .ft-progress-fill {
 	height: 100%;
 	border-radius: var(--radius-s);
-	transition: width 0.3s ease;
+	transition: width 300ms ease-out;
 	background: var(--ft-state-color, var(--text-muted));
 	flex-shrink: 0;
 }
@@ -1244,10 +1258,11 @@
 	color: var(--text-normal);
 }
 .flowtime-table .ft-subgroup-header td {
-	padding-left: 24px;
+	padding: 6px 8px 6px 16px;
 	font-style: italic;
 	color: var(--text-muted);
 	background: var(--background-primary-alt);
+	border-left: 3px solid var(--background-modifier-border-hover);
 }
 
 /* ── View Buttons ── */
@@ -1751,7 +1766,7 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view {
 	flex-direction: column;
 	gap: 1px;
 	margin: 1px;
-	transition: box-shadow 0.15s ease;
+	transition: box-shadow 150ms ease-out;
 	z-index: 2;
 }
 
@@ -2072,4 +2087,15 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view {
 
 .ft-settings-group .setting-item-heading {
 	border-top: none !important;
+}
+
+/* ── Reduced Motion ── */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
 }

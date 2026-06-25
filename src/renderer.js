@@ -8,10 +8,20 @@ const {
 } = require("./task-parser");
 const { renderProgressBar, formatHours } = require("./budget-state");
 const { evaluateFilter } = require("./filter-engine");
-
-const DUR_OPTS = [10, 15, 20, 25, 30, 45, 60, 90, 120, 150, 180, 210, 240];
-const START_H = 7;
-const START_END = 20;
+const {
+	DUR_OPTS,
+	START_H,
+	START_END,
+	timeOpts,
+	parseStored,
+	calcEnd,
+	getMonday,
+	getSunday,
+	priorityWeight,
+	getFileTasks,
+	toggleCheck,
+	updateDate,
+} = require("./task-utils");
 
 class FlowtimeRenderer extends MarkdownRenderChild {
 	constructor(app, containerEl, mode, projectEngine, sourcePath) {
@@ -47,50 +57,11 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 	}
 
 	/* ─── helpers ─── */
-	_timeOpts(h1, h2) {
-		const r = [];
-		for (let h = h1; h <= h2; h++)
-			for (let m = 0; m < 60; m += 30)
-				r.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
-		return r;
-	}
-
-	_parseStored(t) {
-		if (!t) return { start: "", dur: 0 };
-		const m = t.match(/^(\d{1,2}:\d{2})\s*[—\-–]\s*(\d{1,2}:\d{2})$/);
-		if (!m) return { start: "", dur: 0 };
-		const d =
-			m[2].split(":").reduce((a, n) => +n + 60 * a, 0) -
-			m[1].split(":").reduce((a, n) => +n + 60 * a, 0);
-		return {
-			start: m[1],
-			dur:
-				d > 0
-					? DUR_OPTS.reduce((a, b) =>
-							Math.abs(b - d) < Math.abs(a - d) ? b : a,
-						)
-					: 0,
-		};
-	}
-
-	_calcEnd(s, d) {
-		if (!s || !d) return "";
-		const t = s.split(":").reduce((a, n) => +n + 60 * a, 0) + d;
-		return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(Math.round(t % 60)).padStart(2, "0")}`;
-	}
-
-	_getMonday(d) {
-		const date = new Date(d);
-		const day = date.getDay();
-		const diff = day === 0 ? -6 : 1 - day;
-		date.setDate(date.getDate() + diff);
-		return date.toISOString().split("T")[0];
-	}
-	_getSunday(d) {
-		const monday = new Date(this._getMonday(d));
-		monday.setDate(monday.getDate() + 6);
-		return monday.toISOString().split("T")[0];
-	}
+	_timeOpts(h1, h2) { return timeOpts(h1, h2); }
+	_parseStored(t) { return parseStored(t); }
+	_calcEnd(s, d) { return calcEnd(s, d); }
+	_getMonday(d) { return getMonday(d); }
+	_getSunday(d) { return getSunday(d); }
 	_computeBucketTotals() {
 		const totals = {};
 		const ref = this._refDate();
@@ -158,17 +129,13 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		} catch (_) {}
 	}
 
-	/** v0.4.0: Map priority emoji to sort weight (higher = first) */
-	_priorityWeight(p) {
-		const w = { "🟥": 3, "🟨": 2, "🟩": 1 };
-		return w[p] || 0;
-	}
+	_priorityWeight(p) { return priorityWeight(p); }
 
 	/** v0.4.0: Default sort = priority (desc) → time (asc) → date (asc) */
 	_sort() {
 		this.tasks.sort((a, b) => {
-			const pa = this._priorityWeight(a.priority);
-			const pb = this._priorityWeight(b.priority);
+			const pa = priorityWeight(a.priority);
+			const pb = priorityWeight(b.priority);
 			if (pa !== pb) return pb - pa; // higher priority first
 			if (!a.time && !b.time) return 0;
 			if (!a.time) return 1;
@@ -222,7 +189,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			case "date":
 				return task.taskDate || "";
 			case "priority":
-				return this._priorityWeight(task.priority);
+				return priorityWeight(task.priority);
 			case "soon":
 				return task.isSoon ? 1 : 0;
 			default:
@@ -305,32 +272,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 	}
 
 	/* ─── helpers ─── */
-	/**
-	 * Get parsed tasks for a file, using cache if available.
-	 * Falls back to reading and parsing the file, then caches the result.
-	 */
 	async _getFileTasks(file) {
-		const cache = this.plugin?.taskCache;
-		const cached = cache?.get(file.path);
-		if (cached) {
-			return cached.parsedTasks.map((t) => ({ ...t, file }));
-		}
-		const content = await this.app.vault.read(file);
-		const lines = content.split("\n");
-		const result = [];
-		for (let i = 0; i < lines.length; i++) {
-			const parsed = parseTaskLine(lines[i], file, i);
-			if (parsed) result.push(parsed);
-		}
-		// Cache without file references (not serializable)
-		if (cache) {
-			const cacheable = result.map((t) => {
-				const { file: f, ...rest } = t;
-				return rest;
-			});
-			cache.set(file.path, cacheable);
-		}
-		return result;
+		return getFileTasks(file, this.app, this.plugin?.taskCache);
 	}
 
 	/* ─── load ─── */
@@ -1829,7 +1772,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		const saveAndClose = async () => {
 			let changed = false;
 			if (pendingDate !== null && pendingDate !== task.taskDate) {
-				await this.updateDate(task, pendingDate);
+				await updateDate(this.app.vault, task, pendingDate);
 				task.taskDate = pendingDate;
 				changed = true;
 			}
@@ -2270,25 +2213,14 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 	}
 
 	async toggleTaskComplete(task) {
-		const content = await this.app.vault.read(task.file);
-		const lines = content.split("\n");
-		const line = lines[task.line];
-		if (!line) return;
-
-		const wasCompleted = /\[(x|X)\]/.test(line);
-		const newLine = wasCompleted
-			? line.replace(/\[(x|X)\]/, "[ ]")
-			: line.replace(/\[ \]/, "[x]");
-		lines[task.line] = newLine;
-		await this.app.vault.modify(task.file, lines.join("\n"));
-
-		// Toggle status in memory
-		task.status = wasCompleted ? " " : "x";
+		const wasCompleted = task.status === "x";
+		await toggleCheck(this.app.vault, task);
 
 		// Handle recurrence if completing
 		if (!wasCompleted) {
+			const content = await this.app.vault.read(task.file);
+			const newLine = content.split("\n")[task.line];
 			await this._handleRecurrence(task, newLine);
-			// Write completion record to session store
 			if (this.plugin?.sessionStore) {
 				await this.plugin.sessionStore.writeCompletion({
 					date: task.taskDate || new Date().toISOString().split("T")[0],
@@ -2299,7 +2231,6 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			}
 		}
 
-		// Rebuild to reflect new status — keep task in table
 		const tbody = this.containerEl.querySelector("tbody");
 		if (tbody) this.buildRows(tbody);
 		await this._refreshSiblings();

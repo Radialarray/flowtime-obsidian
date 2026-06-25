@@ -82,7 +82,7 @@ Flowtime detects which project a task belongs to via:
 
 - **Folder notes** — a `project.md` inside a folder that matches the folder name
 - **Frontmatter markers** — `type: project` or any configurable key/value pair
-- **Inline tags** — `#project/ProjectName` with configurable prefix
+- **Inline tags** — `@p:ProjectName` anywhere in task text
 - Uncategorized tasks appear under "Other"
 
 ### Time Budgets (Buckets)
@@ -229,7 +229,8 @@ A GTD-inspired inbox for dumping raw tasks without syntax pressure.
 - Open `Inbox.md` directly and type
 - `⌘+P` → **Append to Inbox** — quick textarea prompt
 - Set Quick Entry target to "Inbox" in settings → `⌘+Shift+I` writes to inbox
-- Type `@inbox` anywhere on a line — everything before `@inbox` is captured to Inbox.md and the line is cleared. Works on blank lines (sends `@today` task) or mid-text (captures preceding text, wraps in `- [ ]` as needed)
+- Type `@inbox` anywhere on a line — preceding text captured to Inbox.md, line cleared
+- Type `@p:ProjectName` at end of line — preceding text captured to that project's Tasks.md
 
 **Processing** (`⌘+P` → **Process Inbox**):
 Opens a modal that walks through inbox lines one at a time. Each line gets one action:
@@ -281,7 +282,7 @@ Flowtime parses task lines from any markdown file in your vault:
 | `@Nh` or `@Nm` | Duration | `@1.5h` or `@30m` |
 | `@b:name` or `@bucket:name` | Time bucket | `@b:deep-work` |
 | `🔺⏫🔼🔽⏬` | Priority | |
-| `#tag` | Project tag (with prefix) | `#project/website` |
+| `@p:Name` | Project assignment | `@p:website` |
 | `🔁 every <interval>` | Recurrence | `🔁 every workday`, `🔁 every Mon Wed Fri`, `🔁 every 2nd Sun` |
 
 A complete task example:
@@ -299,7 +300,7 @@ A complete task example:
 1. Run the **New Project** command from the command palette
 2. Enter a project name
 3. A folder is created with a project note containing the frontmatter marker
-4. Tasks in that folder or tagged with `#project/<name>` appear under the project
+4. Tasks in that folder or tagged with `@p:<name>` appear under the project
 
 ### Creating a Daily Dashboard
 
@@ -352,7 +353,7 @@ All settings in **Settings → Flowtime**.
 | Frontmatter value | `project` | Value of that field |
 | Project name key | `name` | Frontmatter field used as display name |
 | Fallback to folder name | on | Use folder name when no frontmatter marker is found |
-| Tag prefix | `project/` | Prefix for inline project tags (`#project/Name`) |
+| Tag prefix | `project/` | Prefix for @p: project tags (legacy #project/ prefix is deprecated) |
 | Projects root | (empty) | Root folder for project detection; empty = scan entire vault |
 | **Quick Entry** | | |
 | Default target file | daily-note | Where new tasks save: daily note / active file / project file / inbox |

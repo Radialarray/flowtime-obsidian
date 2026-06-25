@@ -79,7 +79,7 @@ Flowtime has four entity types. All live in markdown files in the vault:
 |--------|---------|--------|
 | **Project** | Folder + folder note + management doc + wiki | `ProjectName/` with `type: project` frontmatter |
 | **Bucket** | Plugin settings (JSON) | `data.json` via `app.vault.readJson`/`app.vault.writeJson` |
-| **Task** | Inline markdown lines | `- [ ] description @date @1.5h @b:bucket-id #project/Name` |
+| **Task** | Inline markdown lines | `- [ ] description @date @1.5h @b:bucket-id @p:Name` |
 | **Session** | NDJSON files | `flowtime/sessions/YYYY-MM-DD.ndjson` |
 
 ---
@@ -172,7 +172,7 @@ tags: [project]
 
 - `type: project` is the default marker (configurable in settings)
 - `name:` is the display name (optional, falls back to folder name)
-- Tasks reference a project either by location (being inside a project folder) or by a `#project/Name` tag (configurable prefix)
+- Tasks reference a project either by location (being inside a project folder) or by `@p:Name`
 
 ### READ Projects
 
@@ -384,7 +384,7 @@ Tasks are markdown list items with checkbox status and annotation tags.
 | Date | `@YYYY-MM-DD` | `@2026-06-24` | Also `@today`, `@tomorrow`, `@next-monday` |
 | Duration | `@1.5h` or `@30m` | `@1.5h` | Hours or minutes |
 | Bucket | `@b:name` / `@bucket:name` | `@b:deep-work` | Links to bucket definition |
-| Project tag | `@p:Name` | `@p:Website` | New `@p:` syntax (v0.4.0). Legacy `#project/Name` still works |
+| Project tag | `@p:Name` | `@p:Website` | Assigns task to project (v0.4.0) |
 | Priority (color dot) | `🟥` / `🟨` / `🟩` | `🟥` | 🟥=high, 🟨=med, 🟩=low |
 | Priority text | `@high` / `@med` / `@low` | `@high` | Aliases for 🟥/🟨/🟩 (v0.4.0) |
 | Status tag | `@soon` | `@soon` | Marks as backlog/up-next. Shows in "📋 Up Next" section (v0.4.0) |
@@ -511,7 +511,7 @@ Where `today`, `monday` and `sunday` are derived from current date:
 2. Build task line:
 
    ```
-   - [ ] Task description @2026-06-24 @1.5h @b:deep-work #project/ProjectName
+   - [ ] Task description @2026-06-24 @1.5h @b:deep-work @p:ProjectName
    ```
 
 3. Append to file:
@@ -772,7 +772,7 @@ The inbox accepts:
 - **Plain text** — no prefix required
 - **Already-formed task lines** — `- [ ] ...`
 - **URLs, fragments, ideas** — any text
-- **Already-tagged lines** — `@today`, `@b:deep-work`, `@p:Website`, `#project/Name` — tags survive as pre-fills
+- **Already-tagged lines** — `@today`, `@b:deep-work`, `@p:Website` — tags survive as pre-fills
 
 **Header exclusion:** Lines above the first blank line that follows description text after the initial heading are treated as the header section and excluded from processing. This keeps the template's instruction lines from being processed as items.
 
@@ -783,7 +783,8 @@ The inbox accepts:
 | **Open Inbox.md** | Open the file and type raw lines. `@`-completions work here too |
 | **Append to Inbox** (`⌘+P`) | Opens a textarea prompt. Submit appends to Inbox.md |
 | **Quick Entry → Inbox** | Set `quickEntryTargetFile` to `"inbox"`. `⌘+Shift+I` writes straight to Inbox.md |
-| **`@inbox` macro** | Type `@inbox` anywhere: captures preceding text to Inbox.md, clears the line. Blank line → `- [ ]  @today`. Mid-text → wraps in `- [ ]` if needed. |
+| **`@inbox` macro** | Type `@inbox` after task text → captures line to Inbox.md, clears the line |
+| **`@p:Name` capture** | Type `@p:ProjectName` after task text → captures line to that project's Tasks.md, clears the line |
 
 ### Processing — Process Inbox Command (`⌘+P` → "Process Inbox")
 
@@ -798,7 +799,7 @@ Transforms the line into a proper Flowtime task line and appends to the target f
 | Date | Text input (natural language) | `@today`, `@tomorrow`, or explicit `@YYYY-MM-DD` in line |
 | Duration | Dropdown (10m–4h, or None) | `@30m`, `@1.5h`, or `inboxDefaultDuration` setting |
 | Bucket | Dropdown of configured buckets | `@b:deep-work`, `@bucket:admin`, or `inboxDefaultBucket` setting |
-| Project | Text input | `@p:Website` or `#project/Website` in line |
+| Project | Text input | `@p:Website` in line |
 | Priority | Dropdown (None/High/Med/Low) | `🟥`/`@high`, `🟨`/`@med`, `🟩`/`@low` in line |
 | Recurrence | Dropdown (None/Daily/Weekly/Biweekly/Monthly) | `🔁 every week` in line |
 
@@ -862,7 +863,7 @@ When the modal loads a line, `detectTags()` scans for:
 | `@1.5h`, `@30m` | Duration | `@30m` → 30 minutes |
 | `@b:name`, `@bucket:name` | Bucket | `@b:deep-work` |
 | `@p:Name` | Project | `@p:Website` |
-| `#project/Name` | Project (fallback) | `#project/Website` |
+| `@p:Name` | Project | `@p:Website` |
 | `🟥`, `@high` | Priority | `🟥` |
 | `🟨`, `@med` | Priority | `@med` |
 | `🟩`, `@low` | Priority | `🟩` |
@@ -1025,7 +1026,7 @@ await plugin.saveData(plugin.settings)
 2. Append:
 
    ```
-   - [ ] [user description] @tomorrow @1h @b:deep-work #project/X
+   - [ ] [user description] @tomorrow @1h @b:deep-work @p:ProjectName
    ```
 
 3. If user gave a duration and/or bucket, include those
@@ -1217,7 +1218,7 @@ Guidelines for agent behavior when managing Flowtime data:
 - Read the vault to understand existing projects and tasks before making changes
 - Always check `status !== "x"` when listing active tasks (completed tasks are still in files but marked `[x]`)
 - Use the `@b:<id>` format for bucket assignment (short form preferred)
-- Use `#project/<Name>` tag when creating tasks that belong to a project but live in a different folder
+- Use `@p:<name>` when creating tasks that belong to a project but live in a different folder
 - Respect the daily budget cap (default 12h) when scheduling tasks
 - Use natural dates (`@today`, `@tomorrow`) for readability when the user will see the raw task line
 

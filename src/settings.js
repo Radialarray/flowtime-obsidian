@@ -134,7 +134,7 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Tag prefix")
-			.setDesc("Prefix used for project tags (e.g. project/Website)")
+			.setDesc("Prefix for @p: project tags (e.g. @p:Website). Legacy #project/ prefix is deprecated.")
 			.addText((text) =>
 				text
 					.setPlaceholder("project/")

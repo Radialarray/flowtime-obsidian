@@ -1,14 +1,12 @@
 # Flowtime v0.5.0
 
-An Obsidian plugin that turns task management into **interactive tables** with code blocks, inline countdown timers, time budgets, session tracking, a status bar timer, **automatic routine generation**, and a **week planning view** with list and timeline grid modes. Zero external dependencies.
+Obsidian plugin for daily task planning, timeboxing, and project-aware task management with inline timers. No external dependencies.
 
 ---
 
-## Features
+## What it does
 
-### Code Block Views
-
-Eight code block types give you different perspectives on your tasks:
+Eight code block types show your tasks in different ways:
 
 | Block | Mode | Scope |
 |-------|------|-------|
@@ -19,151 +17,92 @@ Eight code block types give you different perspectives on your tasks:
 | ` ```flowtime-project` | project | Tasks for the project containing this code block |
 | ` ```flowtime-buckets` | budget | Weekly time-budget overview per bucket |
 | ` ```flowtime-sessions` | sessions | Time-tracking session history and analytics |
-| ` ```flowtime-weekplan` | weekplan | Week-at-a-glance with list/grid toggle (v0.5.0) |
+| ` ```flowtime-weekplan` | weekplan | Week-at-a-glance with list/grid toggle |
 
-### Quick Entry (Cmd+Shift+I)
+## Task entry
 
-Press **Cmd+Shift+I** (Mac) or **Ctrl+Shift+I** (Windows/Linux) to open the Quick Entry modal. Also available via command palette ("Add Task").
+**Quick entry (Cmd+Shift+I)** — opens a modal. Type task text, set a date, duration, bucket, and project. Preview the final line before saving.
 
-- Natural language date shortcuts:
-  - `@today` / `@tomorrow` / `@yesterday`
-  - `@monday` through `@sunday` — next occurrence
-  - `@next-week` / `@next-month`
-  - `@weekend` / `@next-monday`
-  - Any explicit `YYYY-MM-DD` date
-- Set a duration (`10m`, `30m`, `1h`, `1.5h`)
-- Select a project from the dropdown
-- Pick a time bucket
-- Live preview shows the final task line before saving
+Date shortcuts: `@today`, `@tomorrow`, `@monday`–`@sunday`, `@next-week`, `@next-monday`, or any `YYYY-MM-DD`.
 
-### Interactive Time Editing
+Durations: `10m`, `30m`, `1h`, `1.5h` — typed inline or picked from the modal.
 
-Each task row has inline time controls:
+**@-completions** — type `@` in any note for inline task macros and directives:
 
-- **Start time** — text input with datalist (7:00–20:00, 30-min steps) — type any time
-- **Duration** — text input with common durations (10m–4h) — type `45m`, `1.5h`, etc.
-- **End preview** — auto-calculated end time shown as `→ HH:mm` below the inputs
-- **Auto-save** — changes are saved to the source file after 300ms of inactivity
+- `@td` → new today task, `@tm` → tomorrow, `@now` → 15m today
+- `@today`, `@overdue`, `@weekly` → insert code blocks
+- `@b:deep-work`, `@p:Website`, `@30m`, `@high` → tag the task
 
-### Per-Row Countdown Timer
+**Inbox capture** — `Inbox.md` lives at vault root. Dump raw thoughts there, one per line. No syntax required. Process them through the **Process Inbox** command — a modal walks each line and lets you promote it to a task, project, wiki entry, or snooze it.
 
-Every task with a duration gets a timer column:
+Also: `@inbox` anywhere on a line (captures preceding text to inbox) and `@p:ProjectName` (captures to that project's Tasks.md).
 
-- **▶ Play** — start the countdown timer for that task
-- **⏸ Pause** — pause without recording
-- **↺ Reset** — restart the timer to its original duration
-- **Progress bar** — fills from left to right; turns amber at 80%, red at 100%
-- Timer blinks red when expired
-- Sound plays on expiry (configurable)
-- Linked to the status bar timer — starting a row timer starts the status bar timer too
+## Tables
 
-### Status Bar Timer
+Every code block renders as an interactive table with inline editing.
 
-A persistent timer in the Obsidian status bar:
+**Time inputs** — each task row has editable start time and duration fields. Type `7:30`, `45m`, `1.5h` — the end time auto-calculates below. Changes save to the source file after 300ms.
 
-- **Click** — pause/resume the currently running timer
-- **Right-click** — stop and record the session
-- Shows task name (truncated) and remaining time
-- Displays `⏱ --` when idle
-- Records completed sessions to the session store
+**Countdown timers** — tasks with a duration get a play button. Click to start a countdown. It pauses, resets, plays a sound when done. The progress bar fills from left to right — amber at 80%, red at done. Running a row timer also starts the status bar timer.
 
-### Checkbox Toggle
+**Status bar timer** — shows the active task and remaining time. Left-click to pause/resume, right-click to stop and record the session.
 
-Click the checkbox in any table to toggle task completion:
+**Checkboxes** — click to toggle `[x]` in the source file. Uses Obsidian's native checkbox styling.
 
-- Matches **Obsidian's native checkbox** pixel-perfect: 14×14px, 1px border, 4px radius, SVG mask checkmark
-- Uses `--checkbox-color` / `--checkbox-border-color` / `--checkbox-radius` CSS variables
-- Completed tasks are marked `[x]` in the source file
-- Hidden from view on next render
+**Date popup** — click the date badge on any row. Pick a date, jump to today/tomorrow/next-week, or click ✕ to backlog it.
 
-### Project Detection
+**Task detail popup** — click any task text. Edit the date and bucket, open the source file or project note.
 
-Flowtime detects which project a task belongs to via:
+**Column visibility** — the ☰ Columns button in any table toolbar lets you toggle individual columns. Defaults shown below:
 
-- **Folder notes** — a `project.md` inside a folder that matches the folder name
-- **Frontmatter markers** — `type: project` or any configurable key/value pair
-- **Inline tags** — `@p:ProjectName` anywhere in task text
-- Uncategorized tasks appear under "Other"
-
-### Time Budgets (Buckets)
-
-Organize tasks into time-buckets with weekly limits:
-
-- Built-in buckets: Deep Work, Admin, Meetings (configurable)
-- Each bucket has a name, color, and weekly hour limit
-- Tasks tagged with `@b:bucket-id` or `@bucket:bucket-id` are assigned to that bucket
-- **Weekly overview** (`flowtime-buckets`): shows progress bars for each bucket vs. limit
-- **Daily cap**: configurable daily hour budget with progress bar in today view
-- Color-coded states: normal (accent), warning (amber >80%), over (red >100%)
-
-### Session History
-
-Time spent is recorded automatically when the status bar timer stops:
-
-- `flowtime-sessions` view shows a filterable history table
-- Filter by date range, bucket, or search task text
-- **Session analytics**: daily totals, per-bucket breakdown, summary stats
-- Sessions stored in the plugin folder (`.obsidian/plugins/flowtime/sessions/`) — hidden but synced
-
-### Filter, Sort & Group
-
-Each table has a toolbar with:
-
-- **Filter** — build a filter with field + operator + value
-  - Fields: Bucket, Project, Date, Task Text, Duration, Status, Priority
-  - Operators: is, is not, contains, >, ≥, <, ≤, exists, does not exist
-  - Active filter shown below the panel
-- **Sort** — click any column header to sort; shift-click for multi-column sort
-  - Sort indicators (▲/▼) show current direction
-- **Group** — primary and secondary grouping
-  - Group by: Bucket, Project, Date, Status
-  - Sub-group headers for nested organization
-
-### Column Visibility
-
-Click the **☰ Columns** button in any table toolbar to toggle individual columns:
-
-| Column | Default visibility |
-|--------|--------------------|
+| Column | Default |
+|--------|---------|
 | ✓ Checkbox | Always |
 | Task text | Always |
 | Time | Today mode only |
 | Timer | Today mode only |
 | Date | All modes except Today |
-| Project | Hidden (toggle on) |
-| Bucket | Hidden (toggle on) |
-| Source | Hidden (toggle on) |
+| Project | Hidden |
+| Bucket | Hidden |
+| Source | Hidden |
 | Actions | Compact modes (overdue/dueweek/weekly) |
 
-### Bulk Operations
+**Bulk operations** — compact modes have buttons to assign all visible tasks to today, or backlog them all (overdue mode).
 
-Compact modes (overdue, dueweek, weekly) have bulk action buttons:
+**Filter, sort, group** — each table has a toolbar:
 
-- **📅 Assign All to Today** — reschedule every visible task to today
-- **🗑 Backlog All** (overdue only) — remove dates from all visible tasks
+- Filter by bucket, project, date, text, duration, status, or priority. Operators: is, is not, contains, >, <, exists.
+- Sort by clicking column headers. Shift-click for multi-column.
+- Group by bucket, project, date, or status — with nested sub-headers.
 
-### Date Popup
+## Cross-table refresh
 
-Click the date badge in any task row to open a date picker:
+Change a task's date or time in one table and all other tables on the same page update automatically. No manual reload.
 
-- Native date input for picking any date
-- Quick buttons: Today, Tomorrow, Next Week
-- **✕ Backlog** — remove the date and send to backlog
-- Tasks moved to today stay in view; tasks moved to other dates are removed from the current view
+## Project detection
 
-### Task Detail Popup
+A task belongs to a project if:
 
-Click any task text to open a floating detail panel:
+- It lives in a folder with a folder note that has `type: project` frontmatter
+- The folder itself is named after a project
+- The task text contains `@p:ProjectName`
+- It has a `#project/Name` tag (legacy)
 
-- Edit the task's date
-- Change the task's bucket assignment
-- View the project name (click to open)
-- View the source file (click to open)
-- Close saves pending changes
+Tasks that don't match any project show under "Other".
 
-### Recurrence (v0.5.0)
+## Time budgets (buckets)
 
-Mark recurring tasks with `🔁` — the plugin generates real task instances into your daily notes:
+Organize tasks into categories with weekly hour limits. Built-in buckets: Deep Work, Admin, Meetings (add your own in settings). Tag a task with `@b:deep-work` or `@bucket:deep-work`.
+
+The `flowtime-buckets` view shows progress bars per bucket — normal (accent), warning (amber >80%), over (red >100%). There's also a configurable daily cap with a progress bar in the today view.
+
+## Session history
+
+Every time the status bar timer stops (or a row timer finishes), a session is recorded. The `flowtime-sessions` view shows a filterable history table with daily totals and per-bucket breakdown. Sessions live in `.obsidian/plugins/flowtime/sessions/` — hidden from the file explorer but synced.
+
+## Recurrence & routines
+
+Mark tasks with `🔁` to make them repeat:
 
 | Syntax | Meaning |
 |--------|---------|
@@ -178,99 +117,45 @@ Mark recurring tasks with `🔁` — the plugin generates real task instances in
 | `🔁 every month on 15th` | 15th of every month |
 | `🔁 every 3 days` | Every 3 days from last generation |
 
-### Routines Folder (v0.5.0)
+Put these lines in `.md` files inside `Routines/` (configurable). The plugin reads the folder, figures out what's due, and writes real task instances into your daily notes. Generation history is tracked in the plugin folder to prevent dupes across synced devices.
 
-Create `.md` files in `Routines/` (default, configurable in settings) with task lines using the recurrence markers above. The plugin scans the folder, evaluates what's due, and writes task instances into your daily notes. Generation history is tracked in the plugin folder (`.obsidian/plugins/flowtime/`) to prevent duplication across synced devices.
+Delete an instance and it stays gone — the engine won't recreate it. Vacation mode (toggle in settings or the weekplan toolbar) pauses all generation.
 
-**How it works:**
+On plugin load, the engine generates instances for today and the rest of the week. It also watches the routines folder for changes.
 
-1. Create `Routines/Daily.md` (or any name) with tasks + recurrence markers
-2. On plugin load, the engine generates instances for today + rest of the week
-3. Each instance becomes a real task line in `2026-06-24.md` — editable, deletable, checkable
-4. Deleting an instance removes it permanently — the engine won't re-create it
-5. **Vacation mode** (settings or weekplan toolbar) pauses all generation
-
-### Weekplan View (v0.5.0)
+## Weekplan view
 
 ````markdown
 ```flowtime-weekplan
 ```
 ````
 
-Renders Monday–Friday with all your week's tasks. Two view modes toggled via the toolbar:
+Shows Monday–Friday with all your week's tasks. Two view modes you can toggle:
 
-**List view** — day-by-day sections with inline editing:
-
-- Per-day budget bars showing scheduled hours vs daily cap
-- Inline time/duration inputs with auto-save
-- Checkbox, timer, delete per task
-- Routines marked with 🔁 badge
+**List view** — day-by-day sections. Each day shows scheduled hours vs. daily cap as a progress bar. Inline editing for time, duration, checkbox, delete. Routines get a 🔁 badge.
 
 **Grid view** — horizontal timeline grid:
 
 | | Mon 24 | Tue 25 | Wed 26 | Thu 27 | Fri 28 |
 |---|--------|--------|--------|--------|--------|
 | 09:00 | Deep Work | Meeting | Writing | Deep Work | Standup |
-| 10:00 | (spans) | | | | |
+| 10:00 | | | | | |
 
-- Tasks positioned by their time range (30min slot rows)
-- Today column and current time slot highlighted
-- Click any task card → edit popup with time, duration, checkbox, delete
-- Untimed tasks listed at bottom of each day column
+Tasks sit in their time range (30min slot rows). The current day and time slot are highlighted. Click a card to edit time, duration, checkbox, or delete. Untimed tasks live at the bottom of each day column.
 
-### Inbox Capture & Processing
+## Templates
 
-A GTD-inspired inbox for dumping raw tasks without syntax pressure.
+Three commands:
 
-**`Inbox.md`** is auto-created at vault root. Open it and type anything — one line per thought. No syntax required. Tags are optional but pre-filled during processing (`@today`, `@b:deep-work`, `@p:Website`).
+- **Insert daily dashboard** — drops `flowtime-today` + `flowtime-overdue` blocks at cursor
+- **Insert weekly dashboard** — drops `flowtime-weekly` + `flowtime-dueweek` blocks
+- **Create Daily/Weekly Dashboard** — creates the actual Dashboard.md files at vault root
 
-**Capture methods:**
+## Content width
 
-- Open `Inbox.md` directly and type
-- `⌘+P` → **Append to Inbox** — quick textarea prompt
-- Set Quick Entry target to "Inbox" in settings → `⌘+Shift+I` writes to inbox
-- Type `@inbox` anywhere on a line — preceding text captured to Inbox.md, line cleared
-- Type `@p:ProjectName` at end of line — preceding text captured to that project's Tasks.md
+Settings → Display has a slider for reading view max width. Default 0 uses Obsidian's ~700px. Slide it to 1920px to give tables more room. Applies live.
 
-**Processing** (`⌘+P` → **Process Inbox**):
-Opens a modal that walks through inbox lines one at a time. Each line gets one action:
-
-| Action | Result |
-|--------|--------|
-| **✅ Task** | Becomes a proper Flowtime task line with date/duration/bucket/project/priority/recurrence — appended to daily note, active file, or project file |
-| **📁 Project** | Scaffolds a new project folder + folder note + Tasks.md + Wiki.md. The line becomes the first task |
-| **📖 Wiki** | Appends to a project's Wiki.md under an "📥 From Inbox" section |
-| **🗑 Discard** | Removed from inbox |
-| **⏰ Snooze** | Stays in inbox with `@snooze` date — hidden from processing until that date passes |
-
-Tags already in the line pre-fill the form: `@today` → date, `@30m` → duration, `@b:deep-work` → bucket, `@p:Website` → project, `🟥` → priority, `🔁 every week` → recurrence.
-
-Processed lines are removed from the inbox. Snoozed lines persist with their `@snooze` tag.
-
-### Templates
-
-Three commands available from the command palette:
-
-- **Insert daily dashboard** — inserts `flowtime-today` and `flowtime-overdue` blocks
-- **Insert weekly dashboard** — inserts `flowtime-weekly`, `flowtime-dueweek` blocks
-- **New Project** — creates a folder with a project note with frontmatter marker
-
-### Cross-Table Refresh
-
-When a task's date or time changes in one table, **all other tables on the same page** refresh automatically — no manual reload needed.
-
-### Content Width
-
-A **Content width** slider in Settings → Display controls the reading view's max-width:
-
-- **0** — use Obsidian's default width (~700px)
-- **20–1920px** — widen the content area so tables get more horizontal space
-- Applies live — no reload needed
-- Affects the entire reading view (both live preview and reading mode)
-
----
-
-## Task Format Reference
+## Task format
 
 Flowtime parses task lines from any markdown file in your vault:
 
@@ -283,28 +168,19 @@ Flowtime parses task lines from any markdown file in your vault:
 | `@b:name` or `@bucket:name` | Time bucket | `@b:deep-work` |
 | `🔺⏫🔼🔽⏬` | Priority | |
 | `@p:Name` | Project assignment | `@p:website` |
-| `🔁 every <interval>` | Recurrence | `🔁 every workday`, `🔁 every Mon Wed Fri`, `🔁 every 2nd Sun` |
+| `🔁 every <interval>` | Recurrence | `🔁 every workday` |
 
-A complete task example:
+Complete example:
 
 ```markdown
 - [ ] 09:00—11:30 Code review @2026-06-24 🔼 @1.5h @b:deep-work
 ```
 
----
-
 ## Setup
 
-### Creating a Project
+**New project** — run the command, enter a name. Creates a folder with a project note, optionally Tasks.md and Wiki.md.
 
-1. Run the **New Project** command from the command palette
-2. Enter a project name
-3. A folder is created with a project note containing the frontmatter marker
-4. Tasks in that folder or tagged with `@p:<name>` appear under the project
-
-### Creating a Daily Dashboard
-
-Add to your daily note template:
+**Daily dashboard** — add to your daily note template:
 
 ````markdown
 ## 🔄 Carry Over
@@ -320,7 +196,7 @@ Add to your daily note template:
 ```
 ````
 
-### Weekly Dashboard
+**Weekly dashboard:**
 
 ````markdown
 ## 📊 This Week
@@ -332,7 +208,7 @@ Add to your daily note template:
 ```
 ````
 
-### Budget Overview
+**Budget overview:**
 
 ````markdown
 ## 📊 Weekly Budget
@@ -340,11 +216,9 @@ Add to your daily note template:
 ```
 ````
 
----
+## Settings
 
-## Settings Reference
-
-All settings in **Settings → Flowtime**.
+In Settings → Flowtime.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
@@ -353,7 +227,7 @@ All settings in **Settings → Flowtime**.
 | Frontmatter value | `project` | Value of that field |
 | Project name key | `name` | Frontmatter field used as display name |
 | Fallback to folder name | on | Use folder name when no frontmatter marker is found |
-| Tag prefix | `project/` | Prefix for @p: project tags (legacy #project/ prefix is deprecated) |
+| Tag prefix | `project/` | Prefix for @p: project tags |
 | Projects root | (empty) | Root folder for project detection; empty = scan entire vault |
 | **Quick Entry** | | |
 | Default target file | daily-note | Where new tasks save: daily note / active file / project file / inbox |
@@ -373,7 +247,7 @@ All settings in **Settings → Flowtime**.
 | Date format | YYYY-MM-DD | Moment.js format for dates |
 | Show timer in status bar | on | Show/hide the persistent countdown |
 | Content width | 0 | Slider (0–1920px). 0 = use Obsidian default width |
-| **Routines (v0.5.0)** | | |
+| **Routines** | | |
 | Routines folder | `Routines/` | Folder for routine template `.md` files |
 | Vacation mode | off | Pause all routine generation |
 | Auto-generate on startup | on | Run routine engine when plugin loads |
@@ -386,26 +260,16 @@ All settings in **Settings → Flowtime**.
 | Weekly template | (built-in) | Template for the weekly dashboard command |
 | Project template | (built-in) | Template for new project notes |
 
----
-
 ## Requirements
 
-- Obsidian v1.8.7+
-
----
+Obsidian v1.8.7+
 
 ## Development
 
 ```bash
-# Build
 npm run build
-
-# Deploy to vault
 cp dist/main.js manifest.json styles.css /path/to/vault/.obsidian/plugins/flowtime/
-
-# Create a release build
 npm run release
-cp -r release/flowtime /path/to/vault/.obsidian/plugins/
-
-# Reload Obsidian to apply changes
+cp -r dist/ /path/to/vault/.obsidian/plugins/flowtime/
+# Reload Obsidian
 ```

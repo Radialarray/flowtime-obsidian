@@ -63,11 +63,14 @@ const DEFAULT_SETTINGS = {
 	inboxDefaultBucket: "",
 	inboxDefaultProject: "",
 
+	// Today Note
+	todayNotePath: "Today.md",
+
 	// Saved Views
 	savedViews: {},
 
 	// Routines (v0.5.0)
-	routinesFolder: "flowtime/routines/",
+	routinesFolder: "Routines/",
 	vacationMode: false,
 	autoGenerateOnStartup: true,
 	autoGenerateOnOpenDaily: true,
@@ -372,6 +375,36 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 					});
 				return dropdown;
 			});
+
+		// ── Today Note ──
+		containerEl.createEl("h2", { text: "Today Note" });
+
+		new Setting(containerEl)
+			.setName("Today note path")
+			.setDesc(
+				"Path for the persistent Today note at vault root. Shows today's tasks, overdue, and upcoming items via dynamic code blocks.",
+			)
+			.addText((text) =>
+				text
+					.setPlaceholder("Today.md")
+					.setValue(this.plugin.settings.todayNotePath)
+					.onChange(async (value) => {
+						this.plugin.settings.todayNotePath = value || "Today.md";
+						await this.plugin.saveData(this.plugin.settings);
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName("Open Today Note")
+			.setDesc("Open or create the Today note")
+			.addButton((btn) =>
+				btn
+					.setButtonText("Open")
+					.setCta()
+					.onClick(async () => {
+						await this.plugin._openTodayNote();
+					}),
+			);
 
 		// ── Display ──
 		containerEl.createEl("h2", { text: "Display" });

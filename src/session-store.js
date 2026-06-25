@@ -1,7 +1,8 @@
 class SessionStore {
 	constructor(vault) {
 		this.vault = vault;
-		this.basePath = "flowtime/sessions";
+		// Store sessions in the plugin folder inside .obsidian/ so they're hidden but synced
+		this.basePath = vault.configDir + "/plugins/flowtime/sessions";
 	}
 
 	async _ensureDir() {
@@ -38,15 +39,24 @@ class SessionStore {
 	 * Returns null if valid, or an error message string if invalid.
 	 */
 	_validateRecord(record) {
-		if (!record || typeof record !== "object") return "Record must be an object";
-		if (!record.type || !["session", "completion"].includes(record.type)) return "Record must have type 'session' or 'completion'";
+		if (!record || typeof record !== "object")
+			return "Record must be an object";
+		if (!record.type || !["session", "completion"].includes(record.type))
+			return "Record must have type 'session' or 'completion'";
 		if (record.type === "session") {
-			if (!record.start_time || typeof record.start_time !== "string") return "Session must have start_time (ISO string)";
-			if (!record.end_time || typeof record.end_time !== "string") return "Session must have end_time (ISO string)";
-			if (typeof record.duration_minutes !== "number" || record.duration_minutes < 0) return "Session must have duration_minutes (number >= 0)";
+			if (!record.start_time || typeof record.start_time !== "string")
+				return "Session must have start_time (ISO string)";
+			if (!record.end_time || typeof record.end_time !== "string")
+				return "Session must have end_time (ISO string)";
+			if (
+				typeof record.duration_minutes !== "number" ||
+				record.duration_minutes < 0
+			)
+				return "Session must have duration_minutes (number >= 0)";
 		}
 		if (record.type === "completion") {
-			if (!record.completed_at || typeof record.completed_at !== "string") return "Completion must have completed_at (ISO string)";
+			if (!record.completed_at || typeof record.completed_at !== "string")
+				return "Completion must have completed_at (ISO string)";
 		}
 		return null; // valid
 	}
@@ -54,15 +64,25 @@ class SessionStore {
 	/**
 	 * Write a session record on timer stop/expiry.
 	 */
-	async writeSession({ startTime, endTime, durationMinutes, bucket, taskText, notes }) {
+	async writeSession({
+		startTime,
+		endTime,
+		durationMinutes,
+		bucket,
+		taskText,
+		notes,
+	}) {
 		await this._ensureDir();
-		const date = startTime ? startTime.split("T")[0] : new Date().toISOString().split("T")[0];
+		const date = startTime
+			? startTime.split("T")[0]
+			: new Date().toISOString().split("T")[0];
 		const record = {
 			type: "session",
 			date,
 			start_time: startTime || new Date().toISOString(),
 			end_time: endTime || new Date().toISOString(),
-			duration_minutes: typeof durationMinutes === "number" ? durationMinutes : 0,
+			duration_minutes:
+				typeof durationMinutes === "number" ? durationMinutes : 0,
 			bucket: bucket || "",
 			task_text: taskText || "",
 			notes: notes || "",
@@ -104,9 +124,7 @@ class SessionStore {
 		const results = [];
 		try {
 			const listing = await this.vault.adapter.list(this.basePath);
-			const files = listing.files
-				.filter(f => f.endsWith(".ndjson"))
-				.sort();
+			const files = listing.files.filter((f) => f.endsWith(".ndjson")).sort();
 
 			for (const filePath of files) {
 				// Extract date from filename
@@ -119,7 +137,7 @@ class SessionStore {
 				if (opts.dateTo && fileDate > opts.dateTo) continue;
 
 				const content = await this.vault.adapter.read(filePath);
-				const lines = content.split("\n").filter(l => l.trim());
+				const lines = content.split("\n").filter((l) => l.trim());
 				for (const line of lines) {
 					try {
 						const record = JSON.parse(line);
@@ -132,7 +150,11 @@ class SessionStore {
 		} catch (_) {}
 
 		// Sort by time descending
-		results.sort((a, b) => (b.start_time || b.completed_at || "").localeCompare(a.start_time || a.completed_at || ""));
+		results.sort((a, b) =>
+			(b.start_time || b.completed_at || "").localeCompare(
+				a.start_time || a.completed_at || "",
+			),
+		);
 
 		if (opts.limit) return results.slice(0, opts.limit);
 		return results;
@@ -174,10 +196,12 @@ class SessionStore {
 			const key = `${weekKey}:${d.bucket}`;
 			weeks[key] = (weeks[key] || 0) + d.total_minutes;
 		}
-		return Object.entries(weeks).map(([key, total_minutes]) => {
-			const [weekStart, bucket] = key.split(":");
-			return { weekStart, bucket, total_minutes };
-		}).sort((a, b) => b.weekStart.localeCompare(a.weekStart));
+		return Object.entries(weeks)
+			.map(([key, total_minutes]) => {
+				const [weekStart, bucket] = key.split(":");
+				return { weekStart, bucket, total_minutes };
+			})
+			.sort((a, b) => b.weekStart.localeCompare(a.weekStart));
 	}
 }
 

@@ -126,6 +126,40 @@ class TemplateEngine {
 `;
 	}
 
+	/** Today.md content — always shows today's context */
+	getTodayTemplate() {
+		return `# 📅 Today
+
+## 🎯 Today
+\`\`\`flowtime-today
+\`\`\`
+
+## 🔄 Carry Over
+\`\`\`flowtime-overdue
+\`\`\`
+
+## ◌ Up Next
+\`\`\`flowtime-soon
+\`\`\`
+
+## 📝 Notes
+`;
+	}
+
+	/**
+	 * Create or ensure Today.md at vault root.
+	 * @param {string} [path="Today.md"]
+	 * @returns {string|null} path of created/existing file
+	 */
+	async createToday(path) {
+		const filePath = path || "Today.md";
+		const exists = this.app.vault.getAbstractFileByPath(filePath);
+		if (exists) return filePath;
+
+		await this.app.vault.create(filePath, this.getTodayTemplate());
+		return filePath;
+	}
+
 	/**
 	 * Create a dashboard file at vault root.
 	 * @param {"daily"|"weekly"} mode

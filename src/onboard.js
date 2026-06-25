@@ -139,6 +139,12 @@ async function detectSetupState(app, plugin) {
 			!!vault.getAbstractFileByPath("Dashboard Weekly.md");
 	} catch (_) {}
 
+	// Today note: check if Today.md (or custom path) exists
+	try {
+		const todayPath = plugin.settings.todayNotePath || "Today.md";
+		setup.todayNoteDone = !!vault.getAbstractFileByPath(todayPath);
+	} catch (_) {}
+
 	// Buckets: check if buckets have been customized from defaults
 	try {
 		const buckets = settings.buckets || [];
@@ -174,7 +180,7 @@ async function detectSetupState(app, plugin) {
 
 	// Routines: check if flowtime/routines/ has .md files
 	try {
-		const routinesFolder = settings.routinesFolder || "flowtime/routines/";
+		const routinesFolder = settings.routinesFolder || "Routines/";
 		const folderEntry = vault.getAbstractFileByPath(
 			routinesFolder.replace(/\/$/, ""),
 		);
@@ -196,6 +202,7 @@ async function runOnboard(app, plugin) {
 		layoutType: "flat",
 		createDailyDashboard: true,
 		createWeeklyDashboard: false,
+		createTodayNote: true,
 		bucketPreset: "default",
 		dailyNotesFolder: "Daily",
 		firstProjectName: "",
@@ -210,6 +217,7 @@ async function runOnboard(app, plugin) {
 	const steps = [
 		{ modal: LayoutStepModal, needed: () => !setup.layoutDone },
 		{ modal: DashboardStepModal, needed: () => !setup.dashboardDone },
+		{ modal: TodayNoteStepModal, needed: () => !setup.todayNoteDone },
 		{ modal: BucketStepModal, needed: () => !setup.bucketsDone },
 		{ modal: DailyNotesStepModal, needed: () => !setup.dailyNotesDone },
 		{ modal: RoutineStepModal, needed: () => !setup.routinesDone },
@@ -386,6 +394,68 @@ class DashboardStepModal extends Modal {
 	}
 }
 
+class TodayNoteStepModal extends Modal {
+	constructor(app, state, onDone) {
+		super(app);
+		this.state = state;
+		this.onDone = onDone;
+	}
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.createEl("h3", { text: "Step 3: Today Note" });
+		contentEl.createEl("p", {
+			text: 'A persistent Today.md sits at vault root and always shows today\'s context via dynamic code blocks — no dated filenames, just "Today.md" that always reflects the current date.',
+			cls: "flowtime-label",
+		});
+
+		contentEl
+			.createEl("div", {
+				cls: "flowtime-preview",
+				attr: {
+					style:
+						"background: var(--background-secondary); padding: 8px; border-radius: var(--radius-s); margin-top: 8px; max-height: 160px; overflow-y: auto; font-size: var(--font-ui-smaller); white-space: pre; font-family: var(--font-monospace);",
+				},
+			})
+			.setText(
+				"# \ud83d\udcc5 Today\n\n## \ud83c\udfaf Today\n```flowtime-today\n```\n\n## \ud83d\udd04 Carry Over\n```flowtime-overdue\n```\n\n## \u25cb Up Next\n```flowtime-soon\n```\n\n## \ud83d\udcdd Notes",
+			);
+
+		const createCb = contentEl.createEl("label", {
+			cls: "flowtime-label",
+			attr: { style: "margin-top: 12px;" },
+		});
+		const createCheck = createCb.createEl("input", { type: "checkbox" });
+		createCheck.checked = true;
+		createCheck.style.marginRight = "6px";
+		createCb.append(" Create Today.md (auto-creates on plugin load anyway)");
+
+		const btnRow = contentEl.createEl("div", { cls: "flowtime-btn-row" });
+		const backBtn = btnRow.createEl("button", {
+			text: "\u2190 Back",
+			cls: "flowtime-btn-cancel",
+		});
+		const nextBtn = btnRow.createEl("button", {
+			text: "Next \u2192",
+			cls: "flowtime-btn-submit",
+		});
+
+		backBtn.addEventListener("click", () => {
+			this.state.step--;
+			this.close();
+			this.onDone();
+		});
+		nextBtn.addEventListener("click", () => {
+			this.state.createTodayNote = createCheck.checked;
+			this.state.step++;
+			this.close();
+			this.onDone();
+		});
+	}
+	onClose() {
+		this.contentEl.empty();
+	}
+}
+
 class BucketStepModal extends Modal {
 	constructor(app, state, onDone) {
 		super(app);
@@ -402,7 +472,6 @@ class BucketStepModal extends Modal {
 
 		let firstPreset = null;
 		for (const [key, preset] of Object.entries(BUCKET_PRESETS)) {
-			const groupId = "buckets-" + Math.random().toString(36).slice(2, 6);
 			const lbl = contentEl.createEl("label", { cls: "flowtime-label" });
 			const input = lbl.createEl("input", { type: "radio", value: key });
 			if (!firstPreset) firstPreset = input;
@@ -531,7 +600,7 @@ class RoutineStepModal extends Modal {
 			cls: "flowtime-label",
 		});
 		contentEl.createEl("p", {
-			text: "Sample routine files will be created at flowtime/routines/Daily.md and Weekly.md",
+			text: "Sample routine files will be created at Routines/Daily.md and Routines/Weekly.md",
 			cls: "flowtime-label",
 			attr: {
 				style: "color: var(--text-muted); font-size: var(--font-ui-smaller);",
@@ -718,7 +787,7 @@ async function applySettings(plugin, state) {
 	}
 
 	// 6. Create routines folder and sample template (v0.5.0)
-	const routinesFolder = plugin.settings.routinesFolder || "flowtime/routines/";
+	const routinesFolder = plugin.settings.routinesFolder || "Routines/";
 	try {
 		if (!(await plugin.app.vault.adapter.exists(routinesFolder))) {
 			await plugin.app.vault.createFolder(routinesFolder.replace(/\/$/, ""));
@@ -728,7 +797,6 @@ async function applySettings(plugin, state) {
 		if (state.createRoutines) {
 			const dailyPath = routinesFolder + "Daily.md";
 			const weeklyPath = routinesFolder + "Weekly.md";
-			const today = new Date().toISOString().split("T")[0];
 			// Replace @today placeholders with actual date
 			const dailyContent = ROUTINE_DAILY_TEMPLATE; // daily template has no @today
 			const weeklyContent = ROUTINE_WEEKLY_TEMPLATE; // weekly template has no @today

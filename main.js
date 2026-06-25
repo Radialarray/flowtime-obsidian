@@ -153,6 +153,12 @@ class AtCompletionsSuggest extends EditorSuggest {
 					desc: "Up next tasks code block",
 				},
 				{
+					label: "@today-note",
+					insert:
+						"```flowtime-today\n```\n\n## 🔄 Carry Over\n```flowtime-overdue\n```\n\n## ◌ Up Next\n```flowtime-soon\n```",
+					desc: "Today note (3-section block)",
+				},
+				{
 					label: "@weekly",
 					insert: "```flowtime-weekly\n```",
 					desc: "Weekly view code block",
@@ -502,6 +508,16 @@ module.exports = class FlowtimePlugin extends Plugin {
 			this.settings.buckets = DEFAULT_SETTINGS.buckets;
 		}
 
+		// v0.7.0: One-time migration of routinesFolder from old default
+		if (
+			this.settings.routinesFolder === "flowtime/routines/" &&
+			!savedData?.routinesFolderMigrated
+		) {
+			this.settings.routinesFolder = "Routines/";
+			this.settings.routinesFolderMigrated = true;
+			await this.saveData(this.settings);
+		}
+
 		this.notify = (message, isError = false) => {
 			if (!isError && this.settings.quietMode) return;
 			new Notice(message, this.settings.noticeDuration);
@@ -533,8 +549,10 @@ module.exports = class FlowtimePlugin extends Plugin {
 			try {
 				const cachePath = this._cacheFilePath();
 				if (await this.app.vault.adapter.exists(cachePath)) {
-					const content = await this.app.vault.adapter.read(cachePath);
-					this.taskCache.fromJSON(JSON.parse(content));
+					const raw = await this.app.vault.adapter.read(cachePath);
+					const parsed = JSON.parse(raw);
+					this._lastEvictedCount = parsed._lastEvictedCount || 0;
+					this.taskCache.fromJSON(parsed);
 				} else if (savedData && savedData._taskCache) {
 					this.taskCache.fromJSON(savedData._taskCache);
 					delete savedData._taskCache;
@@ -544,22 +562,43 @@ module.exports = class FlowtimePlugin extends Plugin {
 
 		this._saveTaskCache = async () => {
 			try {
+				const data = this.taskCache.toJSON();
+				data._lastEvictedCount = this._lastEvictedCount || 0;
 				await this.app.vault.adapter.write(
 					this._cacheFilePath(),
-					JSON.stringify(this.taskCache.toJSON(), null, 2),
+					JSON.stringify(data, null, 2),
 				);
 			} catch (_) {}
 		};
 
 		// Load cache from separate file (with legacy fallback)
 		await this._loadTaskCache();
+		console.log(
+			"Flowtime cache: loaded, _lastEvictedCount =",
+			this._lastEvictedCount,
+			"cache size =",
+			this.taskCache.size,
+		);
 
 		// v0.4.0: Auto-evict stale cache entries (files that no longer exist)
 		const evicted = await this.taskCache.autoEvict(async (path) => {
 			return !!this.app.vault.getAbstractFileByPath(path);
 		});
+		console.log(
+			"Flowtime cache: evicted =",
+			evicted,
+			"_lastEvictedCount =",
+			this._lastEvictedCount,
+		);
 		if (evicted > 0) {
-			this.notify(`🧹 Task cache cleaned: ${evicted} stale entries removed`);
+			// Only notify if count changed (so it fires once per unique eviction)
+			const isNew = evicted !== this._lastEvictedCount;
+			this._lastEvictedCount = evicted;
+			await this._saveTaskCache();
+			console.log("Flowtime cache: saved, isNew =", isNew);
+			if (isNew) {
+				this.notify(`🧹 Task cache cleaned: ${evicted} stale entries removed`);
+			}
 		}
 
 		// v0.4.0: Check safety limits
@@ -568,11 +607,11 @@ module.exports = class FlowtimePlugin extends Plugin {
 			this.notify("⚠️ " + w, true);
 		}
 
-		// v0.4.0: Ensure session directory exists
+		// v0.7.0: Ensure session directory exists in plugin folder
 		await this._ensureSessionDir();
 
-		// v0.4.0: Check daily notes folder exists
-		await this._checkDailyNotesFolder();
+		// v0.7.0: Optional daily notes folder — silently skip if missing
+		await this._ensureDailyNotesFolder();
 
 		// v0.5.0: Ensure routines folder exists
 		await this.routineEngine.ensureRoutinesFolder();
@@ -609,7 +648,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 		// Also invalidate on rename (create+delete fires separately)
 
 		// v0.5.0: Watch routines folder for changes → re-generate (debounced)
-		const routinesFolder = this.settings.routinesFolder || "flowtime/routines/";
+		const routinesFolder = this.settings.routinesFolder || "Routines/";
 		this._routineWatchTimer = null;
 		this.registerEvent(
 			this.app.vault.on("modify", (file) => {
@@ -745,6 +784,15 @@ module.exports = class FlowtimePlugin extends Plugin {
 			},
 		});
 
+		// ── Create Inbox command ──
+		this.addCommand({
+			id: "create-inbox",
+			name: "Create Inbox",
+			callback: () => {
+				this._ensureInbox();
+			},
+		});
+
 		// ── Status bar timer ──
 		this.statusTimer = new StatusTimer({
 			statusBarItem: this.addStatusBarItem(),
@@ -838,6 +886,14 @@ module.exports = class FlowtimePlugin extends Plugin {
 			name: "Insert weekly dashboard",
 			editorCallback: (editor) => {
 				this.templateEngine.insertWeekly();
+			},
+		});
+
+		this.addCommand({
+			id: "open-today-note",
+			name: "Open Today Note",
+			callback: () => {
+				this._openTodayNote();
 			},
 		});
 
@@ -1205,25 +1261,79 @@ module.exports = class FlowtimePlugin extends Plugin {
 	}
 
 	/**
-	 * v0.4.0: Ensure the sessions directory exists on plugin load.
+	 * v0.7.0: Ensure the sessions directory exists in the plugin folder.
+	 * Migrates any leftover data from the old vault-root flowtime/ location
+	 * and cleans up the empty parent folder.
 	 */
 	async _ensureSessionDir() {
+		const sessionDir = this.app.vault.configDir + "/plugins/flowtime/sessions";
 		try {
-			const exists = await this.app.vault.adapter.exists("flowtime/sessions");
-			if (!exists) {
-				await this.app.vault.createFolder("flowtime/sessions");
-				this.notify("📁 Created flowtime/sessions/ directory");
+			if (!(await this.app.vault.adapter.exists(sessionDir))) {
+				await this.app.vault.createFolder(sessionDir);
 			}
+
+			// v0.7.0: Migrate old flowtime/sessions/ — copy files, then purge originals
+			const oldDir = "flowtime/sessions";
+			if (await this.app.vault.adapter.exists(oldDir)) {
+				let count = 0;
+				const listing = await this.app.vault.adapter.list(oldDir);
+				for (const f of listing.files) {
+					const content = await this.app.vault.adapter.read(f);
+					const newPath = sessionDir + "/" + f.split("/").pop();
+					await this.app.vault.adapter.write(newPath, content);
+					await this.app.vault.adapter.remove(f);
+					count++;
+				}
+				// Remove now-empty directory
+				await this.app.vault.adapter.rmdir(oldDir, false);
+				if (count > 0) {
+					this.notify(
+						"📁 Migrated " + count + " session file(s) to plugin folder",
+					);
+				}
+			}
+
+			// v0.7.0: Purge any remaining empty flowtime/ tree
+			await this._purgeFlowtime();
 		} catch (e) {
-			console.warn("Flowtime: Could not create sessions directory:", e.message);
+			console.warn("Flowtime: Could not ensure sessions directory:", e.message);
 		}
 	}
 
 	/**
-	 * v0.4.0: Check that the daily notes folder from .obsidian/daily-notes.json exists.
-	 * If missing, warn the user so they can fix or create it.
+	 * Recursively nuke the old flowtime/ tree if it's empty of .md files
+	 * (only plugin debris like empty dirs + .ndjson leftovers).
 	 */
-	async _checkDailyNotesFolder() {
+	async _purgeFlowtime() {
+		try {
+			const root = "flowtime";
+			if (!(await this.app.vault.adapter.exists(root))) return;
+
+			// Walk subdirs and remove any orphaned files + empty dirs
+			for (const sub of [root + "/routines", root + "/sessions"]) {
+				try {
+					if (await this.app.vault.adapter.exists(sub)) {
+						const list = await this.app.vault.adapter.list(sub);
+						for (const f of list.files) await this.app.vault.adapter.remove(f);
+						await this.app.vault.adapter.rmdir(sub, false);
+					}
+				} catch (_) {}
+			}
+
+			// Nuke root if nothing left
+			const rootList = await this.app.vault.adapter.list(root);
+			if (rootList.files.length === 0 && rootList.folders.length === 0) {
+				await this.app.vault.adapter.rmdir(root, false);
+			}
+		} catch (_) {}
+	}
+
+	/**
+	 * v0.7.0: Silently ensure daily notes folder from .obsidian/daily-notes.json
+	 * exists. No-op if not configured or already present — only creates (once)
+	 * if configured but missing. Never shows a notification.
+	 */
+	async _ensureDailyNotesFolder() {
 		try {
 			const dailyNotesPath = this.app.vault.configDir + "/daily-notes.json";
 			if (!(await this.app.vault.adapter.exists(dailyNotesPath))) return;
@@ -1232,18 +1342,13 @@ module.exports = class FlowtimePlugin extends Plugin {
 			const folder = config.folder;
 			if (!folder) return;
 			if (!(await this.app.vault.adapter.exists(folder))) {
-				this.notify(
-					"⚠️ Daily notes folder '" +
-						folder +
-						"' not found. Check Settings → Daily Notes.",
-					true,
-				);
+				await this.app.vault.createFolder(folder);
 			}
 		} catch (_) {}
 	}
 
 	/**
-	 * Ensure the inbox file exists, creating it with a default template if not.
+	 * Ensure the inbox file exists (used by inbox processor modal, not auto-created).
 	 */
 	async _ensureInbox() {
 		const path = this.settings.inboxPath || "Inbox.md";
@@ -1259,6 +1364,24 @@ Process them with **Flowtime: Process Inbox**.
 			}
 		} catch (e) {
 			console.warn("Flowtime: Could not create inbox:", e.message);
+		}
+	}
+
+	/**
+	 * Open or reveal the Today note in a new leaf.
+	 * v0.6.0
+	 */
+	async _openTodayNote() {
+		try {
+			const path = this.settings.todayNotePath || "Today.md";
+			// Ensure it exists
+			await this.templateEngine.createToday(path);
+			const file = this.app.vault.getAbstractFileByPath(path);
+			if (file) {
+				await this.app.workspace.getLeaf().openFile(file);
+			}
+		} catch (e) {
+			this.notify("Could not open Today note: " + e.message, true);
 		}
 	}
 };

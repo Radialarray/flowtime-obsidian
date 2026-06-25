@@ -103,7 +103,7 @@ Time spent is recorded automatically when the status bar timer stops:
 - `flowtime-sessions` view shows a filterable history table
 - Filter by date range, bucket, or search task text
 - **Session analytics**: daily totals, per-bucket breakdown, summary stats
-- Sessions stored in `_flowtime-sessions.json` in your vault
+- Sessions stored in the plugin folder (`.obsidian/plugins/flowtime/sessions/`) — hidden but synced
 
 ### Filter, Sort & Group
 
@@ -180,11 +180,11 @@ Mark recurring tasks with `🔁` — the plugin generates real task instances in
 
 ### Routines Folder (v0.5.0)
 
-Create `.md` files in `flowtime/routines/` with task lines using the recurrence markers above. The plugin scans the folder, evaluates what's due, and writes task instances into your daily notes. Generation history is tracked in `flowtime/routines/.generated.json` to prevent duplication across synced devices.
+Create `.md` files in `Routines/` (default, configurable in settings) with task lines using the recurrence markers above. The plugin scans the folder, evaluates what's due, and writes task instances into your daily notes. Generation history is tracked in the plugin folder (`.obsidian/plugins/flowtime/`) to prevent duplication across synced devices.
 
 **How it works:**
 
-1. Create `flowtime/routines/Daily.md` (or any name) with tasks + recurrence markers
+1. Create `Routines/Daily.md` (or any name) with tasks + recurrence markers
 2. On plugin load, the engine generates instances for today + rest of the week
 3. Each instance becomes a real task line in `2026-06-24.md` — editable, deletable, checkable
 4. Deleting an instance removes it permanently — the engine won't re-create it
@@ -374,7 +374,7 @@ All settings in **Settings → Flowtime**.
 | Show timer in status bar | on | Show/hide the persistent countdown |
 | Content width | 0 | Slider (0–1920px). 0 = use Obsidian default width |
 | **Routines (v0.5.0)** | | |
-| Routines folder | `flowtime/routines/` | Folder for routine template `.md` files |
+| Routines folder | `Routines/` | Folder for routine template `.md` files |
 | Vacation mode | off | Pause all routine generation |
 | Auto-generate on startup | on | Run routine engine when plugin loads |
 | Auto-generate on open daily note | on | Generate when today's daily note is opened |

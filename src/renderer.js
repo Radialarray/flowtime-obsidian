@@ -434,7 +434,9 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 						parsed.status === "X"
 					)
 						continue;
-					if (!parsed.isSoon) continue;
+					// v0.6.0: "soon" mode shows @soon tasks AND tasks with future dates (> today)
+					if (!(parsed.isSoon || (parsed.taskDate && parsed.taskDate > today)))
+						continue;
 					const {
 						taskDate,
 						rawText,

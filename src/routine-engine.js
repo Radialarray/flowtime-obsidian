@@ -1,11 +1,15 @@
 const { Notice } = require("obsidian");
-const { parseTaskLine, parseRecurrence, isRecurrenceDue } = require("./task-parser");
+const {
+	parseTaskLine,
+	parseRecurrence,
+	isRecurrenceDue,
+} = require("./task-parser");
 
 /**
  * RoutineEngine — scans a designated vault folder for routine template files,
  * evaluates recurrence rules, and generates task instances into daily notes.
  *
- * Tracks generation history in .generated.json (inside the routines folder)
+ * Tracks generation history in .generated.json (inside plugin folder under .obsidian/)
  * to prevent cross-device duplication when the vault syncs via Obsidian Sync or Git.
  */
 class RoutineEngine {
@@ -17,11 +21,22 @@ class RoutineEngine {
 	/* ─── config accessors ─── */
 
 	get routinesFolder() {
-		return (this.plugin?.settings?.routinesFolder || "flowtime/routines/").replace(/\/+$/, "") + "/";
+		return (
+			(this.plugin?.settings?.routinesFolder || "Routines/").replace(
+				/\/+$/,
+				"",
+			) + "/"
+		);
 	}
 
+	/**
+	 * v0.7.0: Store .generated.json in the plugin folder (hidden but synced),
+	 * independent of the user-facing routines folder.
+	 */
 	get generatedFilePath() {
-		return this.routinesFolder + ".generated.json";
+		return (
+			this.app.vault.configDir + "/plugins/flowtime/routines-generated.json"
+		);
 	}
 
 	get isVacationMode() {
@@ -42,6 +57,35 @@ class RoutineEngine {
 				const data = JSON.parse(raw);
 				return Array.isArray(data?.entries) ? data.entries : [];
 			}
+			// v0.7.0: One-time migration from old location
+			// Check current routines folder first, then legacy flowtime/routines/
+			const oldPaths = [
+				this.routinesFolder + ".generated.json",
+				"flowtime/routines/.generated.json",
+			];
+			let oldPath = null;
+			for (const p of oldPaths) {
+				if (await this.app.vault.adapter.exists(p)) {
+					oldPath = p;
+					break;
+				}
+			}
+			if (oldPath) {
+				const raw = await this.app.vault.adapter.read(oldPath);
+				const data = JSON.parse(raw);
+				const entries = Array.isArray(data?.entries) ? data.entries : [];
+				if (entries.length > 0) {
+					await this.app.vault.adapter.write(
+						path,
+						JSON.stringify({ entries }, null, 2),
+					);
+					await this.app.vault.adapter.remove(oldPath);
+					if (!this.plugin?.settings?.quietMode) {
+						new Notice("📁 Migrated routine tracking to plugin folder");
+					}
+				}
+				return entries;
+			}
 		} catch (_) {}
 		return [];
 	}
@@ -49,7 +93,10 @@ class RoutineEngine {
 	async saveGenerated(entries) {
 		try {
 			const path = this.generatedFilePath;
-			await this.app.vault.adapter.write(path, JSON.stringify({ entries }, null, 2));
+			await this.app.vault.adapter.write(
+				path,
+				JSON.stringify({ entries }, null, 2),
+			);
 		} catch (e) {
 			console.warn("Flowtime: Failed to save .generated.json:", e.message);
 		}
@@ -63,14 +110,16 @@ class RoutineEngine {
 		const s = line.replace(/\s+/g, " ").trim();
 		for (let i = 0; i < s.length; i++) {
 			const chr = s.charCodeAt(i);
-			hash = ((hash << 5) - hash) + chr;
+			hash = (hash << 5) - hash + chr;
 			hash |= 0; // Convert to 32bit int
 		}
 		return "h" + Math.abs(hash).toString(36);
 	}
 
 	_hasEntry(entries, lineHash, targetDate) {
-		return entries.some(e => e.lineHash === lineHash && e.targetDate === targetDate);
+		return entries.some(
+			(e) => e.lineHash === lineHash && e.targetDate === targetDate,
+		);
 	}
 
 	/* ─── scanning ─── */
@@ -122,7 +171,9 @@ class RoutineEngine {
 	async ensureRoutinesFolder() {
 		try {
 			if (!(await this.app.vault.adapter.exists(this.routinesFolder))) {
-				await this.app.vault.createFolder(this.routinesFolder.replace(/\/$/, ""));
+				await this.app.vault.createFolder(
+					this.routinesFolder.replace(/\/$/, ""),
+				);
 				if (!this.plugin?.settings?.quietMode) {
 					new Notice("📁 Created " + this.routinesFolder);
 				}
@@ -164,23 +215,33 @@ class RoutineEngine {
 			const lineHash = this._hashLine(routine.rawLine);
 
 			// Already generated for this date?
-			if (!options.force && this._hasEntry(entries, lineHash, dateStr)) continue;
-			if (!options.force && this._hasEntry(newEntries, lineHash, dateStr)) continue;
+			if (!options.force && this._hasEntry(entries, lineHash, dateStr))
+				continue;
+			if (!options.force && this._hasEntry(newEntries, lineHash, dateStr))
+				continue;
 
 			// Build the actual task line for the daily note.
 			// Preserve the original task text but ensure date is set correctly.
 			const todayStr = new Date().toISOString().split("T")[0];
 			let taskLine = routine.rawLine;
 			// Replace any existing date with the target date
-			taskLine = taskLine.replace(/[@⏳📅]\s*\d{4}-\d{2}-\d{2}/g, "@" + dateStr);
+			taskLine = taskLine.replace(
+				/[@⏳📅]\s*\d{4}-\d{2}-\d{2}/gu,
+				"@" + dateStr,
+			);
 			// If no date was present, insert it
-			if (!taskLine.match(/[@⏳📅]\s*\d{4}-\d{2}-\d{2}/)) {
+			if (!taskLine.match(/[@⏳📅]\s*\d{4}-\d{2}-\d{2}/u)) {
 				taskLine = taskLine.replace(/(\]\s*)/, "$1@" + dateStr + " ");
 			}
 
 			if (options.dryRun) {
 				generated++;
-				newEntries.push({ routineFile: routine.routineFile, lineHash, targetDate: dateStr, generatedAt: todayStr });
+				newEntries.push({
+					routineFile: routine.routineFile,
+					lineHash,
+					targetDate: dateStr,
+					generatedAt: todayStr,
+				});
 				continue;
 			}
 
@@ -191,7 +252,12 @@ class RoutineEngine {
 			const written = await this._appendTaskIfMissing(dailyFile, taskLine);
 			if (written) {
 				generated++;
-				newEntries.push({ routineFile: routine.routineFile, lineHash, targetDate: dateStr, generatedAt: todayStr });
+				newEntries.push({
+					routineFile: routine.routineFile,
+					lineHash,
+					targetDate: dateStr,
+					generatedAt: todayStr,
+				});
 			}
 		}
 
@@ -290,7 +356,9 @@ class RoutineEngine {
 		try {
 			const dailyNotesPath = this.app.vault.configDir + "/daily-notes.json";
 			if (await this.app.vault.adapter.exists(dailyNotesPath)) {
-				const config = JSON.parse(await this.app.vault.adapter.read(dailyNotesPath));
+				const config = JSON.parse(
+					await this.app.vault.adapter.read(dailyNotesPath),
+				);
 				folder = config.folder || "";
 			}
 		} catch (_) {}
@@ -306,7 +374,11 @@ class RoutineEngine {
 			}
 			return file;
 		} catch (e) {
-			console.warn("Flowtime: Could not ensure daily note:", filePath, e.message);
+			console.warn(
+				"Flowtime: Could not ensure daily note:",
+				filePath,
+				e.message,
+			);
 			return null;
 		}
 	}
@@ -322,7 +394,7 @@ class RoutineEngine {
 
 			// Don't append if identical line already exists
 			const trimmed = taskLine.trim();
-			if (lines.some(l => l.trim() === trimmed)) return false;
+			if (lines.some((l) => l.trim() === trimmed)) return false;
 
 			// Append with a newline separator
 			const newContent = content.endsWith("\n")
@@ -342,7 +414,9 @@ class RoutineEngine {
 	_lastGenForLine(entries, routine) {
 		const lineHash = this._hashLine(routine.rawLine);
 		const match = entries
-			.filter(e => e.routineFile === routine.routineFile && e.lineHash === lineHash)
+			.filter(
+				(e) => e.routineFile === routine.routineFile && e.lineHash === lineHash,
+			)
 			.sort((a, b) => b.targetDate.localeCompare(a.targetDate));
 		return match.length > 0 ? match[0].targetDate : null;
 	}

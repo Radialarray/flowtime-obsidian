@@ -15,3 +15,4 @@ dist/
 # Release builds
 release/
 *.zip
+*.jsonl

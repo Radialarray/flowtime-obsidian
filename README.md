@@ -1,6 +1,8 @@
-# Flowtime v1.0.0
+# Flowtime
 
-Obsidian plugin for daily task planning, timeboxing, and project-aware task management with inline timers. No external dependencies.
+Flowtime is a task management plugin for Obsidian that puts your tasks in tables — editable, filterable, time-tracked tables. Tag tasks with dates, durations, buckets, projects, and priorities in plain markdown, then view them through one of eight code block renderers. No queries to write, no external dependencies.
+
+The workflow: capture freely into your inbox, tag with `@today` or `@b:deep-work` as you go, then plan your day from the `flowtime-today` table. Reschedule overdue items, track time with countdown timers, and review your week with the weekplan grid. Every edit writes back to your markdown files — your data stays yours.
 
 ---
 

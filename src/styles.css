@@ -60,6 +60,14 @@
 	padding: 6px 0;
 }
 
+/* ── Zebra Striping (opt-in via --ft-stripe-opacity) ── */
+.flowtime-table tr:nth-child(even):not(.ft-project-group):not(.ft-subgroup-header) td {
+	background: color-mix(in srgb, var(--background-modifier-border) var(--ft-stripe-opacity, 6%), transparent);
+}
+.flowtime-table tr:hover td {
+	background: var(--background-primary-alt) !important;
+}
+
 .ft-check-cell {
 	padding: 0;
 	text-align: center;
@@ -383,7 +391,6 @@
 
 /* --- ft- Date popup --- */
 .ft-date-popup {
-	display: none;
 	position: fixed;
 	z-index: 1000;
 	background: var(--background-primary);
@@ -392,10 +399,19 @@
 	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
 	padding: 8px;
 	min-width: 180px;
+	visibility: hidden;
+	opacity: 0;
+	transform: scale(0.97);
+	transform-origin: top left;
+	transition: opacity 150ms ease-out, transform 150ms ease-out, visibility 150ms ease-out;
+	pointer-events: none;
 }
 
 .ft-date-popup.ft-dp-open {
-	display: block;
+	visibility: visible;
+	opacity: 1;
+	transform: scale(1);
+	pointer-events: auto;
 }
 
 .ft-dp-input {

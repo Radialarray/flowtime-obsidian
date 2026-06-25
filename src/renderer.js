@@ -1663,12 +1663,19 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				const r = dw.getBoundingClientRect();
 				dp.style.left = r.left + "px";
 				dp.style.top = r.bottom + 4 + "px";
-				dp.classList.add("ft-dp-open");
+				// First append to DOM (invisible via CSS)
 				document.body.appendChild(dp);
+				// Then rAF to trigger transition
+				requestAnimationFrame(() => {
+					dp.classList.add("ft-dp-open");
+				});
 			};
 			const cp = () => {
 				dp.classList.remove("ft-dp-open");
-				if (dp.parentNode) dp.parentNode.removeChild(dp);
+				// Wait for exit transition to finish before removing from DOM
+				setTimeout(() => {
+					if (dp.parentNode) dp.parentNode.removeChild(dp);
+				}, 150); // matches transition duration
 			};
 			ds2.addEventListener("click", (e) => {
 				e.stopPropagation();

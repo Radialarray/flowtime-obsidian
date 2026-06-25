@@ -899,6 +899,14 @@ module.exports = class FlowtimePlugin extends Plugin {
 		});
 
 		this.addCommand({
+			id: "insert-weekplan",
+			name: "Insert weekplan",
+			editorCallback: (editor) => {
+				this.templateEngine.insertWeekplan();
+			},
+		});
+
+		this.addCommand({
 			id: "open-today-note",
 			name: "Open Today Note",
 			callback: () => {

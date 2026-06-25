@@ -39,6 +39,46 @@ Durations: `10m`, `30m`, `1h`, `1.5h` — typed inline or picked from the modal.
 
 Also: `@inbox` anywhere on a line (captures preceding text to inbox) and `@p:ProjectName` (captures to that project's Tasks.md).
 
+## Extract to new note
+
+**Extract to new note (`Ctrl+G` / `Cmd+G`)** — select one or more lines in a note, press the shortcut, and Flowtime creates a new note in the same folder from your selection. The first selected line becomes the title, stripped of list markers, headings, and `@`-directives. All remaining selected lines move to the new note, and the first line is replaced with a `[[wikilink]]` pointing to it. The new note opens in a new tab.
+
+If a file with that title already exists, Flowtime appends ` 2`, ` 3`, etc. to avoid overwrites.
+
+**Undo extract** — run from the command palette to delete the last extracted file. Also attempts `editor.undo()` to revert the source text. Use this within 30 seconds of the extraction.
+
+Examples:
+
+```markdown
+# Before selection (3 lines)
+## Active Sprint
+- [ ] Fix login bug @today @1h @b:deep-work
+- [ ] Review PR @tomorrow
+
+# After Ctrl+G
+[[Active Sprint]]
+
+# New note Active Sprint.md
+## Active Sprint
+- [ ] Fix login bug @today @1h @b:deep-work
+- [ ] Review PR @tomorrow
+```
+
+With a task as the first line, `@`-directives are stripped from the filename and link:
+
+```markdown
+# Before
+- [ ] Review PR @today @1h @b:deep-work
+- [ ] Merge branch
+
+# After
+[[Review PR]]
+
+# New note Review PR.md
+- [ ] Review PR @today @1h @b:deep-work
+- [ ] Merge branch
+```
+
 ## Tables
 
 Every code block renders as an interactive table with inline editing.

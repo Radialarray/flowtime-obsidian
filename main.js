@@ -369,12 +369,46 @@ class AtCompletionsSuggest extends EditorSuggest {
 		const editor = this.context.editor;
 		const { start, end } = this.context;
 
+		// @inbox — capture to Inbox.md instead of inline expansion
+		if (suggestion.type === "macro" && suggestion.label === "@inbox") {
+			editor.replaceRange("", start, end);
+			this._appendToInbox(suggestion.insert);
+			return;
+		}
+
 		if (suggestion.type === "macro") {
 			// Replace the entire line with the expanded macro
 			editor.replaceRange(suggestion.insert, start, end);
 		} else {
 			// Replace @query with the completed directive
 			editor.replaceRange(suggestion.label + " ", start, end);
+		}
+	}
+
+	/**
+	 * Append a task line to the inbox file asynchronously.
+	 */
+	async _appendToInbox(line) {
+		const path = this.plugin.settings.inboxPath || "Inbox.md";
+		try {
+			const app = this.plugin.app;
+			const exists = await app.vault.adapter.exists(path);
+			if (!exists) {
+				await app.vault.create(
+					path,
+					"# \u{1F4E5} Inbox\n\nCapture tasks, ideas, and notes here. One line per item.\nProcess them with **Flowtime: Process Inbox**.\n",
+				);
+			}
+			const file = app.vault.getAbstractFileByPath(path);
+			if (!file) return;
+			const content = await app.vault.read(file);
+			await app.vault.modify(
+				file,
+				content.trimEnd() + "\n" + line.trimEnd() + "\n",
+			);
+			this.plugin.notify("\u{1F4E5} Added to inbox");
+		} catch (e) {
+			console.warn("Flowtime: failed to append to inbox:", e.message);
 		}
 	}
 }

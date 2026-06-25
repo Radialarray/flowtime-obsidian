@@ -98,7 +98,9 @@ class AtCompletionsSuggest extends EditorSuggest {
 
 	async getSuggestions(context) {
 		const q = context.query.toLowerCase();
-		const isCommandMode = context.isCommandMode;
+		// Derive command mode from start position — context.isCommandMode
+		// is stripped by the base class (not part of EditorSuggestContext API)
+		const isCommandMode = context.start != null && context.start.ch === 0;
 
 		if (isCommandMode) {
 			// ── COMMAND MODE: task macros & code blocks ──
@@ -222,9 +224,6 @@ class AtCompletionsSuggest extends EditorSuggest {
 		];
 
 		// v0.4.0: Status & priority tags
-		const inboxAction = [{ label: "inbox", description: "Add task to inbox" }];
-
-		// v0.4.0: Status & priority tags
 		const statusTags = [
 			{ label: "soon", description: "Up next / backlog item" },
 			{ label: "high", description: "🟥 High priority" },
@@ -280,13 +279,6 @@ class AtCompletionsSuggest extends EditorSuggest {
 					});
 			}
 		} else {
-			for (const i of inboxAction)
-				if (i.label.toLowerCase().includes(q))
-					suggestions.push({
-						label: "@" + i.label,
-						description: i.description,
-						type: "status",
-					});
 			for (const d of dates)
 				if (d.label.toLowerCase().includes(q))
 					suggestions.push({

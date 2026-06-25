@@ -186,8 +186,8 @@ class LayoutStepModal extends Modal {
 		const flatRadio = contentEl.createEl("label", { cls: "flowtime-label" });
 		const flatInput = flatRadio.createEl("input", {
 			type: "radio",
-			name: "layout",
 			value: "flat",
+			attr: { name: "layout" },
 		});
 		flatInput.checked = true;
 		flatRadio.append(
@@ -197,8 +197,8 @@ class LayoutStepModal extends Modal {
 		const nestedRadio = contentEl.createEl("label", { cls: "flowtime-label" });
 		const nestedInput = nestedRadio.createEl("input", {
 			type: "radio",
-			name: "layout",
 			value: "nested",
+			attr: { name: "layout" },
 		});
 		nestedRadio.append(
 			" Nested layout — projects under a folder (/Projects/ProjectA)",
@@ -329,7 +329,7 @@ class BucketStepModal extends Modal {
 		const skipRadio = contentEl.createEl("label", { cls: "flowtime-label" });
 		const skipInput = skipRadio.createEl("input", {
 			type: "radio",
-			name: "buckets",
+			attr: { name: "buckets" },
 			value: "keep",
 		});
 		skipRadio.append(" Skip — keep my current buckets");
@@ -642,7 +642,7 @@ async function applySettings(plugin, state) {
 			const weeklyPath = routinesFolder + "Weekly.md";
 			const today = new Date().toISOString().split("T")[0];
 			// Replace @today placeholders with actual date
-			const dailyContent = ROUTINE_DAILY_TEMPLATE;  // daily template has no @today
+			const dailyContent = ROUTINE_DAILY_TEMPLATE; // daily template has no @today
 			const weeklyContent = ROUTINE_WEEKLY_TEMPLATE; // weekly template has no @today
 
 			if (!plugin.app.vault.getAbstractFileByPath(dailyPath)) {

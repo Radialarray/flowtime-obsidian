@@ -62,7 +62,7 @@
 
 /* ── Zebra Striping (opt-in via --ft-stripe-opacity) ── */
 .flowtime-table tr:nth-child(even):not(.ft-project-group):not(.ft-subgroup-header) td {
-	background: color-mix(in srgb, var(--background-modifier-border) var(--ft-stripe-opacity, 6%), transparent);
+	background: color-mix(in srgb, var(--background-primary-alt) var(--ft-stripe-opacity, 40%), var(--background-primary));
 }
 .flowtime-table tr:hover td {
 	background: var(--background-primary-alt) !important;

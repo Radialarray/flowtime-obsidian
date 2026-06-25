@@ -533,17 +533,13 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 					bucket,
 					durationMinutes,
 					projectTag,
-					isSoon,
 				} = parsed;
 
-				// v0.4.0: @soon tasks appear in today + overdue views even without dates
-				const isSoonTask = isSoon && !taskDate;
-
 				if (this.mode === "today") {
-					if (taskDate !== today && !isSoonTask) continue;
+					if (taskDate !== today) continue;
 				}
 				if (this.mode === "overdue") {
-					if ((!taskDate || taskDate >= today) && !isSoonTask) continue;
+					if (!taskDate || taskDate >= today) continue;
 				}
 				if (this.mode === "dueweek") {
 					if (!taskDate || taskDate < today || taskDate > eowStr) continue;
@@ -588,7 +584,6 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 					project: projName,
 					projectPath: projPath,
 					projectSource: projSource,
-					isSoon: isSoonTask, // v0.4.0: @soon tag
 					sprint: parsed.sprint, // v0.6.0: @sprint:id
 					indent: parsed.indent, // v0.6.0
 				});
@@ -1359,27 +1354,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				}
 			}
 		} else {
-			// Standard flat rendering — separate @soon tasks
-			const normalTasks = this.tasks.filter((t) => !t.isSoon);
-			const soonTasks = this.tasks.filter((t) => t.isSoon);
-
-			// v0.6.0: Build display tree for normal tasks
-			this._displayItems = this._buildDisplayTree(normalTasks);
+			// v0.6.0: Build display tree for all tasks
+			this._displayItems = this._buildDisplayTree(this.tasks);
 			for (const item of this._displayItems) {
 				this._renderTaskRow(tbody, item, tdy, od, _dw, wk, pj, isCompact);
-			}
-
-			// v0.4.0: "Coming Soon" section for @soon tasks
-			if (soonTasks.length > 0) {
-				const gr = tbody.createEl("tr", { cls: "ft-project-group" });
-				gr.createEl("td", {
-					text: "◌ Up Next  (" + soonTasks.length + " tasks)",
-					attr: { colspan: String(this._visibleColCount(isCompact)) },
-				});
-				const soonItems = this._buildDisplayTree(soonTasks);
-				for (const item of soonItems) {
-					this._renderTaskRow(tbody, item, tdy, od, _dw, wk, pj, isCompact);
-				}
 			}
 		}
 	}

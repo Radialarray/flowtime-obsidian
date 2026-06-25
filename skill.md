@@ -63,6 +63,283 @@ vault/
 | Root clutter | Higher — projects are top-level | Cleaner — only 2-3 files |
 | Best for | Few projects (<5) or simple vaults | Many projects or mixed vaults |
 
+## Workspace Setup — Agent Quick-Start
+
+Set up a complete Flowtime workspace from scratch by editing files directly. No plugin interaction needed — the plugin reads the files when Obsidian loads.
+
+### 1. Configure Daily Notes
+
+The plugin needs to know where daily notes live for routine generation and task scheduling.
+
+```json
+// .obsidian/daily-notes.json
+{
+  "folder": "Daily",
+  "format": "YYYY-MM-DD",
+  "template": ""
+}
+```
+
+Create the folder if it doesn't exist:
+
+```
+vault/
+└── Daily/              ← exists at vault root
+```
+
+### 2. Create Dashboard Files
+
+Dashboard files are overview notes with Flowtime code blocks. They display interactive task tables when viewed in Obsidian.
+
+**Dashboard.md** — daily overview:
+
+```markdown
+# Dashboard — Today
+
+## 🔄 Carry Over
+```flowtime-overdue
+```
+
+## 🎯 Today
+
+```flowtime-today
+```
+
+## ⚠️ Due This Week
+
+```flowtime-dueweek
+```
+
+```
+
+**Dashboard Weekly.md** — weekly overview:
+
+```markdown
+# Dashboard — Weekly
+
+## 🔄 Carry Over
+```flowtime-overdue
+```
+
+## 🎯 Today
+
+```flowtime-today
+```
+
+## ⚠️ Due This Week
+
+```flowtime-dueweek
+```
+
+## 📅 Week Plan
+
+```flowtime-weekplan
+```
+
+## 📊 This Week (by project)
+
+```flowtime-weekly
+```
+
+## 📊 Budget Overview
+
+```flowtime-buckets
+```
+
+## 📋 Session History
+
+```flowtime-sessions
+```
+
+```
+
+### 3. Configure Buckets (Plugin Settings)
+
+Buckets are time-budget categories. They live in the plugin's data file.
+
+```json
+// .obsidian/plugins/flowtime/data.json
+{
+  "buckets": [
+    {
+      "id": "deep-work",
+      "name": "Deep Work",
+      "color": "#4a9eff",
+      "weeklyLimit": 20,
+      "sortOrder": 0
+    },
+    {
+      "id": "admin",
+      "name": "Admin",
+      "color": "#a8a8a8",
+      "weeklyLimit": 5,
+      "sortOrder": 1
+    },
+    {
+      "id": "meetings",
+      "name": "Meetings",
+      "color": "#e6a700",
+      "weeklyLimit": 5,
+      "sortOrder": 2
+    }
+  ],
+  "dailyCap": 12,
+  "tagPrefix": "project/",
+  "routinesFolder": "flowtime/routines/",
+  "workdays": [1, 2, 3, 4, 5]
+}
+```
+
+For a minimal setup, use a single bucket:
+
+```json
+{
+  "buckets": [
+    { "id": "deep-work", "name": "Deep Work", "color": "#4a9eff", "weeklyLimit": 40, "sortOrder": 0 }
+  ]
+}
+```
+
+### 4. Create Routine Templates (v0.5.0)
+
+Routines auto-generate recurring tasks into daily notes. Create `flowtime/routines/` folder with `.md` files.
+
+```
+vault/
+└── flowtime/
+    └── routines/
+        ├── Daily.md              ← runs every workday
+        └── Weekly.md             ← weekly/monthly intervals
+```
+
+**flowtime/routines/Daily.md** — workday routines:
+
+```markdown
+## 🌅 Morning
+- [ ] Morning pages @06:00—06:30 @b:deep-work 🔁 every workday
+- [ ] Review today's goals @06:30—06:45 🔁 every workday
+- [ ] Check email & messages @06:45—07:00 @b:admin 🔁 every workday
+
+## 🌙 Evening
+- [ ] Daily review & tomorrow prep @16:30—17:00 @b:admin 🔁 every workday
+```
+
+**flowtime/routines/Weekly.md** — weekly/monthly routines:
+
+```markdown
+## 📅 Weekly
+- [ ] Sprint planning @09:00—10:00 🔁 every Mon
+- [ ] Weekly review @15:00—16:00 🔁 every Fri
+- [ ] Team standup @09:00—09:15 🔁 every Mon Wed Fri
+
+## 📆 Monthly
+- [ ] Pay bills 🔁 every month on 1st
+- [ ] Review goals 🔁 every month on 15th
+```
+
+**Supported recurrence markers:**
+
+| Marker | Meaning |
+|--------|---------|
+| `🔁 every day` | Every day |
+| `🔁 every workday` | Mon–Fri (configurable in settings) |
+| `🔁 every week` | Every Monday |
+| `🔁 every month` | 1st of every month |
+| `🔁 every Mon` | Every Monday |
+| `🔁 every Mon Wed Fri` | Monday, Wednesday, Friday |
+| `🔁 every 2nd Sun` | 2nd Sunday of each month |
+| `🔁 every last Fri` | Last Friday of each month |
+| `🔁 every month on 15th` | 15th of every month |
+| `🔁 every 3 days` | Every 3 days from last generation |
+
+### 5. Create Projects (Optional but Recommended)
+
+Projects give structure to your tasks. Each project is a folder with a folder note containing `type: project` frontmatter.
+
+```
+vault/
+└── Projects/
+    └── ProjectName/
+        ├── ProjectName.md              ← folder note (type: project)
+        ├── ProjectName Tasks.md        ← task management doc
+        └── ProjectName Wiki.md         ← knowledge base
+```
+
+**ProjectName.md:**
+
+```markdown
+---
+type: project
+name: ProjectName
+status: active
+tags: [project]
+---
+
+# ProjectName
+
+## 🎯 Goal
+
+## 📋 Tasks
+
+```flowtime-project
+```
+
+## 📝 Notes
+
+```
+
+**ProjectName Tasks.md:**
+
+```markdown
+# ProjectName — Tasks
+
+## 🎯 Active Sprint
+
+```flowtime-project
+```
+
+## 📋 Backlog
+
+```
+
+**ProjectName Wiki.md:**
+
+```markdown
+# ProjectName — Wiki
+
+## Overview
+
+## Architecture
+
+## Decisions
+
+## Reference Links
+
+## Meeting Notes
+```
+
+### 6. Final Steps
+
+After creating all files from outside Obsidian:
+
+1. **Restart Obsidian** or reload the plugin (`Cmd+P` → "Reload app without saving")
+2. **Run** `Cmd+P` → "Flowtime: Generate Routines" to seed routine instances
+3. **Optionally run** `Cmd+P` → "Flowtime: Rebuild Task Cache" if cached data seems stale
+4. Open a dashboard to see your tasks rendered in the interactive tables
+
+### What an Agent Can NOT Do
+
+These require the plugin running inside Obsidian:
+
+- Reload the plugin or run plugin commands
+- Trigger the routine engine to generate task instances
+- Rebuild the task cache
+- Open interactive modals (Quick Entry, Onboard wizard)
+
+After agent setup, always tell the user to **reload Obsidian** so the plugin picks up the new files.
+
+---
+
 ### Decision Gate
 
 | If the information is... | Put it in... | Format |

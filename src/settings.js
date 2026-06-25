@@ -14,9 +14,27 @@ const DEFAULT_SETTINGS = {
 
 	// Buckets
 	buckets: [
-		{ id: "deep-work", name: "Deep Work", color: "#4a9eff", weeklyLimit: 20, sortOrder: 0 },
-		{ id: "admin", name: "Admin", color: "#a8a8a8", weeklyLimit: 5, sortOrder: 1 },
-		{ id: "meetings", name: "Meetings", color: "#e6a700", weeklyLimit: 5, sortOrder: 2 },
+		{
+			id: "deep-work",
+			name: "Deep Work",
+			color: "#4a9eff",
+			weeklyLimit: 20,
+			sortOrder: 0,
+		},
+		{
+			id: "admin",
+			name: "Admin",
+			color: "#a8a8a8",
+			weeklyLimit: 5,
+			sortOrder: 1,
+		},
+		{
+			id: "meetings",
+			name: "Meetings",
+			color: "#e6a700",
+			weeklyLimit: 5,
+			sortOrder: 2,
+		},
 	],
 	bucketPrefix: "budget/",
 	dailyCap: 12,
@@ -122,7 +140,9 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Fallback to folder name")
-			.setDesc("Use folder name as the project name when no frontmatter marker is found")
+			.setDesc(
+				"Use folder name as the project name when no frontmatter marker is found",
+			)
 			.addToggle((toggle) =>
 				toggle
 					.setValue(this.plugin.settings.fallbackToFolderName)
@@ -134,7 +154,9 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Tag prefix")
-			.setDesc("Prefix for @p: project tags (e.g. @p:Website). Legacy #project/ prefix is deprecated.")
+			.setDesc(
+				"Prefix for @p: project tags (e.g. @p:Website). Legacy #project/ prefix is deprecated.",
+			)
 			.addText((text) =>
 				text
 					.setPlaceholder("project/")
@@ -147,7 +169,9 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Projects root")
-			.setDesc("Root folder for projects — leave empty to scan the entire vault")
+			.setDesc(
+				"Root folder for projects — leave empty to scan the entire vault",
+			)
 			.addText((text) =>
 				text
 					.setPlaceholder("")
@@ -159,7 +183,10 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 						// Detect change and offer to rebuild cache
 						if (oldRoot !== value) {
 							this.plugin.taskCache?.clear();
-							new Notice("🔄 Projects root changed — task cache cleared. It will rebuild on next render.", 5000);
+							new Notice(
+								"🔄 Projects root changed — task cache cleared. It will rebuild on next render.",
+								5000,
+							);
 						}
 					}),
 			);
@@ -222,7 +249,9 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 		for (const bucket of buckets) {
 			new Setting(containerEl)
 				.setName(bucket.name)
-				.setDesc(`Weekly limit: ${bucket.weeklyLimit}h · Color: ${bucket.color}`)
+				.setDesc(
+					`Weekly limit: ${bucket.weeklyLimit}h · Color: ${bucket.color}`,
+				)
 				.addText((text) =>
 					text
 						.setPlaceholder("Name")
@@ -249,14 +278,12 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 						}),
 				)
 				.addColorPicker((picker) =>
-					picker
-						.setValue(bucket.color)
-						.onChange(async (value) => {
-							bucket.color = value;
-							// Update the swatch in the description
-							await this.plugin.saveData(this.plugin.settings);
-							this.display();
-						}),
+					picker.setValue(bucket.color).onChange(async (value) => {
+						bucket.color = value;
+						// Update the swatch in the description
+						await this.plugin.saveData(this.plugin.settings);
+						this.display();
+					}),
 				)
 				.addExtraButton((btn) =>
 					btn
@@ -264,9 +291,7 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 						.setTooltip("Delete bucket")
 						.onClick(async () => {
 							this.plugin.settings.buckets =
-								this.plugin.settings.buckets.filter(
-									(b) => b.id !== bucket.id,
-								);
+								this.plugin.settings.buckets.filter((b) => b.id !== bucket.id);
 							await this.plugin.saveData(this.plugin.settings);
 							this.display(); // Re-render
 						}),
@@ -299,7 +324,9 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Inbox file path")
-			.setDesc("Path to the inbox file where you capture tasks. Relative to vault root.")
+			.setDesc(
+				"Path to the inbox file where you capture tasks. Relative to vault root.",
+			)
 			.addText((text) =>
 				text
 					.setPlaceholder("Inbox.md")
@@ -328,7 +355,9 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Default bucket")
-			.setDesc("Pre-filled bucket when processing inbox items as tasks (leave empty for none)")
+			.setDesc(
+				"Pre-filled bucket when processing inbox items as tasks (leave empty for none)",
+			)
 			.addDropdown((dropdown) => {
 				dropdown.addOption("", "None");
 				const buckets = this.plugin.settings.buckets || [];
@@ -375,7 +404,9 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 		let cwSlider;
 		new Setting(containerEl)
 			.setName("Content width")
-			.setDesc("Max width of the content area in pixels — 0 uses Obsidian's default width")
+			.setDesc(
+				"Max width of the content area in pixels — 0 uses Obsidian's default width",
+			)
 			.addSlider((slider) => {
 				cwSlider = slider;
 				slider
@@ -417,7 +448,9 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Notice duration")
-			.setDesc("How long notifications stay visible, in milliseconds (0 = persistent)")
+			.setDesc(
+				"How long notifications stay visible, in milliseconds (0 = persistent)",
+			)
 			.addText((text) =>
 				text
 					.setPlaceholder("4000")
@@ -468,8 +501,7 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 					.setIcon("reset")
 					.setTooltip("Restore default")
 					.onClick(async () => {
-						this.plugin.settings.dailyTemplate =
-							DEFAULT_SETTINGS.dailyTemplate;
+						this.plugin.settings.dailyTemplate = DEFAULT_SETTINGS.dailyTemplate;
 						await this.plugin.saveData(this.plugin.settings);
 						dailyTaEl.value = DEFAULT_SETTINGS.dailyTemplate;
 					}),
@@ -538,7 +570,9 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Routines folder")
-			.setDesc("Folder where routine template markdown files live. Each task line with 🔁 becomes a routine.")
+			.setDesc(
+				"Folder where routine template markdown files live. Each task line with 🔁 becomes a routine.",
+			)
 			.addText((text) =>
 				text
 					.setPlaceholder("flowtime/routines/")
@@ -551,7 +585,9 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Vacation mode")
-			.setDesc("Pause all routine generation. No new routine tasks will be created until this is turned off.")
+			.setDesc(
+				"Pause all routine generation. No new routine tasks will be created until this is turned off.",
+			)
 			.addToggle((toggle) =>
 				toggle
 					.setValue(this.plugin.settings.vacationMode)
@@ -587,13 +623,20 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Workdays")
-			.setDesc("Which days are considered workdays for the 🔁 every workday recurrence. Comma-separated numbers (0=Sun, 1=Mon, ... 6=Sat). Default: 1,2,3,4,5")
+			.setDesc(
+				"Which days are considered workdays for the 🔁 every workday recurrence. Comma-separated numbers (0=Sun, 1=Mon, ... 6=Sat). Default: 1,2,3,4,5",
+			)
 			.addText((text) =>
 				text
 					.setPlaceholder("1,2,3,4,5")
-					.setValue((this.plugin.settings.workdays || [1,2,3,4,5]).join(","))
+					.setValue(
+						(this.plugin.settings.workdays || [1, 2, 3, 4, 5]).join(","),
+					)
 					.onChange(async (value) => {
-						const nums = value.split(",").map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n) && n >= 0 && n <= 6);
+						const nums = value
+							.split(",")
+							.map((s) => parseInt(s.trim(), 10))
+							.filter((n) => !isNaN(n) && n >= 0 && n <= 6);
 						if (nums.length > 0) {
 							this.plugin.settings.workdays = nums;
 							await this.plugin.saveData(this.plugin.settings);
@@ -603,7 +646,9 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Week start day")
-			.setDesc("First day of the week for the weekplan view. 0=Sunday, 1=Monday.")
+			.setDesc(
+				"First day of the week for the weekplan view. 0=Sunday, 1=Monday.",
+			)
 			.addDropdown((dropdown) =>
 				dropdown
 					.addOption("0", "Sunday")

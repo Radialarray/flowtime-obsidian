@@ -3,6 +3,8 @@
  * Extracts structured task data from Obsidian task lines.
  */
 
+const { parseDate } = require("./date-parser");
+
 /**
  * Parse a single task line and return a structured task object.
  * Returns null if the line is not a task line.
@@ -19,16 +21,31 @@ function parseTaskLine(line, file, lineIndex) {
 	const status = m[2].trim();
 
 	// v0.6.0: Extract indent level (leading whitespace before task marker)
-	// Normalize: depth = Math.floor(indent / 2) so 2 or 4 spaces = 1 level
-	const indentSpaces = m[1].match(/^\s*/)[0].length;
+	// Normalize tabs to 2 spaces for consistent depth calculation
+	const indentSpaces = m[1].match(/^\s*/)[0].replace(/\t/g, "  ").length;
 	const indent = indentSpaces;
 
 	// Extract date: /[@⏳📅]\s*(\d{4}-\d{2}-\d{2})/
 	const dateMatch = m[3].match(/[@⏳📅]\s*(\d{4}-\d{2}-\d{2})/);
-	const taskDate = (dateMatch || [])[1] || "";
+	let taskDate = (dateMatch || [])[1] || "";
+
+	// v0.6.0: Fallback — try natural language date parsing (@today, @tomorrow, etc.)
+	if (!taskDate) {
+		const nlMatch = m[3].match(/@(\S+)/g);
+		if (nlMatch) {
+			for (const token of nlMatch) {
+				const resolved = parseDate(token);
+				if (resolved) {
+					taskDate = resolved;
+					break;
+				}
+			}
+		}
+	}
 
 	// Extract time block: /^(\d{1,2}:\d{2}(?:\s*[—\-–]\s*\d{1,2}:\d{2})?)\s*/
-	let time = "", rest = m[3];
+	let time = "",
+		rest = m[3];
 	const tm = rest.match(/^(\d{1,2}:\d{2}(?:\s*[—\-–]\s*\d{1,2}:\d{2})?)\s*/);
 	if (tm) {
 		time = tm[1];
@@ -68,7 +85,8 @@ function parseTaskLine(line, file, lineIndex) {
 	const durMatch = rest.match(/@(\d+(?:\.\d+)?)([hm])/);
 	if (durMatch) {
 		const val = parseFloat(durMatch[1]);
-		durationMinutes = durMatch[2] === "h" ? Math.round(val * 60) : Math.round(val);
+		durationMinutes =
+			durMatch[2] === "h" ? Math.round(val * 60) : Math.round(val);
 	}
 
 	// Fallback: compute duration from time block (e.g. 09:00—11:30)
@@ -93,10 +111,10 @@ function parseTaskLine(line, file, lineIndex) {
 		status,
 		priority,
 		bucket,
-		projectTag,     // v0.4.0: @p:Name or null
-		isSoon,         // v0.4.0: @soon tag
-		indent,         // v0.6.0: leading whitespace length for subtask hierarchy
-		sprint,         // v0.6.0: @sprint:id or null
+		projectTag, // v0.4.0: @p:Name or null
+		isSoon, // v0.4.0: @soon tag
+		indent, // v0.6.0: leading whitespace length for subtask hierarchy
+		sprint, // v0.6.0: @sprint:id or null
 	};
 }
 
@@ -106,11 +124,20 @@ function parseTaskLine(line, file, lineIndex) {
 function cleanTaskText(text) {
 	return text
 		.replace(/[@⏳📅]\s*\d{4}-\d{2}-\d{2}/gu, "")
-		.replace(/@\d+(?:\.\d+)?[hm]/g, "")  // duration: @1.5h @30m
+		.replace(
+			/@(?:today|tod|tomorrow|tom|yesterday|yes|mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\b/gi,
+			"",
+		) // v0.6.0: strip natural language date words
+		.replace(
+			/@next\s+(?:week|mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\b/gi,
+			"",
+		) // @next week/day
+		.replace(/@in\s+\d+\s*[dwm]\b/gi, "") // @in 3d / @in 1w / @in 2m
+		.replace(/@\d+(?:\.\d+)?[hm]/g, "") // duration: @1.5h @30m
 		.replace(/@(?:bucket|b):[^\s]+/g, "") // bucket directive
-		.replace(/@p:[^\s]+/g, "")             // v0.4.0: project directive
+		.replace(/@p:[^\s]+/g, "") // v0.4.0: project directive
 		.replace(/@(?:high|med|low|soon)\b/gi, "") // v0.4.0: priority/status tags
-		.replace(/@sprint:[^\s]+/g, "")             // v0.6.0: sprint tag
+		.replace(/@sprint:[^\s]+/g, "") // v0.6.0: sprint tag
 		.replace(/[🟥🟨🟩]/g, "")
 		.replace(/🔁 every .+$/gm, "") // v0.5.0: all recurrence markers
 		.replace(/#\S+/g, "")
@@ -143,28 +170,35 @@ function parseRecurrence(text) {
 	const expr = m[1].trim().toLowerCase();
 
 	// Simple patterns
-	if (expr === 'day' || expr === 'days' || expr === '1 day') return { type: 'daily' };
-	if (expr === 'workday' || expr === 'workdays') return { type: 'workday' };
-	if (expr === 'week' || expr === 'weeks' || expr === '1 week') return { type: 'weekly' };
-	if (expr === 'month' || expr === 'months' || expr === '1 month') return { type: 'monthly' };
+	if (expr === "day" || expr === "days" || expr === "1 day")
+		return { type: "daily" };
+	if (expr === "workday" || expr === "workdays") return { type: "workday" };
+	if (expr === "week" || expr === "weeks" || expr === "1 week")
+		return { type: "weekly" };
+	if (expr === "month" || expr === "months" || expr === "1 month")
+		return { type: "monthly" };
 
 	// Interval gap: "every 3 days", "every 2 weeks", "every 3 months"
-	const intervalMatch = expr.match(/^(\d+)\s*(day|days|week|weeks|month|months)$/);
+	const intervalMatch = expr.match(
+		/^(\d+)\s*(day|days|week|weeks|month|months)$/,
+	);
 	if (intervalMatch) {
 		const n = parseInt(intervalMatch[1], 10);
-		const unit = intervalMatch[2].replace(/s$/, '');
-		if (n > 1) return { type: 'interval', every: n, unit };
+		const unit = intervalMatch[2].replace(/s$/, "");
+		if (n > 1) return { type: "interval", every: n, unit };
 	}
 
 	// Day names: "every sun", "every mon wed fri"
-	const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+	const dayNames = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 
 	// Check for nth-weekday pattern: "every 2nd sun", "every 1st mon"
-	const nthMatch = expr.match(/^(1st|2nd|3rd|4th|last)\s+(sun|mon|tue|wed|thu|fri|sat)$/i);
+	const nthMatch = expr.match(
+		/^(1st|2nd|3rd|4th|last)\s+(sun|mon|tue|wed|thu|fri|sat)$/i,
+	);
 	if (nthMatch) {
-		const nthMap = { '1st': 1, '2nd': 2, '3rd': 3, '4th': 4, 'last': -1 };
+		const nthMap = { "1st": 1, "2nd": 2, "3rd": 3, "4th": 4, last: -1 };
 		return {
-			type: 'nth-weekday',
+			type: "nth-weekday",
 			nth: nthMap[nthMatch[1].toLowerCase()],
 			weekday: dayNames.indexOf(nthMatch[2].toLowerCase()),
 		};
@@ -173,14 +207,16 @@ function parseRecurrence(text) {
 	// Month date: "every month on 15th"
 	const monthDateMatch = expr.match(/^month\s+on\s+(\d{1,2})(?:st|nd|rd|th)?$/);
 	if (monthDateMatch) {
-		return { type: 'month-date', monthDay: parseInt(monthDateMatch[1], 10) };
+		return { type: "month-date", monthDay: parseInt(monthDateMatch[1], 10) };
 	}
 
 	// Plain day names: "every sun", "every mon wed fri"
 	const dayNameMatch = expr.match(/\b(sun|mon|tue|wed|thu|fri|sat)\b/gi);
 	if (dayNameMatch) {
-		const days = [...new Set(dayNameMatch.map(d => dayNames.indexOf(d.toLowerCase())))];
-		return { type: 'custom-days', days };
+		const days = [
+			...new Set(dayNameMatch.map((d) => dayNames.indexOf(d.toLowerCase()))),
+		];
+		return { type: "custom-days", days };
 	}
 
 	return null;
@@ -203,31 +239,31 @@ function parseRecurrence(text) {
 function isRecurrenceDue(recurrence, dateStr, options = {}) {
 	if (!recurrence || !dateStr) return false;
 
-	const date = new Date(dateStr + 'T12:00:00');
+	const date = new Date(dateStr + "T12:00:00");
 	const dayOfWeek = date.getDay(); // 0=Sun
 	const dayOfMonth = date.getDate();
 	const month = date.getMonth();
 	const year = date.getFullYear();
 
 	switch (recurrence.type) {
-		case 'daily':
+		case "daily":
 			return true;
 
-		case 'workday': {
+		case "workday": {
 			const workdays = options.workdays || [1, 2, 3, 4, 5];
 			return workdays.includes(dayOfWeek);
 		}
 
-		case 'weekly':
+		case "weekly":
 			return dayOfWeek === 1;
 
-		case 'monthly':
+		case "monthly":
 			return dayOfMonth === 1;
 
-		case 'custom-days':
+		case "custom-days":
 			return recurrence.days.includes(dayOfWeek);
 
-		case 'nth-weekday': {
+		case "nth-weekday": {
 			const daysInMonth = new Date(year, month + 1, 0).getDate();
 			if (recurrence.nth === -1) {
 				// Last occurrence: count from end
@@ -251,25 +287,26 @@ function isRecurrenceDue(recurrence, dateStr, options = {}) {
 			return false;
 		}
 
-		case 'month-date':
+		case "month-date":
 			return dayOfMonth === recurrence.monthDay;
 
-		case 'interval': {
+		case "interval": {
 			if (!options.lastGenerated) {
 				// First time — assume due. Engine deduplicates via .generated.json.
 				return true;
 			}
-			const lastDate = new Date(options.lastGenerated + 'T12:00:00');
+			const lastDate = new Date(options.lastGenerated + "T12:00:00");
 			const diffMs = date - lastDate;
 			const diffDays = diffMs / (1000 * 60 * 60 * 24);
 			switch (recurrence.unit) {
-				case 'day':
+				case "day":
 					return diffDays >= recurrence.every;
-				case 'week':
+				case "week":
 					return diffDays >= recurrence.every * 7;
-				case 'month': {
-					const monthDiff = (year - lastDate.getFullYear()) * 12
-						+ (month - lastDate.getMonth());
+				case "month": {
+					const monthDiff =
+						(year - lastDate.getFullYear()) * 12 +
+						(month - lastDate.getMonth());
 					return monthDiff >= recurrence.every;
 				}
 				default:
@@ -291,7 +328,8 @@ function formatDuration(minutes) {
 		? "--"
 		: minutes < 60
 			? minutes + "m"
-			: ((minutes / 60) % 1 === 0 ? minutes / 60 : (minutes / 60).toFixed(1)) + "h";
+			: ((minutes / 60) % 1 === 0 ? minutes / 60 : (minutes / 60).toFixed(1)) +
+				"h";
 }
 
 /**
@@ -355,7 +393,7 @@ function flattenTree(roots, collapsedIds = new Set()) {
 			depth: node.depth,
 			hasChildren: node.children.length > 0,
 			childrenCount: node.children.length,
-			childrenTasks: node.children.map(c => c.task), // actual child task refs
+			childrenTasks: node.children.map((c) => c.task), // actual child task refs
 			collapsed: isCollapsed,
 			taskId: id,
 		});
@@ -387,7 +425,7 @@ module.exports = {
 	isRecurrenceDue,
 	formatDuration,
 	formatTimer,
-	buildTaskTree,   // v0.6.0
-	flattenTree,     // v0.6.0
-	taskId,          // v0.6.0
+	buildTaskTree, // v0.6.0
+	flattenTree, // v0.6.0
+	taskId, // v0.6.0
 };

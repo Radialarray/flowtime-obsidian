@@ -5,9 +5,9 @@ const {
 	parseRecurrence,
 	formatDuration,
 	formatTimer,
-	buildTaskTree,   // v0.6.0
-	flattenTree,     // v0.6.0
-	taskId,          // v0.6.0
+	buildTaskTree, // v0.6.0
+	flattenTree, // v0.6.0
+	taskId, // v0.6.0
 } = require("./task-parser");
 const { renderProgressBar, formatHours } = require("./budget-state");
 const { evaluateFilter } = require("./filter-engine");
@@ -42,8 +42,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		this._sortConfig = [];
 		this._sortMode = null;
 		this._groupConfig = { primary: null, secondary: null };
-		this._collapsed = new Set();   // v0.6.0: collapsed tree nodes by taskId
-		this._displayItems = [];       // v0.6.0: flattened tree display list
+		this._collapsed = new Set(); // v0.6.0: collapsed tree nodes by taskId
+		this._displayItems = []; // v0.6.0: flattened tree display list
 	}
 
 	async onload() {
@@ -102,6 +102,13 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			return false;
 		const root = this.plugin?.settings?.projectsRoot || "";
 		if (!root) return true; // No root filter — scan everything
+		// v0.6.0: Always include the inbox file even if outside projectsRoot
+		const inboxPath = (this.plugin?.settings?.inboxPath || "Inbox.md").replace(
+			/^\.\//,
+			"",
+		);
+		if (filePath === inboxPath || filePath.endsWith("/" + inboxPath))
+			return true;
 		const normalizedRoot = root.endsWith("/") ? root : root + "/";
 		return filePath.startsWith(normalizedRoot);
 	}
@@ -353,6 +360,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 						project: projName,
 						isSoon: parsed.isSoon,
 						sprint: parsed.sprint, // v0.6.0
+						indent: parsed.indent, // v0.6.0
 					});
 				}
 			}
@@ -490,6 +498,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 						projectSource: projSource,
 						isSoon: true,
 						sprint: parsed.sprint,
+						indent: parsed.indent, // v0.6.0
 					});
 				}
 			}
@@ -581,6 +590,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 					projectSource: projSource,
 					isSoon: isSoonTask, // v0.4.0: @soon tag
 					sprint: parsed.sprint, // v0.6.0: @sprint:id
+					indent: parsed.indent, // v0.6.0
 				});
 			}
 		}
@@ -1553,7 +1563,16 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
 		// Task cell: priority + text (v0.6.0: tree-aware with depth + toggle)
 		const childrenTasks = item.childrenTasks || [];
-		if (this._columnVisibility.task !== false) this._buildTaskCell(row, task, depth, hasChildren, collapsed, tid, childrenTasks);
+		if (this._columnVisibility.task !== false)
+			this._buildTaskCell(
+				row,
+				task,
+				depth,
+				hasChildren,
+				collapsed,
+				tid,
+				childrenTasks,
+			);
 
 		if (this._columnVisibility.project !== false) {
 			const pc = row.createEl("td", { cls: "ft-project-cell" });
@@ -1957,7 +1976,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
 		// v0.6.0: Tree indent based on depth
 		if (depth > 0) {
-			tc.style.paddingLeft = (depth * 18 + 8) + "px";
+			tc.style.paddingLeft = depth * 18 + 8 + "px";
 		}
 
 		// v0.6.0: Collapse/expand toggle for parent rows
@@ -1990,7 +2009,9 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
 		// v0.6.0: Mini progress bar when parent has children
 		if (hasChildren && childrenTasks && childrenTasks.length > 0) {
-			const done = childrenTasks.filter((c) => c.status === "x" || c.status === "X").length;
+			const done = childrenTasks.filter(
+				(c) => c.status === "x" || c.status === "X",
+			).length;
 			const total = childrenTasks.length;
 			const pct = total > 0 ? Math.round((done / total) * 100) : 0;
 			const bar = tc.createEl("span", {

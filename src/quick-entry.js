@@ -38,32 +38,14 @@ class QuickEntryModal extends Modal {
 			cls: "flowtime-date-preview",
 		});
 
-		// ── Live preview helper (defined early so all handlers can call it) ──
+		// ── Live preview container (populated later once all inputs exist) ──
 		const preview = contentEl.createEl("div", { cls: "flowtime-preview" });
 		preview.createEl("div", { text: "Preview:", cls: "flowtime-label" });
-		const previewCode = preview.createEl("code", { cls: "flowtime-preview-code" });
+		const previewCode = preview.createEl("code", {
+			cls: "flowtime-preview-code",
+		});
 
-		const updateLivePreview = () => {
-			const date = parseDate(dateInput.value);
-			const project = projInput.value.trim();
-			const task = taskInput.value.trim();
-			let line = "- [ ] " + (task || "task description");
-			if (project) line += " #" + this.plugin.settings.tagPrefix + project;
-			if (date) line += " @" + date;
-			const dur = parseInt(durSelect.value, 10);
-			if (dur && dur > 0) {
-				const durStr = dur < 60 ? dur + "m" : dur / 60 + "h";
-				line += " @" + durStr;
-			}
-			const bucket = bucketSelect.value;
-			if (bucket) line += " @b:" + bucket;
-			// Add parent indent if set
-			const parentLine = parentSelect ? parentSelect.value : "";
-			if (parentLine) line = "  " + line;
-			previewCode.setText(line);
-		};
-
-		// Live preview on date input
+		// Live preview on date input (preview fn defined later after all inputs exist)
 		dateInput.addEventListener("input", () => {
 			const parsed = parseDate(dateInput.value);
 			datePreview.setText(parsed ? "→ @" + parsed : "→ ?");
@@ -87,7 +69,7 @@ class QuickEntryModal extends Modal {
 		const openDD = () => {
 			const r = projInput.getBoundingClientRect();
 			projDD.style.left = r.left + "px";
-			projDD.style.top = (r.bottom + 4) + "px";
+			projDD.style.top = r.bottom + 4 + "px";
 			projDD.style.width = r.width + "px";
 			projDD.style.display = "block";
 			document.body.appendChild(projDD);
@@ -103,10 +85,13 @@ class QuickEntryModal extends Modal {
 			projDD.empty();
 			const q = query.toLowerCase().trim();
 			const matches = q
-				? allProjects.filter(p => p.name.toLowerCase().includes(q))
+				? allProjects.filter((p) => p.name.toLowerCase().includes(q))
 				: allProjects;
 			for (const proj of matches.slice(0, 8)) {
-				const item = projDD.createEl("button", { text: proj.name, cls: "flowtime-proj-dd-item" });
+				const item = projDD.createEl("button", {
+					text: proj.name,
+					cls: "flowtime-proj-dd-item",
+				});
 				item.addEventListener("click", () => {
 					projInput.value = proj.name;
 					closeDD();
@@ -114,7 +99,10 @@ class QuickEntryModal extends Modal {
 				});
 			}
 			if (matches.length === 0) {
-				projDD.createEl("div", { text: "No projects found", cls: "flowtime-proj-dd-empty" });
+				projDD.createEl("div", {
+					text: "No projects found",
+					cls: "flowtime-proj-dd-empty",
+				});
 			}
 		};
 
@@ -134,16 +122,19 @@ class QuickEntryModal extends Modal {
 		// Load projects + auto-detect
 		const activeFile = this.app.workspace.getActiveFile();
 		if (this.plugin.projectEngine) {
-			this.plugin.projectEngine.getAllProjects().then(projects => {
+			this.plugin.projectEngine.getAllProjects().then((projects) => {
 				allProjects = projects;
 			});
 			if (activeFile) {
-				this.plugin.projectEngine.resolve(activeFile.path).then(result => {
-					if (result?.name && !projInput.value) {
-						projInput.value = result.name;
-						updateLivePreview();
-					}
-				}).catch(() => {});
+				this.plugin.projectEngine
+					.resolve(activeFile.path)
+					.then((result) => {
+						if (result?.name && !projInput.value) {
+							projInput.value = result.name;
+							updateLivePreview();
+						}
+					})
+					.catch(() => {});
 			}
 		}
 
@@ -155,19 +146,16 @@ class QuickEntryModal extends Modal {
 		];
 		for (const d of durations) {
 			durSelect.createEl("option", {
-				text:
-					d === 0
-						? "None"
-						: d < 60
-							? d + "m"
-							: d / 60 + "h",
+				text: d === 0 ? "None" : d < 60 ? d + "m" : d / 60 + "h",
 				value: String(d),
 			});
 		}
 
 		// ── Bucket ──
 		contentEl.createEl("label", { text: "Bucket", cls: "flowtime-label" });
-		const bucketSelect = contentEl.createEl("select", { cls: "flowtime-select" });
+		const bucketSelect = contentEl.createEl("select", {
+			cls: "flowtime-select",
+		});
 		const buckets = this.plugin.settings.buckets || [];
 		bucketSelect.createEl("option", { text: "None", value: "" });
 		for (const b of buckets) {
@@ -178,16 +166,11 @@ class QuickEntryModal extends Modal {
 			});
 		}
 
-		// Update preview on any input change
-		taskInput.addEventListener("input", updateLivePreview);
-		projInput.addEventListener("input", updateLivePreview);
-		durSelect.addEventListener("change", updateLivePreview);
-		bucketSelect.addEventListener("change", updateLivePreview);
-		updateLivePreview();
-
 		// v0.6.0: Parent task dropdown for subtask hierarchy
 		contentEl.createEl("label", { text: "Subtask of", cls: "flowtime-label" });
-		const parentSelect = contentEl.createEl("select", { cls: "flowtime-select" });
+		const parentSelect = contentEl.createEl("select", {
+			cls: "flowtime-select",
+		});
 		parentSelect.createEl("option", { text: "None (top-level)", value: "" });
 
 		// Load parent candidates from the target file
@@ -227,7 +210,10 @@ class QuickEntryModal extends Modal {
 				// Populate dropdown (keep existing selection if possible)
 				const currentVal = parentSelect.value;
 				parentSelect.empty();
-				parentSelect.createEl("option", { text: "None (top-level)", value: "" });
+				parentSelect.createEl("option", {
+					text: "None (top-level)",
+					value: "",
+				});
 				for (const c of candidates.slice(0, 20)) {
 					const opt = parentSelect.createEl("option", {
 						text: c.cleanText.slice(0, 60),
@@ -241,8 +227,37 @@ class QuickEntryModal extends Modal {
 		};
 		loadParents();
 
-		// Parent select changes update preview
+		// v0.6.0: Define updateLivePreview AFTER all inputs exist
+		// (moved here to avoid const TDZ issues in bundled output)
+		const updateLivePreview = () => {
+			const date = parseDate(dateInput.value);
+			const project = projInput.value.trim();
+			const task = taskInput.value.trim();
+			let line = "- [ ] " + (task || "task description");
+			if (project) line += " #" + this.plugin.settings.tagPrefix + project;
+			if (date) line += " @" + date;
+			const dur = parseInt(durSelect.value, 10);
+			if (dur && dur > 0) {
+				const durStr = dur < 60 ? dur + "m" : dur / 60 + "h";
+				line += " @" + durStr;
+			}
+			const bucket = bucketSelect.value;
+			if (bucket) line += " @b:" + bucket;
+			// Add parent indent if set
+			const parentLine = parentSelect ? parentSelect.value : "";
+			if (parentLine) line = "  " + line;
+			previewCode.setText(line);
+		};
+
+		// Wire up preview to all inputs (now that everything exists)
+		taskInput.addEventListener("input", updateLivePreview);
+		projInput.addEventListener("input", updateLivePreview);
+		durSelect.addEventListener("change", updateLivePreview);
+		bucketSelect.addEventListener("change", updateLivePreview);
 		parentSelect.addEventListener("change", updateLivePreview);
+
+		// Initial preview render
+		updateLivePreview();
 
 		// ── Buttons ──
 		const btnRow = contentEl.createEl("div", { cls: "flowtime-btn-row" });
@@ -293,7 +308,7 @@ class QuickEntryModal extends Modal {
 				try {
 					const adapter = this.app.vault.adapter;
 					const folder = (await adapter.exists(dnConfigPath))
-						? (JSON.parse(await adapter.read(dnConfigPath)).folder || "")
+						? JSON.parse(await adapter.read(dnConfigPath)).folder || ""
 						: "";
 					const path = folder ? folder + "/" + today + ".md" : today + ".md";
 					targetFile = this.app.vault.getAbstractFileByPath(path) || activeFile;
@@ -314,7 +329,10 @@ class QuickEntryModal extends Modal {
 				if (f) {
 					targetFile = f;
 				} else {
-					this.plugin.notify("Inbox not found. Run Flowtime: Process Inbox to create it.", true);
+					this.plugin.notify(
+						"Inbox not found. Run Flowtime: Process Inbox to create it.",
+						true,
+					);
 					return;
 				}
 			} // "active-file" → targetFile stays as activeFile

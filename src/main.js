@@ -1540,9 +1540,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 						);
 					}
 				})
-				.catch((e) =>
-					console.warn("Flowtime: Daily gen error:", e.message),
-				);
+				.catch((e) => console.warn("Flowtime: Daily gen error:", e.message));
 			// Re-schedule for the next 6 AM or 6 PM
 			this._scheduleDailyGenerations();
 		}, delay);

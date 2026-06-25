@@ -11,3 +11,6 @@ dist/
 
 # Pi agent runtime
 .pi/
+
+# Release builds
+release/

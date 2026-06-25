@@ -1,5 +1,26 @@
 const { Modal, Notice } = require("obsidian");
 
+/** v0.5.0: Default routine template content */
+const ROUTINE_TEMPLATE = `## 🌅 Morning
+- [ ] Morning pages @06:00—06:30 @b:deep-work 🔁 every workday
+- [ ] Review today's goals @06:30—06:45 🔁 every workday
+- [ ] Check email & messages @06:45—07:00 @b:admin 🔁 every workday
+
+## 📅 Weekly
+- [ ] Sprint planning @09:00—10:00 🔁 every Mon
+- [ ] Weekly review @15:00—16:00 🔁 every Fri
+- [ ] Team standup @09:00—09:15 🔁 every Mon Wed Fri
+
+## 📆 Monthly
+- [ ] Pay bills 🔁 every month on 1st
+- [ ] Review goals 🔁 every month on 15th
+
+## Notes
+- Tasks with 🔁 are automatically generated into your daily notes
+- Delete any of these examples or add your own routines
+- Use 🔁 every day | workday | Mon | Mon Wed Fri | 2nd Sun | month on 15th | etc.
+`;
+
 const BUCKET_PRESETS = {
 	default: {
 		label: "Default (Deep Work + Admin + Meetings)",
@@ -67,7 +88,14 @@ async function runOnboard(app, plugin) {
 	});
 	if (!state.proceed) return;
 
-	// ── Step 5: First Project ──
+	// ── Step 5: Routines (v0.5.0) ──
+	state.createRoutines = true;
+	await new Promise((resolve) => {
+		new RoutineStepModal(app, state, resolve).open();
+	});
+	if (!state.proceed) return;
+
+	// ── Step 6: First Project ──
 	await new Promise((resolve) => {
 		new ProjectStepModal(app, state, resolve).open();
 	});
@@ -276,6 +304,61 @@ class DailyNotesStepModal extends Modal {
 	onClose() { this.contentEl.empty(); }
 }
 
+/* ─── Step 5: Routines (v0.5.0) ─── */
+
+class RoutineStepModal extends Modal {
+	constructor(app, state, onDone) {
+		super(app);
+		this.state = state;
+		this.onDone = onDone;
+	}
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.createEl("h3", { text: "Step 5: Routines" });
+
+		contentEl.createEl("p", {
+			text: "Routines auto-generate recurring tasks into your daily notes. " +
+				"Create a template file with 🔁 markers and the engine handles the rest.",
+			cls: "flowtime-label",
+		});
+
+		contentEl.createEl("p", {
+			text: "A sample routine file will be created at flowtime/routines/Daily.md",
+			cls: "flowtime-label",
+			attr: { style: "color: var(--text-muted); font-size: var(--font-ui-smaller);" },
+		});
+
+		// Preview of the template
+		const preview = contentEl.createEl("div", {
+			cls: "flowtime-preview",
+			attr: { style: "background: var(--background-secondary); padding: 8px; border-radius: var(--radius-s); margin-top: 8px; max-height: 200px; overflow-y: auto; font-size: var(--font-ui-smaller); white-space: pre; font-family: var(--font-monospace);" },
+		});
+		preview.setText(ROUTINE_TEMPLATE.replace(/\t/g, "  "));
+
+		const createCb = contentEl.createEl("label", { cls: "flowtime-label", attr: { style: "margin-top: 12px;" } });
+		const createCheck = createCb.createEl("input", { type: "checkbox" });
+		createCheck.checked = true;
+		createCheck.style.marginRight = "6px";
+		createCb.append(" Create sample routine file (recommended)");
+
+		const btnRow = contentEl.createEl("div", { cls: "flowtime-btn-row" });
+		const backBtn = btnRow.createEl("button", { text: "← Back", cls: "flowtime-btn-cancel" });
+		const nextBtn = btnRow.createEl("button", { text: "Next →", cls: "flowtime-btn-submit" });
+
+		backBtn.addEventListener("click", () => {
+			this.state.proceed = false;
+			this.close();
+			this.onDone();
+		});
+		nextBtn.addEventListener("click", () => {
+			this.state.createRoutines = createCheck.checked;
+			this.close();
+			this.onDone();
+		});
+	}
+	onClose() { this.contentEl.empty(); }
+}
+
 class ProjectStepModal extends Modal {
 	constructor(app, state, onDone) {
 		super(app);
@@ -284,7 +367,7 @@ class ProjectStepModal extends Modal {
 	}
 	onOpen() {
 		const { contentEl } = this;
-		contentEl.createEl("h3", { text: "Step 5: First Project (optional)" });
+		contentEl.createEl("h3", { text: "Step 6: First Project (optional)" });
 
 		contentEl.createEl("p", {
 			text: "Scaffold your first project? You can always create more later.",
@@ -393,6 +476,31 @@ async function applySettings(plugin, state) {
 			scaffoldWiki: state.scaffoldWiki,
 		});
 		results.push("project '" + state.firstProjectName + "' created");
+	}
+
+	// 6. Create routines folder and sample template (v0.5.0)
+	const routinesFolder = plugin.settings.routinesFolder || "flowtime/routines/";
+	try {
+		if (!(await plugin.app.vault.adapter.exists(routinesFolder))) {
+			await plugin.app.vault.createFolder(routinesFolder.replace(/\/$/, ""));
+			results.push("created routines folder");
+		}
+
+		if (state.createRoutines) {
+			const routinePath = routinesFolder + "Daily.md";
+			if (!plugin.app.vault.getAbstractFileByPath(routinePath)) {
+				// Use today's date in the template
+				const today = new Date().toISOString().split("T")[0];
+				const template = ROUTINE_TEMPLATE.replace(/@today/g, "@" + today);
+				await plugin.app.vault.create(routinePath, template);
+				results.push("created " + routinePath);
+			} else {
+				results.push(routinePath + " already exists");
+			}
+		}
+	} catch (e) {
+		console.warn("Flowtime: Could not set up routines:", e.message);
+		results.push("routines (warning: " + e.message + ")");
 	}
 
 	// Save all settings

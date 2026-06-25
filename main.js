@@ -103,6 +103,11 @@ class AtCompletionsSuggest extends EditorSuggest {
 		if (isCommandMode) {
 			// ── COMMAND MODE: task macros & code blocks ──
 			const macros = [
+				{
+					label: "@inbox",
+					insert: "- [ ]  @today ",
+					desc: "Inbox task with today date",
+				},
 				{ label: "@td", insert: "- [ ]  @today ", desc: "Today task skeleton" },
 				{
 					label: "@tm",
@@ -176,26 +181,9 @@ class AtCompletionsSuggest extends EditorSuggest {
 					desc: "Week plan code block",
 				},
 			];
-			const matched = macros
+			return macros
 				.filter((m) => m.label.slice(1).includes(q))
 				.map((m) => ({ ...m, type: "macro" }));
-			// Always inject @inbox at the front
-			if ("inbox".includes(q || "")) {
-				matched.unshift({
-					label: "@inbox",
-					insert: "- [ ]  @today ",
-					desc: "Inbox task with today date",
-					type: "macro",
-				});
-			}
-			// Debug: log whether @inbox is in results
-			console.debug(
-				"Flowtime suggestions:",
-				matched.length,
-				"items, has @inbox:",
-				matched.some((m) => m.label === "@inbox"),
-			);
-			return matched;
 		}
 
 		// ── DIRECTIVE MODE: normal @ completions ──
@@ -485,11 +473,21 @@ module.exports = class FlowtimePlugin extends Plugin {
 
 		// v0.5.0: Auto-generate routine instances
 		if (this.settings.autoGenerateOnStartup !== false) {
-			this.routineEngine.generateAllDue().then(count => {
-				if (count > 0 && !this.settings.quietMode) {
-					this.notify("🔁 Generated " + count + " routine task" + (count === 1 ? "" : "s"));
-				}
-			}).catch(e => console.warn("Flowtime: Routine generation error:", e.message));
+			this.routineEngine
+				.generateAllDue()
+				.then((count) => {
+					if (count > 0 && !this.settings.quietMode) {
+						this.notify(
+							"🔁 Generated " +
+								count +
+								" routine task" +
+								(count === 1 ? "" : "s"),
+						);
+					}
+				})
+				.catch((e) =>
+					console.warn("Flowtime: Routine generation error:", e.message),
+				);
 		}
 
 		// Track old projectsRoot to detect changes
@@ -507,17 +505,24 @@ module.exports = class FlowtimePlugin extends Plugin {
 		// v0.5.0: Watch routines folder for changes → re-generate (debounced)
 		const routinesFolder = this.settings.routinesFolder || "flowtime/routines/";
 		this._routineWatchTimer = null;
-		this.registerEvent(this.app.vault.on("modify", (file) => {
-			if (file.path.startsWith(routinesFolder) && !file.path.endsWith(".generated.json")) {
-				if (this._routineWatchTimer) clearTimeout(this._routineWatchTimer);
-				this._routineWatchTimer = setTimeout(() => {
-					this._routineWatchTimer = null;
-					this.routineEngine.generateAllDue().catch(e =>
-						console.warn("Flowtime: Routine auto-gen error:", e.message)
-					);
-				}, 5000);
-			}
-		}));
+		this.registerEvent(
+			this.app.vault.on("modify", (file) => {
+				if (
+					file.path.startsWith(routinesFolder) &&
+					!file.path.endsWith(".generated.json")
+				) {
+					if (this._routineWatchTimer) clearTimeout(this._routineWatchTimer);
+					this._routineWatchTimer = setTimeout(() => {
+						this._routineWatchTimer = null;
+						this.routineEngine
+							.generateAllDue()
+							.catch((e) =>
+								console.warn("Flowtime: Routine auto-gen error:", e.message),
+							);
+					}, 5000);
+				}
+			}),
+		);
 
 		// Register /add-task slash command suggester
 		this.registerEditorSuggest(new AddTaskSuggest(this.app, this));
@@ -697,11 +702,20 @@ module.exports = class FlowtimePlugin extends Plugin {
 		}
 
 		// v0.5.0: Weekplan renderer (uses dedicated WeekplanRenderer)
-		this.registerMarkdownCodeBlockProcessor("flowtime-weekplan", (_src, el, ctx) => {
-			const r = new WeekplanRenderer(this.app, el, this, this.projectEngine, ctx.sourcePath);
-			this.renderers.push(r);
-			ctx.addChild(r);
-		});
+		this.registerMarkdownCodeBlockProcessor(
+			"flowtime-weekplan",
+			(_src, el, ctx) => {
+				const r = new WeekplanRenderer(
+					this.app,
+					el,
+					this,
+					this.projectEngine,
+					ctx.sourcePath,
+				);
+				this.renderers.push(r);
+				ctx.addChild(r);
+			},
+		);
 
 		// ── Template Engine Commands ──
 
@@ -941,7 +955,9 @@ module.exports = class FlowtimePlugin extends Plugin {
 			name: "Generate Routines",
 			callback: async () => {
 				const count = await this.routineEngine.generateAllDue({ force: true });
-				this.notify("🔁 Generated " + count + " routine task" + (count === 1 ? "" : "s"));
+				this.notify(
+					"🔁 Generated " + count + " routine task" + (count === 1 ? "" : "s"),
+				);
 			},
 		});
 
@@ -950,7 +966,13 @@ module.exports = class FlowtimePlugin extends Plugin {
 			name: "Generate Routines for Today",
 			callback: async () => {
 				const count = await this.routineEngine.generateToday({ force: true });
-				this.notify("🔁 Generated " + count + " routine task" + (count === 1 ? "" : "s") + " for today");
+				this.notify(
+					"🔁 Generated " +
+						count +
+						" routine task" +
+						(count === 1 ? "" : "s") +
+						" for today",
+				);
 			},
 		});
 
@@ -959,7 +981,9 @@ module.exports = class FlowtimePlugin extends Plugin {
 			name: "Clear Routine Generation Tracking",
 			callback: async () => {
 				await this.routineEngine.clearTracking();
-				this.notify("🗑 Routine tracking cleared. Regenerate to recreate instances.");
+				this.notify(
+					"🗑 Routine tracking cleared. Regenerate to recreate instances.",
+				);
 			},
 		});
 

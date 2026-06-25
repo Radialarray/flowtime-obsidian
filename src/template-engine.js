@@ -108,6 +108,10 @@ class TemplateEngine {
 \`\`\`flowtime-dueweek
 \`\`\`
 
+## 📅 Week Plan
+\`\`\`flowtime-weekplan
+\`\`\`
+
 ## 📊 This Week (by project)
 \`\`\`flowtime-weekly
 \`\`\`

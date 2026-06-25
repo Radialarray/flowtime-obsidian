@@ -1,5 +1,10 @@
 const { MarkdownRenderChild, Notice } = require("obsidian");
-const { parseTaskLine, parseRecurrence, formatDuration, formatTimer } = require("./task-parser");
+const {
+	parseTaskLine,
+	parseRecurrence,
+	formatDuration,
+	formatTimer,
+} = require("./task-parser");
 const { renderProgressBar, formatHours } = require("./budget-state");
 
 const DUR_OPTS = [10, 15, 20, 25, 30, 45, 60, 90, 120, 150, 180, 210, 240];
@@ -20,10 +25,10 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		this.plugin = plugin;
 		this.projectEngine = projectEngine;
 		this.sourcePath = sourcePath;
-		this.dayTasks = {};     // dateStr → task[]
-		this.dayTotals = {};    // dateStr → total minutes
+		this.dayTasks = {}; // dateStr → task[]
+		this.dayTotals = {}; // dateStr → total minutes
 		this.dailyCap = 12;
-		this.gridMode = false;  // toggle: false=list, true=timeline grid
+		this.gridMode = false; // toggle: false=list, true=timeline grid
 	}
 
 	async onload() {
@@ -109,7 +114,8 @@ class WeekplanRenderer extends MarkdownRenderChild {
 	}
 
 	_isFileInScope(filePath) {
-		if (filePath.startsWith(".obsidian") || filePath.startsWith(".git")) return false;
+		if (filePath.startsWith(".obsidian") || filePath.startsWith(".git"))
+			return false;
 		const root = this.plugin?.settings?.projectsRoot || "";
 		if (!root) return true;
 		const normalizedRoot = root.endsWith("/") ? root : root + "/";
@@ -120,7 +126,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		const cache = this.plugin?.taskCache;
 		const cached = cache?.get(file.path);
 		if (cached) {
-			return cached.parsedTasks.map(t => ({ ...t, file }));
+			return cached.parsedTasks.map((t) => ({ ...t, file }));
 		}
 		const content = await this.app.vault.read(file);
 		const lines = content.split("\n");
@@ -130,7 +136,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			if (parsed) result.push(parsed);
 		}
 		if (cache) {
-			const cacheable = result.map(t => {
+			const cacheable = result.map((t) => {
 				const { file: f, ...rest } = t;
 				return rest;
 			});
@@ -175,9 +181,23 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			if (!this._isFileInScope(file.path)) continue;
 			const fileTasks = await this._getFileTasks(file);
 			for (const parsed of fileTasks) {
-				if (parsed.status === "x" || parsed.status === "-" || parsed.status === "X") continue;
+				if (
+					parsed.status === "x" ||
+					parsed.status === "-" ||
+					parsed.status === "X"
+				)
+					continue;
 
-				const { taskDate, rawText, time, status, priority, cleanText, bucket, durationMinutes } = parsed;
+				const {
+					taskDate,
+					rawText,
+					time,
+					status,
+					priority,
+					cleanText,
+					bucket,
+					durationMinutes,
+				} = parsed;
 
 				if (!taskDate) continue;
 
@@ -259,28 +279,41 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		// Toolbar buttons
 		const toolbar = header.createEl("div", { cls: "ft-wp-toolbar" });
 
-		const genBtn = toolbar.createEl("button", { text: "🔄 Regenerate Routines", cls: "ft-wp-btn" });
+		const genBtn = toolbar.createEl("button", {
+			text: "🔄 Regenerate Routines",
+			cls: "ft-wp-btn",
+		});
 		genBtn.addEventListener("click", async () => {
 			if (this.plugin?.routineEngine) {
-				const count = await this.plugin.routineEngine.generateAllDue({ force: true });
-				this.plugin.notify?.("🔁 Generated " + count + " routine task" + (count === 1 ? "" : "s"));
+				const count = await this.plugin.routineEngine.generateAllDue({
+					force: true,
+				});
+				this.plugin.notify?.(
+					"🔁 Generated " + count + " routine task" + (count === 1 ? "" : "s"),
+				);
 				await this.loadWeek();
 				this.renderView();
 			}
 		});
 
 		const vacBtn = toolbar.createEl("button", {
-			text: this.plugin?.settings?.vacationMode ? "▶ Resume Routines" : "⏸ Vacation Mode",
-			cls: "ft-wp-btn" + (this.plugin?.settings?.vacationMode ? " ft-wp-vacation-on" : ""),
+			text: this.plugin?.settings?.vacationMode
+				? "▶ Resume Routines"
+				: "⏸ Vacation Mode",
+			cls:
+				"ft-wp-btn" +
+				(this.plugin?.settings?.vacationMode ? " ft-wp-vacation-on" : ""),
 		});
 		vacBtn.addEventListener("click", async () => {
 			if (this.plugin) {
 				this.plugin.settings.vacationMode = !this.plugin.settings.vacationMode;
 				await this.plugin.saveData(this.plugin.settings);
 				this.renderView();
-				this.plugin.notify?.(this.plugin.settings.vacationMode
-					? "⏸ Routine generation paused"
-					: "▶ Routine generation resumed");
+				this.plugin.notify?.(
+					this.plugin.settings.vacationMode
+						? "⏸ Routine generation paused"
+						: "▶ Routine generation resumed",
+				);
 			}
 		});
 
@@ -294,7 +327,10 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			this.renderView();
 		});
 
-		const addBtn = toolbar.createEl("button", { text: "➕ Add Task", cls: "ft-wp-btn ft-wp-btn-primary" });
+		const addBtn = toolbar.createEl("button", {
+			text: "➕ Add Task",
+			cls: "ft-wp-btn ft-wp-btn-primary",
+		});
 		addBtn.addEventListener("click", () => {
 			const { QuickEntryModal } = require("./quick-entry");
 			const modal = new QuickEntryModal(this.app, this.plugin);
@@ -303,8 +339,12 @@ class WeekplanRenderer extends MarkdownRenderChild {
 
 		// ── Vacation notice ──
 		if (this.plugin?.settings?.vacationMode) {
-			const notice = this.containerEl.createEl("div", { cls: "ft-wp-vacation-notice" });
-			notice.createEl("span", { text: "⏸ Vacation mode is ON — routines are paused" });
+			const notice = this.containerEl.createEl("div", {
+				cls: "ft-wp-vacation-notice",
+			});
+			notice.createEl("span", {
+				text: "⏸ Vacation mode is ON — routines are paused",
+			});
 		}
 
 		if (this.gridMode) {
@@ -360,7 +400,9 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		for (let h = START_H; h <= START_END; h++) {
 			for (let m = 0; m < 60; m += 30) {
 				if (h === START_END && m > 0) break;
-				slots.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+				slots.push(
+					`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`,
+				);
 			}
 		}
 
@@ -408,7 +450,9 @@ class WeekplanRenderer extends MarkdownRenderChild {
 				if (days[di] === today) {
 					const now = new Date();
 					const nowMin = now.getHours() * 60 + now.getMinutes();
-					const slotMin = parseInt(timeLabel.split(":")[0], 10) * 60 + parseInt(timeLabel.split(":")[1], 10);
+					const slotMin =
+						parseInt(timeLabel.split(":")[0], 10) * 60 +
+						parseInt(timeLabel.split(":")[1], 10);
 					if (nowMin >= slotMin && nowMin < slotMin + 30) {
 						cell.addClass("ft-tg-now");
 					}
@@ -418,7 +462,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 
 		// ── Hour separators (thicker lines at whole hours) ──
 		for (let h = START_H + 1; h <= START_END; h++) {
-			const rowNum = ((h - START_H) * 2) + 2;
+			const rowNum = (h - START_H) * 2 + 2;
 			for (let di = 0; di < days.length; di++) {
 				const sep = grid.createEl("div", { cls: "ft-tg-hsep" });
 				sep.style.gridRow = String(rowNum);
@@ -440,7 +484,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			}
 
 			// Second pass: untimed tasks listed at bottom of day column
-			const untimed = tasks.filter(t => !t.time);
+			const untimed = tasks.filter((t) => !t.time);
 			if (untimed.length === 0) continue;
 
 			const bottomRow = 2 + slots.length;
@@ -466,7 +510,10 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			if (rowStart < 2) return; // outside visible range
 
 			const card = grid.createEl("div", {
-				cls: "ft-tg-card" + (task.status === "x" ? " ft-tg-done" : "") + (task.isRoutine ? " ft-tg-routine" : ""),
+				cls:
+					"ft-tg-card" +
+					(task.status === "x" ? " ft-tg-done" : "") +
+					(task.isRoutine ? " ft-tg-routine" : ""),
 			});
 			card.style.gridRow = `${rowStart} / ${rowEnd}`;
 			card.style.gridColumn = String(col);
@@ -491,7 +538,10 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			}
 
 			// Time tooltip (updated live during resize)
-			const timeLabel = card.createEl("span", { text: start + (dur ? "—" + endTime : ""), cls: "ft-tg-time-label" });
+			const timeLabel = card.createEl("span", {
+				text: start + (dur ? "—" + endTime : ""),
+				cls: "ft-tg-time-label",
+			});
 
 			// ── Resize handle (v0.5.0) ──
 			const resizeHandle = card.createEl("div", { cls: "ft-tg-resize-handle" });
@@ -510,7 +560,10 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		} else {
 			// Untimed task — rendered at the bottom of the day column
 			const card = grid.createEl("div", {
-				cls: "ft-tg-card ft-tg-untimed" + (task.status === "x" ? " ft-tg-done" : "") + (task.isRoutine ? " ft-tg-routine" : ""),
+				cls:
+					"ft-tg-card ft-tg-untimed" +
+					(task.status === "x" ? " ft-tg-done" : "") +
+					(task.isRoutine ? " ft-tg-routine" : ""),
 			});
 			card.style.gridColumn = String(col);
 			card.style.gridRow = "-1"; // auto place at end of column
@@ -547,7 +600,8 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			if (relY < HEADER_H) return rowStart + 1; // min = 30 min
 			const rawRow = 2 + Math.round((relY - HEADER_H) / ROW_H);
 			// Clamp: at least start+1, at most last data row
-			const maxRow = 2 + (parseInt(grid.style.getPropertyValue("--tg-rows"), 10) || 27) - 1;
+			const maxRow =
+				2 + (parseInt(grid.style.getPropertyValue("--tg-rows"), 10) || 27) - 1;
 			return Math.max(rowStart + 1, Math.min(rawRow, maxRow));
 		};
 
@@ -597,7 +651,8 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			// Calculate duration in minutes
 			const sParts = startTime.split(":").map(Number);
 			const eParts = newEndTime.split(":").map(Number);
-			const durMinutes = (eParts[0] * 60 + eParts[1]) - (sParts[0] * 60 + sParts[1]);
+			const durMinutes =
+				eParts[0] * 60 + eParts[1] - (sParts[0] * 60 + sParts[1]);
 			if (durMinutes <= 0) return;
 
 			// Update the task data
@@ -609,7 +664,11 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			timeLabel.setText(startTime + "—" + newEndTime);
 
 			// Persist to vault
-			await this._saveTaskInline(task, startTime, durMinutes < 60 ? durMinutes + "m" : (durMinutes / 60) + "h");
+			await this._saveTaskInline(
+				task,
+				startTime,
+				durMinutes < 60 ? durMinutes + "m" : durMinutes / 60 + "h",
+			);
 		};
 
 		document.addEventListener("mousemove", onMove, true);
@@ -644,42 +703,61 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		// Position near the card
 		const rect = card.getBoundingClientRect();
 		popup.style.left = rect.left + "px";
-		popup.style.top = (rect.bottom + 4) + "px";
+		popup.style.top = rect.bottom + 4 + "px";
 
 		// ── Time input ──
 		const timeRow = popup.createEl("div", { cls: "ft-tg-popup-row" });
 		timeRow.createEl("label", { text: "Time: ", cls: "ft-tg-popup-label" });
 		const startInput = timeRow.createEl("input", {
-			type: "text", value: start || "", placeholder: "09:00", cls: "ft-tg-popup-input",
+			type: "text",
+			value: start || "",
+			placeholder: "09:00",
+			cls: "ft-tg-popup-input",
 		});
 		const durInput = timeRow.createEl("input", {
-			type: "text", value: dur ? formatDuration(dur) : "", placeholder: "30m", cls: "ft-tg-popup-input",
+			type: "text",
+			value: dur ? formatDuration(dur) : "",
+			placeholder: "30m",
+			cls: "ft-tg-popup-input",
 		});
 
 		// ── Checkbox ──
 		const checkRow = popup.createEl("div", { cls: "ft-tg-popup-row" });
-		const cb = checkRow.createEl("input", { type: "checkbox", cls: "ft-tg-popup-cb" });
+		const cb = checkRow.createEl("input", {
+			type: "checkbox",
+			cls: "ft-tg-popup-cb",
+		});
 		cb.checked = task.status === "x";
 		checkRow.createEl("span", { text: " Done", cls: "ft-tg-popup-label" });
 
 		// ── Save button ──
 		const btnRow = popup.createEl("div", { cls: "ft-tg-popup-row" });
-		const saveBtn = btnRow.createEl("button", { text: "Save", cls: "ft-tg-popup-btn" });
-		const delBtn = btnRow.createEl("button", { text: "🗑 Remove", cls: "ft-tg-popup-btn ft-tg-popup-del" });
+		const saveBtn = btnRow.createEl("button", {
+			text: "Save",
+			cls: "ft-tg-popup-btn",
+		});
+		const delBtn = btnRow.createEl("button", {
+			text: "🗑 Remove",
+			cls: "ft-tg-popup-btn ft-tg-popup-del",
+		});
 
 		saveBtn.addEventListener("click", async () => {
 			// Update time
 			task.time = startInput.value.trim()
 				? (() => {
-					const s = startInput.value.trim();
-					const d = this._parseDurStr(durInput.value.trim());
-					return d > 0 ? s + "—" + this._calcEnd(s, d) : s;
-				})()
+						const s = startInput.value.trim();
+						const d = this._parseDurStr(durInput.value.trim());
+						return d > 0 ? s + "—" + this._calcEnd(s, d) : s;
+					})()
 				: "";
 			task.durationMinutes = this._parseDurStr(durInput.value.trim());
 
 			// Persist to vault
-			await this._saveTaskInline(task, startInput.value.trim(), durInput.value.trim());
+			await this._saveTaskInline(
+				task,
+				startInput.value.trim(),
+				durInput.value.trim(),
+			);
 
 			// Toggle check
 			if (cb.checked !== (task.status === "x")) {
@@ -718,7 +796,8 @@ class WeekplanRenderer extends MarkdownRenderChild {
 	async _saveTaskInline(task, startStr, durStr) {
 		if (!task.file) return;
 		const durMinutes = this._parseDurStr(durStr);
-		const end = startStr && durMinutes > 0 ? this._calcEnd(startStr, durMinutes) : "";
+		const end =
+			startStr && durMinutes > 0 ? this._calcEnd(startStr, durMinutes) : "";
 		let timeBlock = startStr;
 		if (end) timeBlock += "—" + end;
 
@@ -746,7 +825,8 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		}
 
 		if (durMinutes > 0) {
-			const durStr2 = durMinutes < 60 ? durMinutes + "m" : (durMinutes / 60) + "h";
+			const durStr2 =
+				durMinutes < 60 ? durMinutes + "m" : durMinutes / 60 + "h";
 			if (line.match(/@\d+(?:\.\d+)?[hm]/)) {
 				line = line.replace(/@\d+(?:\.\d+)?[hm]/, "@" + durStr2);
 			} else {
@@ -784,7 +864,11 @@ class WeekplanRenderer extends MarkdownRenderChild {
 
 			// Budget bar
 			if (this.dailyCap > 0) {
-				const bar = renderProgressBar(totalHours, this.dailyCap, `${formatHours(totalHours)}h / ${this.dailyCap}h`);
+				const bar = renderProgressBar(
+					totalHours,
+					this.dailyCap,
+					`${formatHours(totalHours)}h / ${this.dailyCap}h`,
+				);
 				bar.style.minWidth = "180px";
 				bar.style.marginLeft = "12px";
 				dayHeader.appendChild(bar);
@@ -844,7 +928,10 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		}
 
 		// End preview
-		const endPreview = timeCol.createEl("span", { text: "", cls: "ft-wp-end-preview" });
+		const endPreview = timeCol.createEl("span", {
+			text: "",
+			cls: "ft-wp-end-preview",
+		});
 		const updateEnd = () => {
 			const s = si.value;
 			const d = this._parseDurStr(di.value);
@@ -854,11 +941,20 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			let timer;
 			return () => {
 				clearTimeout(timer);
-				timer = setTimeout(() => this._saveTaskTime(task, si, di, endPreview), 300);
+				timer = setTimeout(
+					() => this._saveTaskTime(task, si, di, endPreview),
+					300,
+				);
 			};
 		})();
-		si.addEventListener("input", () => { updateEnd(); saveTime(); });
-		di.addEventListener("input", () => { updateEnd(); saveTime(); });
+		si.addEventListener("input", () => {
+			updateEnd();
+			saveTime();
+		});
+		di.addEventListener("input", () => {
+			updateEnd();
+			saveTime();
+		});
 		updateEnd();
 
 		// ── Checkbox ──
@@ -1016,7 +1112,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 
 		// Update duration directive if present
 		if (durMinutes > 0) {
-			const durStr = durMinutes < 60 ? durMinutes + "m" : (durMinutes / 60) + "h";
+			const durStr = durMinutes < 60 ? durMinutes + "m" : durMinutes / 60 + "h";
 			if (line.match(/@\d+(?:\.\d+)?[hm]/)) {
 				line = line.replace(/@\d+(?:\.\d+)?[hm]/, "@" + durStr);
 			} else {
@@ -1060,15 +1156,21 @@ class WeekplanRenderer extends MarkdownRenderChild {
 	_getWeekNumber(dateStr) {
 		const d = new Date(dateStr + "T12:00:00");
 		d.setHours(0, 0, 0, 0);
-		d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+		d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
 		const week1 = new Date(d.getFullYear(), 0, 4);
-		return 1 + Math.round(((d - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+		return (
+			1 +
+			Math.round(((d - week1) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7)
+		);
 	}
 
 	_beep() {
 		if (this.plugin?.settings?.timerSound === false) return;
 		try {
-			for (const [freq, delay] of [[880, 0], [660, 0.2]]) {
+			for (const [freq, delay] of [
+				[880, 0],
+				[660, 0.2],
+			]) {
 				const ctx = new AudioContext(),
 					o = ctx.createOscillator(),
 					g = ctx.createGain();
@@ -1076,7 +1178,10 @@ class WeekplanRenderer extends MarkdownRenderChild {
 				g.connect(ctx.destination);
 				o.frequency.value = freq;
 				g.gain.setValueAtTime(0.3, ctx.currentTime + delay);
-				g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + delay + 0.6);
+				g.gain.exponentialRampToValueAtTime(
+					0.01,
+					ctx.currentTime + delay + 0.6,
+				);
 				o.start(ctx.currentTime + delay);
 			}
 		} catch (_) {}

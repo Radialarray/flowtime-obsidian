@@ -17,9 +17,52 @@ const MAX_CACHE_SIZE_BYTES = 1_000_000; // 1MB
 
 class TaskCache {
 	constructor() {
-		/** @type {Map<string, { parsedTasks: object[], mtime: number }>} */
+		/** @type {Map<string, { parsedTasks: object[], mtime: number, size: number }>} */
 		this._cache = new Map();
+		/** @type {Map<string, Array<{filePath: string, task: object}>>} */
+		this._dateIndex = new Map();
 		this._warningIssued = false;
+	}
+
+	/**
+	 * Maintain date index for a file's tasks.
+	 * Removes old entries for this file, then re-indexes all tasks.
+	 * @param {string} filePath
+	 * @param {object[]} parsedTasks
+	 */
+	_indexFile(filePath, parsedTasks) {
+		// Remove stale date entries for this file
+		for (const [, entries] of this._dateIndex) {
+			for (let i = entries.length - 1; i >= 0; i--) {
+				if (entries[i].filePath === filePath) entries.splice(i, 1);
+			}
+		}
+		// Add new entries
+		for (const task of parsedTasks) {
+			if (!task.taskDate) continue;
+			if (!this._dateIndex.has(task.taskDate)) {
+				this._dateIndex.set(task.taskDate, []);
+			}
+			this._dateIndex.get(task.taskDate).push({ filePath, task });
+		}
+	}
+
+	/**
+	 * Get all cached tasks within a date range [from, to] (inclusive, YYYY-MM-DD).
+	 * Returns array of { filePath, task } for every matching cached task.
+	 * Does NOT read from disk — only returns what's already cached.
+	 * @param {string} dateFrom
+	 * @param {string} dateTo
+	 * @returns {Array<{filePath: string, task: object}>}
+	 */
+	getTasksForDateRange(dateFrom, dateTo) {
+		const result = [];
+		for (const [dateStr, entries] of this._dateIndex) {
+			if (dateStr >= dateFrom && dateStr <= dateTo) {
+				result.push(...entries);
+			}
+		}
+		return result;
 	}
 
 	/**
@@ -38,12 +81,14 @@ class TaskCache {
 	 * @param {object[]} parsedTasks — array of task objects (without file references)
 	 */
 	set(filePath, parsedTasks) {
-		if (!parsedTasks || parsedTasks.length === 0) {
+		if (!parsedTasks) parsedTasks = [];
+		this._indexFile(filePath, parsedTasks);
+		if (parsedTasks.length === 0) {
 			// Don't store empty entries — saves space
 			this._cache.delete(filePath);
 			return;
 		}
-		this._cache.set(filePath, { parsedTasks, mtime: Date.now() });
+		this._cache.set(filePath, { parsedTasks, mtime: Date.now(), size: 0 });
 	}
 
 	/**
@@ -52,6 +97,12 @@ class TaskCache {
 	 */
 	invalid(filePath) {
 		this._cache.delete(filePath);
+		// Clear from date index too
+		for (const [, entries] of this._dateIndex) {
+			for (let i = entries.length - 1; i >= 0; i--) {
+				if (entries[i].filePath === filePath) entries.splice(i, 1);
+			}
+		}
 	}
 
 	/**
@@ -66,6 +117,7 @@ class TaskCache {
 	/** Clear all cached entries. */
 	clear() {
 		this._cache.clear();
+		this._dateIndex.clear();
 		this._warningIssued = false;
 	}
 
@@ -140,13 +192,18 @@ class TaskCache {
 
 	/**
 	 * Serialize cache to a plain object for storage.
-	 * @returns {object} — filePath -> parsedTasks[]
+	 * Stores mtime per file for cross-session staleness checks.
+	 * @returns {object} — filePath -> { parsedTasks, mtime }
 	 */
 	toJSON() {
 		const obj = {};
 		for (const [key, val] of this._cache) {
 			if (val.parsedTasks && val.parsedTasks.length > 0) {
-				obj[key] = val.parsedTasks;
+				obj[key] = {
+					parsedTasks: val.parsedTasks,
+					mtime: val.mtime,
+					size: val.size,
+				};
 			}
 		}
 		return obj;
@@ -159,10 +216,43 @@ class TaskCache {
 	fromJSON(obj) {
 		if (!obj || typeof obj !== "object") return;
 		for (const [key, val] of Object.entries(obj)) {
-			if (Array.isArray(val) && val.length > 0) {
-				this._cache.set(key, { parsedTasks: val, mtime: Date.now() });
+			const tasks = Array.isArray(val) ? val : val?.parsedTasks;
+			const mtime = val?.mtime || Date.now();
+			const size = val?.size || 0;
+			if (Array.isArray(tasks) && tasks.length > 0) {
+				this._cache.set(key, { parsedTasks: tasks, mtime, size });
+				this._indexFile(key, tasks);
 			}
 		}
+	}
+
+	/**
+	 * Cross-session staleness check: compare cached mtime against actual file mtime.
+	 * Invalidates entries where the file has been modified since caching.
+	 * Run once after fromJSON() during plugin startup.
+	 * @param {object} vaultAdapter — app.vault.adapter
+	 * @returns {Promise<number>} number of stale entries evicted
+	 */
+	async evictStale(vaultAdapter) {
+		const stale = [];
+		for (const [path, entry] of this._cache) {
+			try {
+				const stat = await vaultAdapter.stat(path);
+				if (!stat) {
+					stale.push(path);
+				} else if (stat.mtime > entry.mtime) {
+					// File modified since caching (same machine or sync)
+					stale.push(path);
+				} else if (entry.size > 0 && stat.size !== entry.size) {
+					// Size changed but mtime didn't — sync preserved mtime, content changed
+					stale.push(path);
+				}
+			} catch (_) {
+				// stat() fails → file gone; autoEvict handles this
+			}
+		}
+		for (const path of stale) this.invalid(path);
+		return stale.length;
 	}
 }
 

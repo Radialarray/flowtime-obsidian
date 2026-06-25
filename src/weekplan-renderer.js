@@ -1,15 +1,23 @@
-const { MarkdownRenderChild, Notice } = require("obsidian");
-const {
-	parseTaskLine,
-	parseRecurrence,
-	formatDuration,
-	formatTimer,
-} = require("./task-parser");
+const { MarkdownRenderChild } = require("obsidian");
+const { parseTaskLine, formatDuration, formatTimer } = require("./task-parser");
 const { renderProgressBar, formatHours } = require("./budget-state");
-
-const DUR_OPTS = [10, 15, 20, 25, 30, 45, 60, 90, 120, 150, 180, 210, 240];
-const START_H = 7;
-const START_END = 20;
+const {
+	DUR_OPTS,
+	START_H,
+	START_END,
+	parseStored,
+	calcEnd,
+	parseDurStr,
+	timeToRow,
+	getMonday,
+	getFriday,
+	getWeekNumber,
+	isFileInScope,
+	getFileTasks,
+	toggleCheck,
+	priorityWeight,
+	saveTimeWithDuration,
+} = require("./task-utils");
 
 /**
  * WeekplanRenderer — day-by-day week planning view.
@@ -34,8 +42,11 @@ class WeekplanRenderer extends MarkdownRenderChild {
 	async onload() {
 		try {
 			this.dailyCap = this.plugin?.settings?.dailyCap || 12;
-			await this.loadWeek();
+			// Phase 1: Render instantly from cache (fast, might miss recent changes)
+			this._loadFromCache();
 			this.renderView();
+			// Phase 2: Full scan in background, re-render when done
+			this.loadWeek().then(() => this.renderView());
 		} catch (e) {
 			this.containerEl.createEl("p", {
 				text: "⚠️ Error: " + e.message,
@@ -152,103 +163,177 @@ class WeekplanRenderer extends MarkdownRenderChild {
 
 	/* ─── loading ─── */
 
+	/** Quick load from cache only — no I/O. Call before renderView(). */
+	_loadFromCache() {
+		const today = new Date().toISOString().split("T")[0];
+		const mon = getMonday(today);
+		const fri = getFriday(mon);
+		this._initWeek(mon, fri);
+
+		const cached = this.plugin?.taskCache?.getTasksForDateRange(mon, fri) || [];
+		for (const { filePath, task: parsed } of cached) {
+			const file = this.app.vault.getAbstractFileByPath(filePath);
+			if (!file || !parsed.taskDate) continue;
+			if (!this.dayTasks[parsed.taskDate]) continue;
+			this._addTaskNoProject(parsed, file);
+		}
+	}
+
+	/** Full scan — reads uncached files, refreshes cache. Call async after first render. */
 	async loadWeek() {
 		const today = new Date().toISOString().split("T")[0];
-		const mon = this._getMonday(today);
-		const fri = this._getFriday(mon);
+		const root = this.plugin?.settings?.projectsRoot || "";
+		const mon = getMonday(today);
+		const fri = getFriday(mon);
 
-		this.weekStart = mon;
-		this.weekEnd = fri;
-		this.dayTasks = {};
-		this.dayTotals = {};
+		this._initWeek(mon, fri);
 
-		// Initialize each day
-		const days = [];
-		const d = new Date(mon + "T12:00:00");
-		const end = new Date(fri + "T12:00:00");
-		while (d <= end) {
-			days.push(d.toISOString().split("T")[0]);
-			d.setDate(d.getDate() + 1);
+		const cache = this.plugin?.taskCache;
+		const cached = cache?.getTasksForDateRange(mon, fri) || [];
+		const cachedPaths = new Set(cached.map((e) => e.filePath));
+
+		// Scan uncached files in parallel
+		const allFiles = this.app.vault
+			.getMarkdownFiles()
+			.filter((f) => isFileInScope(f.path, root));
+		const uncached = allFiles.filter((f) => !cachedPaths.has(f.path));
+
+		const freshResults = await Promise.all(
+			uncached.map(async (file) => ({
+				file,
+				tasks: await getFileTasks(file, this.app, cache),
+			})),
+		);
+
+		// Process cached entries + fresh results
+		for (const { filePath, task: parsed } of cached) {
+			if (!parsed.taskDate || !this.dayTasks[parsed.taskDate]) continue;
+			const file = this.app.vault.getAbstractFileByPath(filePath);
+			if (!file) continue;
+			await this._addTask(parsed, file);
 		}
-
-		for (const dateStr of days) {
-			this.dayTasks[dateStr] = [];
-			this.dayTotals[dateStr] = 0;
-		}
-
-		// Scan vault for tasks matching this week
-		for (const file of this.app.vault.getMarkdownFiles()) {
-			if (!this._isFileInScope(file.path)) continue;
-			const fileTasks = await this._getFileTasks(file);
-			for (const parsed of fileTasks) {
+		for (const { file, tasks } of freshResults) {
+			for (const parsed of tasks) {
 				if (
 					parsed.status === "x" ||
 					parsed.status === "-" ||
 					parsed.status === "X"
 				)
 					continue;
-
-				const {
-					taskDate,
-					rawText,
-					time,
-					status,
-					priority,
-					cleanText,
-					bucket,
-					durationMinutes,
-				} = parsed;
-
-				if (!taskDate) continue;
-
-				// Check if the task's date is within this week
-				if (taskDate < mon || taskDate > fri) continue;
-
-				// Detect if this is a routine-generated task (has 🔁 in text)
-				const isRoutine = !!rawText.match(/🔁/);
-
-				// Resolve project
-				let project = null;
-				if (this.projectEngine) {
-					const pj = await this.projectEngine.resolve(file.path);
-					project = pj?.name || null;
-				}
-				if (!project && rawText) {
-					const pMatch = rawText.match(/@p:([^\s]+)/);
-					if (pMatch) project = pMatch[1];
-				}
-				if (!project && rawText) {
-					const tp = this.plugin?.settings?.tagPrefix || "project/";
-					const tagMatch = rawText.match(new RegExp(tp + "([^\\s]+)"));
-					if (tagMatch) project = tagMatch[1];
-				}
-
-				if (this.dayTasks[taskDate]) {
-					this.dayTasks[taskDate].push({
-						file,
-						line: parsed.line,
-						rawLine: parsed.rawLine,
-						time,
-						taskDate,
-						durationMinutes: durationMinutes || 0,
-						rawText,
-						cleanText,
-						status,
-						priority,
-						bucket,
-						project,
-						isRoutine,
-					});
-					this.dayTotals[taskDate] += durationMinutes || 0;
-				}
+				if (!parsed.taskDate || !this.dayTasks[parsed.taskDate]) continue;
+				await this._addTask(parsed, file);
 			}
 		}
 
-		// Sort tasks in each day: priority → time
-		for (const dateStr of days) {
+		this._sortDays();
+	}
+
+	/** Init day buckets for a Mon-Fri range */
+	_initWeek(mon, fri) {
+		this.weekStart = mon;
+		this.weekEnd = fri;
+		this.dayTasks = {};
+		this.dayTotals = {};
+		const d = new Date(mon + "T12:00:00");
+		const end = new Date(fri + "T12:00:00");
+		while (d <= end) {
+			const dateStr = d.toISOString().split("T")[0];
+			this.dayTasks[dateStr] = [];
+			this.dayTotals[dateStr] = 0;
+			d.setDate(d.getDate() + 1);
+		}
+	}
+
+	/** Add parsed task to day bucket (with project resolution) */
+	async _addTask(parsed, file) {
+		const {
+			taskDate,
+			rawText,
+			time,
+			priority,
+			cleanText,
+			bucket,
+			durationMinutes,
+		} = parsed;
+		const isRoutine = !!rawText.match(/🔁/);
+		let project = null;
+		if (this.projectEngine) {
+			const pj = await this.projectEngine.resolve(file.path);
+			project = pj?.name || null;
+		}
+		if (!project && rawText) {
+			const pMatch = rawText.match(/@p:([^\s]+)/);
+			if (pMatch) project = pMatch[1];
+		}
+		if (!project && rawText) {
+			const tp = this.plugin?.settings?.tagPrefix || "project/";
+			const tagMatch = rawText.match(new RegExp(tp + "([^\\s]+)"));
+			if (tagMatch) project = tagMatch[1];
+		}
+		this.dayTasks[taskDate].push({
+			file,
+			line: parsed.line,
+			rawLine: parsed.rawLine,
+			time,
+			taskDate,
+			durationMinutes: durationMinutes || 0,
+			rawText,
+			cleanText,
+			status: parsed.status,
+			priority,
+			bucket,
+			project,
+			isRoutine,
+		});
+		this.dayTotals[taskDate] += durationMinutes || 0;
+	}
+
+	/** Fast path version — skips projectEngine resolve (no I/O) */
+	_addTaskNoProject(parsed, file) {
+		const {
+			taskDate,
+			rawText,
+			time,
+			priority,
+			cleanText,
+			bucket,
+			durationMinutes,
+		} = parsed;
+		const isRoutine = !!rawText.match(/🔁/);
+		let project = null;
+		if (rawText) {
+			const pMatch = rawText.match(/@p:([^\s]+)/);
+			if (pMatch) project = pMatch[1];
+			if (!project) {
+				const tp = this.plugin?.settings?.tagPrefix || "project/";
+				const tagMatch = rawText.match(new RegExp(tp + "([^\\s]+)"));
+				if (tagMatch) project = tagMatch[1];
+			}
+		}
+		this.dayTasks[taskDate].push({
+			file,
+			line: parsed.line,
+			rawLine: parsed.rawLine,
+			time,
+			taskDate,
+			durationMinutes: durationMinutes || 0,
+			rawText,
+			cleanText,
+			status: parsed.status,
+			priority,
+			bucket,
+			project,
+			isRoutine,
+		});
+		this.dayTotals[taskDate] += durationMinutes || 0;
+	}
+
+	/** Sort tasks in each day: priority → time */
+	_sortDays() {
+		for (const dateStr of Object.keys(this.dayTasks)) {
 			this.dayTasks[dateStr].sort((a, b) => {
-				const pa = this._priorityWeight(a.priority);
-				const pb = this._priorityWeight(b.priority);
+				const pa = priorityWeight(a.priority);
+				const pb = priorityWeight(b.priority);
 				if (pa !== pb) return pb - pa;
 				if (!a.time && !b.time) return 0;
 				if (!a.time) return 1;
@@ -263,13 +348,11 @@ class WeekplanRenderer extends MarkdownRenderChild {
 	renderView() {
 		this.containerEl.empty();
 
-		const today = new Date().toISOString().split("T")[0];
-
 		// ── Header bar ──
 		const header = this.containerEl.createEl("div", { cls: "ft-wp-header" });
 
 		// Week label
-		const weekNum = this._getWeekNumber(this.weekStart);
+		const weekNum = getWeekNumber(this.weekStart);
 		const headerTitle = header.createEl("div", { cls: "ft-wp-title" });
 		headerTitle.createEl("span", {
 			text: `📅 Week ${weekNum} — ${this._fmtDate(this.weekStart)} → ${this._fmtDate(this.weekEnd)}`,
@@ -348,9 +431,9 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		}
 
 		if (this.gridMode) {
-			this.renderGridView(today);
+			this.renderGridView();
 		} else {
-			this.renderListView(today);
+			this.renderListView();
 		}
 	}
 
@@ -382,7 +465,8 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		return idx >= 0 ? idx + 2 : 2;
 	}
 
-	renderGridView(today) {
+	renderGridView() {
+		const today = new Date().toISOString().split("T")[0];
 		const days = Object.keys(this.dayTasks).sort();
 		this.dayOrder = days;
 		if (days.length === 0) {
@@ -408,6 +492,8 @@ class WeekplanRenderer extends MarkdownRenderChild {
 
 		// Total grid rows = 1 header + slots length
 		grid.style.setProperty("--tg-rows", String(1 + slots.length));
+		grid.style.setProperty("--tg-cols", String(1 + days.length));
+		grid._tgSlots = slots;
 
 		// ── Header row ──
 		const hc = grid.createEl("div", { cls: "ft-tg-hc" });
@@ -472,6 +558,8 @@ class WeekplanRenderer extends MarkdownRenderChild {
 
 		// ── Task cards ──
 		this._tgEditPopup = null;
+		this._tgOccupied = {};
+		this._tgUtCount = {};
 
 		for (const dateStr of days) {
 			const tasks = this.dayTasks[dateStr];
@@ -480,7 +568,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			// First pass: render timed tasks
 			for (const task of tasks) {
 				if (!task.time) continue;
-				this._renderGridTask(grid, task, col, today);
+				this._renderGridTask(grid, task, col);
 			}
 
 			// Second pass: untimed tasks listed at bottom of day column
@@ -489,7 +577,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 
 			const bottomRow = 2 + slots.length;
 			for (const task of untimed) {
-				this._renderGridTask(grid, task, col, today);
+				this._renderGridTask(grid, task, col);
 			}
 			// Untimed section label
 			const utLabel = grid.createEl("div", { cls: "ft-tg-ut-label" });
@@ -500,23 +588,41 @@ class WeekplanRenderer extends MarkdownRenderChild {
 	}
 
 	/** Render a single task card on the timeline grid */
-	_renderGridTask(grid, task, col, today) {
-		const { start, dur } = this._parseStored(task.time);
+	_renderGridTask(grid, task, col) {
+		const { start, dur } = parseStored(task.time);
 		if (start) {
-			const rowStart = this._timeToRow(start);
-			const endTime = this._calcEnd(start, dur);
-			let rowEnd = endTime ? this._timeToRow(endTime) : rowStart + 1;
+			const rowStart = timeToRow(start, START_H, START_END);
+			const endTime = calcEnd(start, dur);
+			let rowEnd = endTime
+				? timeToRow(endTime, START_H, START_END)
+				: rowStart + 1;
 			if (rowEnd <= rowStart) rowEnd = rowStart + 1;
 			if (rowStart < 2) return; // outside visible range
+
+			// Track occupied columns: col > [ { rowStart, rowEnd, count } ]
+			if (!this._tgOccupied) this._tgOccupied = {};
+			if (!this._tgOccupied[col]) this._tgOccupied[col] = [];
+			const overlaps = this._tgOccupied[col].filter(
+				(o) => rowStart < o.rowEnd && rowEnd > o.rowStart,
+			);
+			const stackLevel = overlaps.length; // 0 = first, 1 = second, etc.
+			this._tgOccupied[col].push({ rowStart, rowEnd });
 
 			const card = grid.createEl("div", {
 				cls:
 					"ft-tg-card" +
 					(task.status === "x" ? " ft-tg-done" : "") +
-					(task.isRoutine ? " ft-tg-routine" : ""),
+					(task.isRoutine ? " ft-tg-routine" : "") +
+					(stackLevel > 0 ? " ft-tg-stacked" : ""),
 			});
 			card.style.gridRow = `${rowStart} / ${rowEnd}`;
 			card.style.gridColumn = String(col);
+			card.style.marginLeft =
+				stackLevel > 0 ? `${stackLevel * 20 + 1}px` : "1px";
+			card.style.width =
+				stackLevel > 0
+					? `calc(100% - ${stackLevel * 20 + 2}px)`
+					: "calc(100% - 2px)";
 			card._tgRowStart = rowStart;
 			card._tgRowEnd = rowEnd;
 			card._tgTask = task;
@@ -558,7 +664,14 @@ class WeekplanRenderer extends MarkdownRenderChild {
 				this._openTaskEditPopup(card, task, start, dur);
 			});
 		} else {
-			// Untimed task — rendered at the bottom of the day column
+			// Untimed task — rendered at the bottom of the day column, stacked
+			// Track untimed count per column to give each a unique row
+			if (!this._tgUtCount) this._tgUtCount = {};
+			this._tgUtCount[col] = (this._tgUtCount[col] || 0) + 1;
+			// Place untimed tasks starting from bottom + 2 rows each
+			const bottomBase = 2 + ((grid._tgSlots && grid._tgSlots.length) || 26);
+			const utRow = bottomBase + this._tgUtCount[col];
+
 			const card = grid.createEl("div", {
 				cls:
 					"ft-tg-card ft-tg-untimed" +
@@ -566,9 +679,9 @@ class WeekplanRenderer extends MarkdownRenderChild {
 					(task.isRoutine ? " ft-tg-routine" : ""),
 			});
 			card.style.gridColumn = String(col);
-			card.style.gridRow = "-1"; // auto place at end of column
+			card.style.gridRow = `${utRow} / ${utRow + 1}`;
 
-			const dot = card.createEl("span", { cls: "ft-tg-ut-dot" });
+			card.createEl("span", { cls: "ft-tg-ut-dot" });
 			card.createEl("span", { text: task.cleanText, cls: "ft-tg-text" });
 			if (task.project) {
 				card.createEl("span", { text: task.project, cls: "ft-tg-project" });
@@ -840,7 +953,8 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		await this.app.vault.modify(task.file, lines.join("\n"));
 	}
 
-	renderListView(today) {
+	renderListView() {
+		const today = new Date().toISOString().split("T")[0];
 		let hasAnyTasks = false;
 		const days = Object.keys(this.dayTasks).sort();
 
@@ -876,7 +990,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 
 			// Task list for this day
 			for (const task of tasks) {
-				this._renderTaskRow(section, task, dateStr, today);
+				this._renderTaskRow(section, task);
 			}
 		}
 
@@ -890,7 +1004,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		}
 	}
 
-	_renderTaskRow(section, task, dateStr, today) {
+	_renderTaskRow(section, task) {
 		const row = section.createEl("div", { cls: "ft-wp-task" });
 		if (task.status === "x" || task.status === "-") {
 			row.addClass("ft-wp-task-done");
@@ -983,7 +1097,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		if (task.project) {
 			textCol.createEl("span", { text: task.project, cls: "ft-wp-project" });
 		}
-		const textSpan = textCol.createEl("span", {
+		textCol.createEl("span", {
 			text: task.cleanText,
 			cls: "ft-wp-task-text",
 		});
@@ -1059,71 +1173,18 @@ class WeekplanRenderer extends MarkdownRenderChild {
 
 	/* ─── task operations ─── */
 
-	async _toggleCheck(task, cbEl) {
-		if (!task.file) return;
-		const content = await this.app.vault.read(task.file);
-		const lines = content.split("\n");
-		const line = lines[task.line];
-		if (!line) return;
-
-		const isChecked = line.match(/\[x\]/i);
-		const newLine = isChecked
-			? line.replace(/\[x\]/i, "[ ]")
-			: line.replace(/\[ \]/, "[x]");
-
-		lines[task.line] = newLine;
-		await this.app.vault.modify(task.file, lines.join("\n"));
-		task.status = isChecked ? " " : "x";
+	async _toggleCheck(task) {
+		await toggleCheck(this.app.vault, task);
 	}
 
-	async _saveTaskTime(task, si, di, endPreview) {
-		if (!task.file) return;
+	async _saveTaskTime(task, si, di) {
 		const start = si.value.trim();
-		const durMinutes = this._parseDurStr(di.value.trim());
-		const end = start && durMinutes > 0 ? this._calcEnd(start, durMinutes) : "";
-
-		let timeBlock = start;
-		if (end) timeBlock += "—" + end;
-
-		const content = await this.app.vault.read(task.file);
-		const lines = content.split("\n");
-		let line = lines[task.line];
-		if (!line) return;
-
-		// Replace existing time block or add one at the start of task text
-		const hasTime = line.match(/^\s*[-*+]\s*\[[^\]]*\]\s*\d{1,2}:\d{2}/);
-		if (hasTime && timeBlock) {
-			line = line.replace(
-				/^(\s*[-*+]\s*\[[^\]]*\]\s*)\d{1,2}:\d{2}(?:\s*[—\-–]\s*\d{1,2}:\d{2})?/,
-				"$1" + timeBlock,
-			);
-		} else if (timeBlock) {
-			line = line.replace(
-				/^(\s*[-*+]\s*\[[^\]]*\]\s*)/,
-				"$1" + timeBlock + " ",
-			);
-		} else {
-			// Remove time block if both empty
-			line = line.replace(
-				/^(\s*[-*+]\s*\[[^\]]*\]\s*)\d{1,2}:\d{2}(?:\s*[—\-–]\s*\d{1,2}:\d{2})?\s*/,
-				"$1",
-			);
-		}
-
-		// Update duration directive if present
-		if (durMinutes > 0) {
-			const durStr = durMinutes < 60 ? durMinutes + "m" : durMinutes / 60 + "h";
-			if (line.match(/@\d+(?:\.\d+)?[hm]/)) {
-				line = line.replace(/@\d+(?:\.\d+)?[hm]/, "@" + durStr);
-			} else {
-				line += " @" + durStr;
-			}
-		} else {
-			line = line.replace(/@\d+(?:\.\d+)?[hm]\s*/, "");
-		}
-
-		lines[task.line] = line;
-		await this.app.vault.modify(task.file, lines.join("\n"));
+		const durMinutes = parseDurStr(di.value.trim());
+		await saveTimeWithDuration(this.app.vault, task, start, durMinutes);
+		// Update in-memory task so grid view / next loadWeek uses fresh data
+		const end = start && durMinutes > 0 ? calcEnd(start, durMinutes) : "";
+		task.time = start ? (end ? `${start}—${end}` : start) : "";
+		task.durationMinutes = durMinutes;
 	}
 
 	async _removeTask(task) {
@@ -1131,7 +1192,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 
 		// If it's a routine, mark in .generated.json so engine doesn't re-create
 		if (task.isRoutine && this.plugin?.routineEngine) {
-			const entries = await this.plugin.routineEngine.loadGenerated();
+			await this.plugin.routineEngine.loadGenerated();
 			// Remove the task line from the file
 			await this._deleteTaskLine(task);
 			// Also add a tombstone entry if the routine line hash matches

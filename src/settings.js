@@ -1,4 +1,4 @@
-const { PluginSettingTab, Setting } = require("obsidian");
+const { PluginSettingTab, Setting, Notice } = require("obsidian");
 
 const DEFAULT_SETTINGS = {
 	// Project Detection

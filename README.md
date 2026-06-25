@@ -1,4 +1,4 @@
-# Flowtime v0.5.0
+# Flowtime v1.0.0
 
 Obsidian plugin for daily task planning, timeboxing, and project-aware task management with inline timers. No external dependencies.
 

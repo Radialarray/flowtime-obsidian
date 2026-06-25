@@ -1,6 +1,6 @@
 {
   "name": "flowtime",
-  "version": "0.5.0",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "build": "node esbuild.config.mjs production",

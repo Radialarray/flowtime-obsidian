@@ -57,11 +57,21 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 	}
 
 	/* ─── helpers ─── */
-	_timeOpts(h1, h2) { return timeOpts(h1, h2); }
-	_parseStored(t) { return parseStored(t); }
-	_calcEnd(s, d) { return calcEnd(s, d); }
-	_getMonday(d) { return getMonday(d); }
-	_getSunday(d) { return getSunday(d); }
+	_timeOpts(h1, h2) {
+		return timeOpts(h1, h2);
+	}
+	_parseStored(t) {
+		return parseStored(t);
+	}
+	_calcEnd(s, d) {
+		return calcEnd(s, d);
+	}
+	_getMonday(d) {
+		return getMonday(d);
+	}
+	_getSunday(d) {
+		return getSunday(d);
+	}
 	_computeBucketTotals() {
 		const totals = {};
 		const ref = this._refDate();
@@ -129,7 +139,9 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		} catch (_) {}
 	}
 
-	_priorityWeight(p) { return priorityWeight(p); }
+	_priorityWeight(p) {
+		return priorityWeight(p);
+	}
 
 	/** v0.4.0: Default sort = priority (desc) → time (asc) → date (asc) */
 	_sort() {

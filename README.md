@@ -145,10 +145,11 @@ Tasks sit in their time range (30min slot rows). The current day and time slot a
 
 ## Templates
 
-Three commands:
+Four commands:
 
 - **Insert daily dashboard** — drops `flowtime-today` + `flowtime-overdue` blocks at cursor
 - **Insert weekly dashboard** — drops `flowtime-weekly` + `flowtime-dueweek` blocks
+- **Insert weekplan** — drops `` ```flowtime-weekplan ``` `` block at cursor
 - **Create Daily/Weekly Dashboard** — creates the actual Dashboard.md files at vault root
 
 ## Content width

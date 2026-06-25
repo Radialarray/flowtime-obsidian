@@ -72,6 +72,15 @@ class TemplateEngine {
 		return true;
 	}
 
+	/** Insert weekplan code block at cursor (v0.5.0) */
+	insertWeekplan() {
+		const editor = this.app.workspace.activeEditor?.editor;
+		if (!editor) return false;
+		const content = "\`\`\`flowtime-weekplan\n\`\`\`";
+		this.insertAtCursor(editor, content);
+		return true;
+	}
+
 	// ── v0.4.0: Dashboard creation methods ──
 
 	/** Dashboard.md (daily overview) content */

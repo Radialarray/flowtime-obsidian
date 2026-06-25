@@ -467,7 +467,7 @@ Type `@` at the **start of a line** (no task marker) to open command macros. Sel
 | `@weekly` | ``flowtime-weekly`` code block |
 | `@budget` | ``flowtime-buckets`` code block |
 | `@proj` | ``flowtime-project`` code block |
-| `@inbox` | `- [ ]` — inbox task skeleton (no date) |
+| `@inbox` | Captures preceding text to `Inbox.md`, clears the line |
 | `@sessions` | ``flowtime-sessions`` code block |
 | `@weekplan` | ``flowtime-weekplan`` code block (v0.5.0) |
 
@@ -647,7 +647,6 @@ When you mark such a task complete (change `[ ]` to `[x]`), you should also:
 1. Update the date to the next occurrence
 2. Change `[x]` back to `[ ]` (it stays open, just advances to next date)
 
-
 **Critical rules for agents:**
 
 - **Do NOT edit `.generated.json`** — it's auto-managed. Editing it can cause duplicate tasks across synced devices.
@@ -784,7 +783,7 @@ The inbox accepts:
 | **Open Inbox.md** | Open the file and type raw lines. `@`-completions work here too |
 | **Append to Inbox** (`⌘+P`) | Opens a textarea prompt. Submit appends to Inbox.md |
 | **Quick Entry → Inbox** | Set `quickEntryTargetFile` to `"inbox"`. `⌘+Shift+I` writes straight to Inbox.md |
-| **`@inbox` macro** | On a blank line in any note, type `@inbox` → expands to `- [ ]` |
+| **`@inbox` macro** | Type `@inbox` anywhere: captures preceding text to Inbox.md, clears the line. Blank line → `- [ ]  @today`. Mid-text → wraps in `- [ ]` if needed. |
 
 ### Processing — Process Inbox Command (`⌘+P` → "Process Inbox")
 
@@ -939,7 +938,6 @@ function cleanDescription(text) {
 | `🟥` / `@high` | Priority | `🟥` → priority dropdown sets High |
 | `🔁 every week` | Recurrence | `🔁 every week` → recurrence dropdown sets Weekly |
 
-
 ---
 
 ## 6. CODE BLOCKS
@@ -989,7 +987,6 @@ Key settings for agent use:
 | `inboxDefaultDuration` | number | `30` | Default duration in minutes for inbox task processing |
 | `inboxDefaultBucket` | string | `""` | Default bucket id for inbox task processing |
 | `inboxDefaultProject` | string | `""` | Default project name for inbox task processing |
-
 
 To read/write settings:
 

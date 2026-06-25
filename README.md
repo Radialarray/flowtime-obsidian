@@ -183,6 +183,7 @@ Mark recurring tasks with `🔁` — the plugin generates real task instances in
 Create `.md` files in `flowtime/routines/` with task lines using the recurrence markers above. The plugin scans the folder, evaluates what's due, and writes task instances into your daily notes. Generation history is tracked in `flowtime/routines/.generated.json` to prevent duplication across synced devices.
 
 **How it works:**
+
 1. Create `flowtime/routines/Daily.md` (or any name) with tasks + recurrence markers
 2. On plugin load, the engine generates instances for today + rest of the week
 3. Each instance becomes a real task line in `2026-06-24.md` — editable, deletable, checkable
@@ -199,12 +200,14 @@ Create `.md` files in `flowtime/routines/` with task lines using the recurrence 
 Renders Monday–Friday with all your week's tasks. Two view modes toggled via the toolbar:
 
 **List view** — day-by-day sections with inline editing:
+
 - Per-day budget bars showing scheduled hours vs daily cap
 - Inline time/duration inputs with auto-save
 - Checkbox, timer, delete per task
 - Routines marked with 🔁 badge
 
 **Grid view** — horizontal timeline grid:
+
 | | Mon 24 | Tue 25 | Wed 26 | Thu 27 | Fri 28 |
 |---|--------|--------|--------|--------|--------|
 | 09:00 | Deep Work | Meeting | Writing | Deep Work | Standup |
@@ -226,7 +229,7 @@ A GTD-inspired inbox for dumping raw tasks without syntax pressure.
 - Open `Inbox.md` directly and type
 - `⌘+P` → **Append to Inbox** — quick textarea prompt
 - Set Quick Entry target to "Inbox" in settings → `⌘+Shift+I` writes to inbox
-- Type `@inbox` on a blank line → expands to `- [ ]`
+- Type `@inbox` anywhere on a line — everything before `@inbox` is captured to Inbox.md and the line is cleared. Works on blank lines (sends `@today` task) or mid-text (captures preceding text, wraps in `- [ ]` as needed)
 
 **Processing** (`⌘+P` → **Process Inbox**):
 Opens a modal that walks through inbox lines one at a time. Each line gets one action:

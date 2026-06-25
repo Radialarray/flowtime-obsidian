@@ -224,6 +224,9 @@ class AtCompletionsSuggest extends EditorSuggest {
 		];
 
 		// v0.4.0: Status & priority tags
+		const inboxAction = [{ label: "inbox", description: "Capture line to inbox" }];
+
+		// v0.4.0: Status & priority tags
 		const statusTags = [
 			{ label: "soon", description: "Up next / backlog item" },
 			{ label: "high", description: "🟥 High priority" },
@@ -279,6 +282,9 @@ class AtCompletionsSuggest extends EditorSuggest {
 					});
 			}
 		} else {
+			for (const i of inboxAction)
+				if (i.label.toLowerCase().includes(q))
+					suggestions.push({ label: "@" + i.label, description: i.description, type: "status" });
 			for (const d of dates)
 				if (d.label.toLowerCase().includes(q))
 					suggestions.push({
@@ -369,10 +375,22 @@ class AtCompletionsSuggest extends EditorSuggest {
 		const editor = this.context.editor;
 		const { start, end } = this.context;
 
-		// @inbox — capture to Inbox.md instead of inline expansion
-		if (suggestion.type === "macro" && suggestion.label === "@inbox") {
-			editor.replaceRange("", start, end);
-			this._appendToInbox(suggestion.insert);
+		// @inbox — capture preceding text to Inbox.md
+		if (suggestion.label === "@inbox") {
+			// Get the line content before @inbox
+			const line = editor.getLine(start.line);
+			const beforeText = line.slice(0, start.ch).trim();
+
+			// Build the inbox line
+			let inboxLine = beforeText;
+			if (!inboxLine.startsWith("- [ ]") && !inboxLine.startsWith("- [x]")) {
+				inboxLine = "- [ ] " + inboxLine;
+			}
+
+			// Clear the entire line
+			editor.replaceRange("", { line: start.line, ch: 0 }, end);
+
+			this._appendToInbox(inboxLine);
 			return;
 		}
 

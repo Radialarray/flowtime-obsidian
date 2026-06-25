@@ -5,6 +5,9 @@ const {
 	parseRecurrence,
 	formatDuration,
 	formatTimer,
+	buildTaskTree,   // v0.6.0
+	flattenTree,     // v0.6.0
+	taskId,          // v0.6.0
 } = require("./task-parser");
 const { renderProgressBar, formatHours } = require("./budget-state");
 const { evaluateFilter } = require("./filter-engine");
@@ -29,6 +32,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		this._sortConfig = [];
 		this._sortMode = null;
 		this._groupConfig = { primary: null, secondary: null };
+		this._collapsed = new Set();   // v0.6.0: collapsed tree nodes by taskId
+		this._displayItems = [];       // v0.6.0: flattened tree display list
 	}
 
 	async onload() {
@@ -959,6 +964,33 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		groupSel.addEventListener("change", applyGroup);
 		subSel.addEventListener("change", applyGroup);
 
+		// v0.6.0: Tree expand/collapse tooltip
+		if (this._displayItems.length > 0 || this.tasks.length > 0) {
+			const treeSep = toolbar.createEl("span", {
+				text: "|",
+				cls: "ft-group-label",
+			});
+			const expandBtn = toolbar.createEl("button", {
+				text: "◀ Expand",
+				cls: "ft-filter-btn",
+			});
+			expandBtn.addEventListener("click", () => {
+				this._collapsed.clear();
+				this.renderTable();
+			});
+			const collapseBtn = toolbar.createEl("button", {
+				text: "▶ Collapse",
+				cls: "ft-filter-btn",
+			});
+			collapseBtn.addEventListener("click", () => {
+				// Collapse all items with children
+				for (const item of this._displayItems) {
+					if (item.hasChildren) this._collapsed.add(item.taskId);
+				}
+				this.renderTable();
+			});
+		}
+
 		// ── Save/Load View (placeholder — needs Modal, prompt() unavailable in Obsidian) ──
 		// To be re-implemented with Obsidian Modal API in future release
 
@@ -1224,8 +1256,9 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 							attr: { colspan: String(this._visibleColCount(isCompact)) },
 						});
 					}
-					for (const task of subGroups[subKey]) {
-						this._renderTaskRow(tbody, task, tdy, od, _dw, wk, pj, isCompact);
+					const groupItems = this._buildDisplayTree(subGroups[subKey]);
+					for (const item of groupItems) {
+						this._renderTaskRow(tbody, item, tdy, od, _dw, wk, pj, isCompact);
 					}
 				}
 			}
@@ -1234,8 +1267,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			const normalTasks = this.tasks.filter((t) => !t.isSoon);
 			const soonTasks = this.tasks.filter((t) => t.isSoon);
 
-			for (const task of normalTasks) {
-				this._renderTaskRow(tbody, task, tdy, od, _dw, wk, pj, isCompact);
+			// v0.6.0: Build display tree for normal tasks
+			this._displayItems = this._buildDisplayTree(normalTasks);
+			for (const item of this._displayItems) {
+				this._renderTaskRow(tbody, item, tdy, od, _dw, wk, pj, isCompact);
 			}
 
 			// v0.4.0: "Coming Soon" section for @soon tasks
@@ -1245,15 +1280,43 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 					text: "◌ Up Next  (" + soonTasks.length + " tasks)",
 					attr: { colspan: String(this._visibleColCount(isCompact)) },
 				});
-				for (const task of soonTasks) {
-					this._renderTaskRow(tbody, task, tdy, od, _dw, wk, pj, isCompact);
+				const soonItems = this._buildDisplayTree(soonTasks);
+				for (const item of soonItems) {
+					this._renderTaskRow(tbody, item, tdy, od, _dw, wk, pj, isCompact);
 				}
 			}
 		}
 	}
 
-	/* Single row builder for all modes */
-	_renderTaskRow(tbody, task, tdy, od, _dw, wk, pj, isCompact) {
+	/**
+	 * v0.6.0: Build flattened display tree from a task array.
+	 * Groups by file, builds per-file trees, then flattens respecting _collapsed set.
+	 */
+	_buildDisplayTree(tasks) {
+		if (!tasks || tasks.length === 0) return [];
+		// Group by file path to build per-file trees
+		const byFile = {};
+		for (const task of tasks) {
+			const key = task.file?.path || "_orphan";
+			if (!byFile[key]) byFile[key] = [];
+			byFile[key].push(task);
+		}
+		const allRoots = [];
+		for (const fileTasks of Object.values(byFile)) {
+			const roots = buildTaskTree(fileTasks);
+			allRoots.push(...roots);
+		}
+		return flattenTree(allRoots, this._collapsed);
+	}
+
+	/* Single row builder for all modes — accepts task or tree item */
+	_renderTaskRow(tbody, item, tdy, od, _dw, wk, pj, isCompact) {
+		// Support both tree items { task, depth, ... } and raw task objects
+		const task = item.task || item;
+		const depth = item.depth !== undefined ? item.depth : 0;
+		const hasChildren = !!item.hasChildren;
+		const collapsed = !!item.collapsed;
+		const tid = item.taskId || "";
 		const { start, dur } = this._parseStored(task.time);
 		const row = tbody.createEl("tr");
 		let si, ds; // startInput, durationSelect
@@ -1357,8 +1420,9 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			}
 		}
 
-		// Task cell: priority + text
-		if (this._columnVisibility.task !== false) this._buildTaskCell(row, task);
+		// Task cell: priority + text (v0.6.0: tree-aware with depth + toggle)
+		const childrenTasks = item.childrenTasks || [];
+		if (this._columnVisibility.task !== false) this._buildTaskCell(row, task, depth, hasChildren, collapsed, tid, childrenTasks);
 
 		if (this._columnVisibility.project !== false) {
 			const pc = row.createEl("td", { cls: "ft-project-cell" });
@@ -1734,12 +1798,34 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		if (!isCompact) this.rowData.push({ task, si, ds });
 	}
 
-	/* Build task cell with priority + text (checkbox is separate column) */
-	_buildTaskCell(row, task) {
+	/* Build task cell with priority + text + tree indent (v0.6.0) */
+	_buildTaskCell(row, task, depth, hasChildren, collapsed, tid, childrenTasks) {
 		const tc = row.createEl("td", { cls: "ft-task-cell" });
+
+		// v0.6.0: Tree indent based on depth
+		if (depth > 0) {
+			tc.style.paddingLeft = (depth * 18 + 8) + "px";
+		}
+
+		// v0.6.0: Collapse/expand toggle for parent rows
+		if (hasChildren) {
+			const toggle = tc.createEl("span", {
+				text: collapsed ? "▶" : "▼",
+				cls: "ft-tree-toggle",
+			});
+			toggle.addEventListener("click", (e) => {
+				e.stopPropagation();
+				if (this._collapsed.has(tid)) this._collapsed.delete(tid);
+				else this._collapsed.add(tid);
+				this.renderTable();
+			});
+		}
+
 		if (task.priority) {
 			tc.createEl("span", { text: task.priority, cls: "ft-priority" });
 		}
+
+		// Text + done styling
 		const textEl = tc.createEl("span", {
 			text: task.cleanText,
 			cls: "ft-task-text",
@@ -1748,6 +1834,19 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			row.addClass("ft-task-done");
 			textEl.addClass("ft-task-done-text");
 		}
+
+		// v0.6.0: Mini progress bar when parent has children
+		if (hasChildren && childrenTasks && childrenTasks.length > 0) {
+			const done = childrenTasks.filter((c) => c.status === "x" || c.status === "X").length;
+			const total = childrenTasks.length;
+			const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+			const bar = tc.createEl("span", {
+				cls: "ft-sub-progress",
+				text: ` [${done}/${total}]`,
+			});
+			bar.title = `${done} of ${total} subtasks done (${pct}%)`;
+		}
+
 		textEl.addEventListener("click", (e) => {
 			e.stopPropagation();
 			this._showTaskDetail(

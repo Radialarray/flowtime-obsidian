@@ -1257,8 +1257,8 @@
 	background: var(--background-primary);
 	color: var(--text-normal);
 }
-.ft-subgroup-header td {
-	padding-left: 24px !important;
+.flowtime-table .ft-subgroup-header td {
+	padding-left: 24px;
 	font-style: italic;
 	color: var(--text-muted);
 	background: var(--background-primary-alt);
@@ -1308,7 +1308,7 @@
 body.ft-wide .markdown-source-view .cm-sizer,
 body.ft-wide .markdown-source-view .cm-content,
 body.ft-wide .markdown-reading-view .markdown-preview-sizer {
-	max-width: var(--ft-content-width) !important;
+	max-width: var(--ft-content-width);
 }
 
 /* ── @-Completion Popup ── */
@@ -1655,8 +1655,8 @@ body.ft-wide .markdown-reading-view .markdown-preview-sizer {
 	background: var(--background-primary-alt);
 }
 
-.ft-tg-now {
-	background: var(--background-modifier-success) !important;
+.ft-tg-now.ft-tg-cell {
+	background: var(--background-modifier-success);
 	opacity: 0.08;
 }
 

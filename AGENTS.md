@@ -41,3 +41,4 @@ cp -r dist/ /path/to/vault/.obsidian/plugins/flowtime/
 - Table re-renders via `buildRows(tbody)` — empties and rebuilds
 - Timer state is in-memory (not persisted across Obsidian sessions)
 - Agent skills in `skills/flowtime/` — load via `read`
+- In any GitHub-facing text (releases, PRs, issues, comments), wrap `@username` patterns in backticks to prevent auto-linking. E.g. write `` `@p:` `` instead of `@p:` — otherwise GitHub creates spurious user mentions.

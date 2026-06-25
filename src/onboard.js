@@ -120,11 +120,10 @@ async function detectSetupState(app, plugin) {
 	try {
 		for (const file of vault.getMarkdownFiles()) {
 			if (file.name === file.parent?.name + ".md") {
-				const content = await vault.read(file);
-				if (
-					content.includes("type: project") ||
-					content.includes('type: "project"')
-				) {
+				// Use metadataCache frontmatter — avoids vault.read() + YAML parse
+				const cache = app.metadataCache.getCache(file.path);
+				const fm = cache?.frontmatter;
+				if (fm?.type === "project") {
 					setup.layoutDone = true;
 					break;
 				}

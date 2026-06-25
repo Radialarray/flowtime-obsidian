@@ -843,30 +843,27 @@ class ProcessInboxModal extends Modal {
 		let targetFile = null;
 
 		if (target === "daily-note") {
+			// Resolve daily note by path instead of scanning all files
 			const today = new Date().toISOString().split("T")[0];
-			const allFiles = this.app.vault.getMarkdownFiles();
-			const dailyFile = allFiles.find((f) => f.basename === today);
-			if (dailyFile) {
-				targetFile = dailyFile;
-			} else {
-				// Create daily note
-				const dailyNotesPath = this.app.vault.configDir + "/daily-notes.json";
-				try {
-					if (await this.app.vault.adapter.exists(dailyNotesPath)) {
-						const config = JSON.parse(
-							await this.app.vault.adapter.read(dailyNotesPath),
-						);
-						const folder = config.folder || "";
-						const dailyPath = folder
-							? folder + "/" + today + ".md"
-							: today + ".md";
-						targetFile = await this.app.vault.create(
-							dailyPath,
-							"# " + today + "\n\n",
-						);
-					}
-				} catch (_) {}
-			}
+			const dnConfigPath = this.app.vault.configDir + "/daily-notes.json";
+			try {
+				const adapter = this.app.vault.adapter;
+				let folder = "";
+				if (await adapter.exists(dnConfigPath)) {
+					const config = JSON.parse(await adapter.read(dnConfigPath));
+					folder = config.folder || "";
+				}
+				const dailyPath = folder
+					? folder + "/" + today + ".md"
+					: today + ".md";
+				targetFile = this.app.vault.getAbstractFileByPath(dailyPath);
+				if (!targetFile) {
+					targetFile = await this.app.vault.create(
+						dailyPath,
+						"# " + today + "\n\n",
+					);
+				}
+			} catch (_) {}
 		} else if (target === "active-file") {
 			targetFile = this.app.workspace.getActiveFile();
 		} else if (target === "project-file") {

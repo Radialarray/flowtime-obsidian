@@ -223,11 +223,18 @@ class QuickEntryModal extends Modal {
 			const target = this.plugin.settings.quickEntryTargetFile;
 
 			if (target === "daily-note") {
-				// Search vault for a file whose basename matches today's date
+				// Resolve daily note by path instead of scanning all files
 				const today = new Date().toISOString().split("T")[0];
-				const allFiles = this.app.vault.getMarkdownFiles();
-				const dailyFile = allFiles.find((f) => f.basename === today);
-				targetFile = dailyFile || activeFile;
+				targetFile = activeFile;
+				const dnConfigPath = this.app.vault.configDir + "/daily-notes.json";
+				try {
+					const adapter = this.app.vault.adapter;
+					const folder = (await adapter.exists(dnConfigPath))
+						? (JSON.parse(await adapter.read(dnConfigPath)).folder || "")
+						: "";
+					const path = folder ? folder + "/" + today + ".md" : today + ".md";
+					targetFile = this.app.vault.getAbstractFileByPath(path) || activeFile;
+				} catch (_) {}
 			} else if (target === "project-file" && project) {
 				// Try to find project folder note via projectEngine cache
 				const cached = this.plugin.projectEngine?.cache?.get?.(

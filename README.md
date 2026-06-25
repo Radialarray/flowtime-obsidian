@@ -265,6 +265,18 @@ In Settings → Flowtime.
 
 Obsidian v1.8.7+
 
+## Privacy
+
+Flowtime scans your vault's markdown files to find task annotations, time blocks, project frontmatter, and tags. This scanning is entirely local — no data leaves your vault, and there are no network requests, telemetry, or analytics. The plugin works fully offline.
+
+What the plugin accesses:
+
+- **File paths** — reads file names and paths to discover task-carrying notes
+- **File content** — reads markdown files to parse inline task syntax
+- **Metadata cache** — uses Obsidian's built-in cache for frontmatter lookups (avoids raw file reads where possible)
+
+Flowtime does not collect, transmit, or store any of your data outside your Obsidian vault.
+
 ## Development
 
 ```bash

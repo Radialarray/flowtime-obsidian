@@ -141,6 +141,9 @@ class ProjectEngine {
 	async getAllProjects() {
 		const projects = new Map(); // name → path
 		const files = this.app.vault.getMarkdownFiles();
+		const key = this.settings.projectFrontmatterKey;
+		const value = this.settings.projectFrontmatterValue;
+		const nameKey = this.settings.projectNameKey;
 		for (const file of files) {
 			// Only check files that could be folder notes (name matches parent dir)
 			const parts = file.path.split("/");
@@ -148,10 +151,11 @@ class ProjectEngine {
 			if (!folder || file.basename !== folder) continue;
 
 			try {
-				const content = await this.app.vault.read(file);
-				const fm = this._parseFrontmatter(content);
-				if (fm.found) {
-					const name = fm.name || folder;
+				// Use metadataCache for frontmatter — avoids vault.read() + YAML parse
+				const cache = this.app.metadataCache.getCache(file.path);
+				const fm = cache?.frontmatter;
+				if (fm && fm[key] === value) {
+					const name = fm[nameKey] || fm.title || fm.alias || folder;
 					if (!projects.has(name)) {
 						projects.set(name, file.path);
 					}

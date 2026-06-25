@@ -5,7 +5,7 @@
   "scripts": {
     "build": "node esbuild.config.mjs production",
     "dev": "node esbuild.config.mjs",
-    "release": "npm run build && mkdir -p release/flowtime/skills && cp dist/main.js manifest.json styles.css release/flowtime/ && cp README.md release/flowtime/ && cp -r skills/flowtime/ release/flowtime/skills/flowtime/; echo 'Release ready at release/flowtime/'"
+    "release": "npm run build && mkdir -p release/flowtime/skills && cp dist/main.js manifest.json src/styles.css release/flowtime/ && cp README.md release/flowtime/ && cp -r skills/flowtime/ release/flowtime/skills/flowtime/; echo 'Release ready at release/flowtime/'"
   },
   "devDependencies": {
     "esbuild": "^0.25.0"

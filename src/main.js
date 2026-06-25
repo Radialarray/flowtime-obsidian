@@ -1,15 +1,15 @@
 const { Plugin, Notice, Modal, EditorSuggest } = require("obsidian");
-const { FlowtimeRenderer } = require("./src/renderer");
-const { FlowtimeSettingsTab, DEFAULT_SETTINGS } = require("./src/settings");
-const { ProcessInboxModal } = require("./src/inbox-processor");
-const { ProjectEngine } = require("./src/project-engine");
-const { TemplateEngine } = require("./src/template-engine");
-const { QuickEntryModal } = require("./src/quick-entry");
-const { runOnboard } = require("./src/onboard");
-const { StatusTimer } = require("./src/status-timer");
-const { SessionStore } = require("./src/session-store");
-const { TaskCache } = require("./src/cache");
-const { RoutineEngine } = require("./src/routine-engine");
+const { FlowtimeRenderer } = require("./renderer");
+const { FlowtimeSettingsTab, DEFAULT_SETTINGS } = require("./settings");
+const { ProcessInboxModal } = require("./inbox-processor");
+const { ProjectEngine } = require("./project-engine");
+const { TemplateEngine } = require("./template-engine");
+const { QuickEntryModal } = require("./quick-entry");
+const { runOnboard } = require("./onboard");
+const { StatusTimer } = require("./status-timer");
+const { SessionStore } = require("./session-store");
+const { TaskCache } = require("./cache");
+const { RoutineEngine } = require("./routine-engine");
 
 class AddTaskSuggest extends EditorSuggest {
 	constructor(app, plugin) {
@@ -830,7 +830,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 		);
 
 		this.renderers = [];
-		const { WeekplanRenderer } = require("./src/weekplan-renderer");
+		const { WeekplanRenderer } = require("./weekplan-renderer");
 		for (const [name, mode] of [
 			["flowtime-today", "today"],
 			["flowtime-overdue", "overdue"],

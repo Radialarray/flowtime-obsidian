@@ -10,6 +10,7 @@ const { StatusTimer } = require("./status-timer");
 const { SessionStore } = require("./session-store");
 const { TaskCache } = require("./cache");
 const { RoutineEngine } = require("./routine-engine");
+const { ExtractNoteHandler } = require("./extract-note");
 
 class AddTaskSuggest extends EditorSuggest {
 	constructor(app, plugin) {
@@ -716,6 +717,16 @@ module.exports = class FlowtimePlugin extends Plugin {
 				editor.replaceRange(line, cursor);
 				// Move cursor to after "- [ ] " so user can type task text immediately
 				editor.setCursor({ line: cursor.line, ch: cursor.ch + 6 });
+			},
+		});
+
+		// ── Extract to New Note command (Ctrl+G) ──
+		this.addCommand({
+			id: "extract-to-new-note",
+			name: "Extract to new note",
+			hotkeys: [{ modifiers: ["Mod"], key: "G" }],
+			editorCallback: (editor, view) => {
+				new ExtractNoteHandler(this.app, editor, view, this).run();
 			},
 		});
 

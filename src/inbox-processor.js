@@ -151,13 +151,10 @@ function detectTags(text) {
 	const bucketMatch = remaining.match(/@(?:bucket|b):([^\s]+)/);
 	if (bucketMatch) bucket = bucketMatch[1];
 
-	// Project: @p:Name or #project/Name (configurable)
+	// Project: @p:Name
 	let project = "";
 	const pMatch = remaining.match(/@p:([^\s]+)/);
 	if (pMatch) project = pMatch[1];
-	// Also check #project/ prefix as fallback
-	const tagMatch = remaining.match(/#(?:project\/)([^\s]+)/);
-	if (tagMatch && !project) project = tagMatch[1];
 
 	// Priority
 	let priority = "";

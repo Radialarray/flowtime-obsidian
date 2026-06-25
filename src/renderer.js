@@ -1,5 +1,11 @@
 const { MarkdownRenderChild, Notice } = require("obsidian");
-const { parseTaskLine, cleanTaskText, parseRecurrence, formatDuration, formatTimer } = require("./task-parser");
+const {
+	parseTaskLine,
+	cleanTaskText,
+	parseRecurrence,
+	formatDuration,
+	formatTimer,
+} = require("./task-parser");
 const { renderProgressBar, formatHours } = require("./budget-state");
 const { evaluateFilter } = require("./filter-engine");
 
@@ -93,7 +99,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		for (const task of this.tasks) {
 			if (!task.bucket) continue;
 			if (task.taskDate && task.taskDate >= mon && task.taskDate <= sun) {
-				totals[task.bucket] = (totals[task.bucket] || 0) + (task.durationMinutes || 0);
+				totals[task.bucket] =
+					(totals[task.bucket] || 0) + (task.durationMinutes || 0);
 			}
 		}
 		return totals;
@@ -105,7 +112,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 	 * Always excludes .obsidian/ and .git/
 	 */
 	_isFileInScope(filePath) {
-		if (filePath.startsWith(".obsidian") || filePath.startsWith(".git")) return false;
+		if (filePath.startsWith(".obsidian") || filePath.startsWith(".git"))
+			return false;
 		const root = this.plugin?.settings?.projectsRoot || "";
 		if (!root) return true; // No root filter — scan everything
 		const normalizedRoot = root.endsWith("/") ? root : root + "/";
@@ -199,26 +207,41 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
 	_getSortValue(task, field) {
 		switch (field) {
-			case "time": return task.time || "";
-			case "status": return task.status || "";
-			case "text": return task.cleanText || "";
-			case "project": return task.project || "";
-			case "bucket": return task.bucket || "";
-			case "source": return task.file?.basename || "";
-			case "date": return task.taskDate || "";
-			case "priority": return this._priorityWeight(task.priority);
-			case "soon": return task.isSoon ? 1 : 0;
-			default: return "";
+			case "time":
+				return task.time || "";
+			case "status":
+				return task.status || "";
+			case "text":
+				return task.cleanText || "";
+			case "project":
+				return task.project || "";
+			case "bucket":
+				return task.bucket || "";
+			case "source":
+				return task.file?.basename || "";
+			case "date":
+				return task.taskDate || "";
+			case "priority":
+				return this._priorityWeight(task.priority);
+			case "soon":
+				return task.isSoon ? 1 : 0;
+			default:
+				return "";
 		}
 	}
 
 	_getGroupValue(task, field) {
 		switch (field) {
-			case "bucket": return task.bucket || "Unassigned";
-			case "project": return task.project || "Other";
-			case "date": return task.taskDate || "No date";
-			case "status": return task.status?.trim() ? "Done" : "Open";
-			default: return "Other";
+			case "bucket":
+				return task.bucket || "Unassigned";
+			case "project":
+				return task.project || "Other";
+			case "date":
+				return task.taskDate || "No date";
+			case "status":
+				return task.status?.trim() ? "Done" : "Open";
+			default:
+				return "Other";
 		}
 	}
 
@@ -245,7 +268,11 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 	}
 
 	_isCompactMode() {
-		return this.mode === "overdue" || this.mode === "dueweek" || this.mode === "weekly";
+		return (
+			this.mode === "overdue" ||
+			this.mode === "dueweek" ||
+			this.mode === "weekly"
+		);
 	}
 
 	/* Count how many columns are visible for current mode */
@@ -254,8 +281,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		let count = 0;
 		if (isCompact) {
 			if (v.check !== false) count++;
-			if (v.priority !== false && v.priority) count++;  // v0.4.0
-			if (v.soon !== false && v.soon) count++;           // v0.4.0
+			if (v.priority !== false && v.priority) count++; // v0.4.0
+			if (v.soon !== false && v.soon) count++; // v0.4.0
 			if (v.task !== false) count++;
 			if (v.project !== false) count++;
 			if (v.bucket !== false) count++;
@@ -265,8 +292,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		} else {
 			if (v.time !== false) count++;
 			if (v.check !== false) count++;
-			if (v.priority !== false && v.priority) count++;  // v0.4.0
-			if (v.soon !== false && v.soon) count++;           // v0.4.0
+			if (v.priority !== false && v.priority) count++; // v0.4.0
+			if (v.soon !== false && v.soon) count++; // v0.4.0
 			if (v.task !== false) count++;
 			if (v.project !== false) count++;
 			if (v.bucket !== false) count++;
@@ -286,7 +313,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		const cache = this.plugin?.taskCache;
 		const cached = cache?.get(file.path);
 		if (cached) {
-			return cached.parsedTasks.map(t => ({ ...t, file }));
+			return cached.parsedTasks.map((t) => ({ ...t, file }));
 		}
 		const content = await this.app.vault.read(file);
 		const lines = content.split("\n");
@@ -297,7 +324,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		}
 		// Cache without file references (not serializable)
 		if (cache) {
-			const cacheable = result.map(t => {
+			const cacheable = result.map((t) => {
 				const { file: f, ...rest } = t;
 				return rest;
 			});
@@ -359,8 +386,14 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				const fileTasks = await this._getFileTasks(file);
 				for (const parsed of fileTasks) {
 					if (!parsed.bucket) continue;
-					if (parsed.taskDate && parsed.taskDate >= mon && parsed.taskDate <= sun) {
-						weeklyTotals[parsed.bucket] = (weeklyTotals[parsed.bucket] || 0) + (parsed.durationMinutes || 0);
+					if (
+						parsed.taskDate &&
+						parsed.taskDate >= mon &&
+						parsed.taskDate <= sun
+					) {
+						weeklyTotals[parsed.bucket] =
+							(weeklyTotals[parsed.bucket] || 0) +
+							(parsed.durationMinutes || 0);
 					}
 				}
 			}
@@ -395,26 +428,69 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				if (!this._isFileInScope(file.path)) continue;
 				const fileTasks = await this._getFileTasks(file);
 				for (const parsed of fileTasks) {
-					if (parsed.status === "x" || parsed.status === "-" || parsed.status === "X") continue;
+					if (
+						parsed.status === "x" ||
+						parsed.status === "-" ||
+						parsed.status === "X"
+					)
+						continue;
 					if (!parsed.isSoon) continue;
-					const { taskDate, rawText, time, status, priority, cleanText, bucket, durationMinutes, projectTag } = parsed;
-					const project = this.projectEngine ? await this.projectEngine.resolve(file.path) : null;
+					const {
+						taskDate,
+						rawText,
+						time,
+						status,
+						priority,
+						cleanText,
+						bucket,
+						durationMinutes,
+						projectTag,
+					} = parsed;
+					const project = this.projectEngine
+						? await this.projectEngine.resolve(file.path)
+						: null;
 					let projName = project?.name || null;
-					let projPath = project?.path || null;
+					const projPath = project?.path || null;
 					let projSource = project?.source || null;
 					if (!projName && this.projectEngine) {
-						if (projectTag) { projName = projectTag; projSource = "tag"; }
+						if (projectTag) {
+							projName = projectTag;
+							projSource = "tag";
+						}
 						if (!projName && rawText) {
 							const tp = this.plugin?.settings?.tagPrefix || "project/";
 							const tj = this.projectEngine.resolveFromTag(rawText, tp);
-							if (tj) { projName = tj; projSource = "tag"; }
+							if (tj) {
+								projName = tj;
+								projSource = "tag";
+							}
 						}
 					}
-					this.tasks.push({ file, line: parsed.line, rawLine: parsed.rawLine, time, taskDate, rawText, cleanText, status, priority, bucket, durationMinutes, project: projName, projectPath: projPath, projectSource: projSource, isSoon: true });
+					this.tasks.push({
+						file,
+						line: parsed.line,
+						rawLine: parsed.rawLine,
+						time,
+						taskDate,
+						rawText,
+						cleanText,
+						status,
+						priority,
+						bucket,
+						durationMinutes,
+						project: projName,
+						projectPath: projPath,
+						projectSource: projSource,
+						isSoon: true,
+					});
 				}
 			}
-			if (this._activeFilter) this.tasks = this.tasks.filter(t => evaluateFilter(this._activeFilter, t));
-			if (this._sortConfig?.length > 0) this._applySort(); else this._sort();
+			if (this._activeFilter)
+				this.tasks = this.tasks.filter((t) =>
+					evaluateFilter(this._activeFilter, t),
+				);
+			if (this._sortConfig?.length > 0) this._applySort();
+			else this._sort();
 			return;
 		}
 
@@ -423,9 +499,25 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			if (!this._isFileInScope(file.path)) continue;
 			const fileTasks = await this._getFileTasks(file);
 			for (const parsed of fileTasks) {
-				if (parsed.status === "x" || parsed.status === "-" || parsed.status === "X") continue;
+				if (
+					parsed.status === "x" ||
+					parsed.status === "-" ||
+					parsed.status === "X"
+				)
+					continue;
 
-				const { taskDate, rawText, time, status, priority, cleanText, bucket, durationMinutes, projectTag, isSoon } = parsed;
+				const {
+					taskDate,
+					rawText,
+					time,
+					status,
+					priority,
+					cleanText,
+					bucket,
+					durationMinutes,
+					projectTag,
+					isSoon,
+				} = parsed;
 
 				// v0.4.0: @soon tasks appear in today + overdue views even without dates
 				const isSoonTask = isSoon && !taskDate;
@@ -449,22 +541,13 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
 				// Fallback: check task text for #project/xxx tag or @p:Name
 				let projName = project?.name || null;
-				let projPath = project?.path || null;
+				const projPath = project?.path || null;
 				let projSource = project?.source || null;
 				if (!projName && this.projectEngine) {
-					// Try @p:Name first (v0.4.0 syntax)
+					// @p:Name syntax (v0.4.0+)
 					if (projectTag) {
 						projName = projectTag;
 						projSource = "tag";
-					}
-					// Fallback to #project/xxx tag (legacy)
-					if (!projName && rawText) {
-						const tagPrefix = this.plugin?.settings?.tagPrefix || "project/";
-						const tagProject = this.projectEngine.resolveFromTag(rawText, tagPrefix);
-						if (tagProject) {
-							projName = tagProject;
-							projSource = "tag";
-						}
 					}
 				}
 
@@ -488,18 +571,24 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 					project: projName,
 					projectPath: projPath,
 					projectSource: projSource,
-					isSoon: isSoonTask,     // v0.4.0: @soon tag
+					isSoon: isSoonTask, // v0.4.0: @soon tag
 				});
 			}
 		}
 
 		// Apply active filter
 		if (this._activeFilter) {
-			this.tasks = this.tasks.filter(t => evaluateFilter(this._activeFilter, t));
+			this.tasks = this.tasks.filter((t) =>
+				evaluateFilter(this._activeFilter, t),
+			);
 		}
 
 		// Default grouping for weekly mode when no custom group set
-		if (this.mode === "weekly" && this._groupConfig && !this._groupConfig.primary) {
+		if (
+			this.mode === "weekly" &&
+			this._groupConfig &&
+			!this._groupConfig.primary
+		) {
 			this._groupConfig = { primary: "project", secondary: null };
 		}
 
@@ -533,8 +622,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			this._columnVisibility = {
 				check: true,
 				task: true,
-				priority: false,  // v0.4.0: priority emoji column, hidden by default
-				soon: false,       // v0.4.0: @soon badge column, hidden by default
+				priority: false, // v0.4.0: priority emoji column, hidden by default
+				soon: false, // v0.4.0: @soon badge column, hidden by default
 				project: false,
 				bucket: false,
 				source: false,
@@ -566,14 +655,19 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				project: "📭 No tasks for this project.",
 				today: "📭 No tasks scheduled for today.",
 			};
-			const emptyEl = this.containerEl.createEl("div", { cls: "ft-empty-state" });
+			const emptyEl = this.containerEl.createEl("div", {
+				cls: "ft-empty-state",
+			});
 			emptyEl.createEl("p", {
 				text: msgs[this.mode] || msgs.today,
 				cls: "flowtime-empty ft-empty-text",
 			});
 
 			const btnRow = emptyEl.createEl("div", { cls: "ft-empty-actions" });
-			const addBtn = btnRow.createEl("button", { text: "➕ Add a task", cls: "ft-empty-btn" });
+			const addBtn = btnRow.createEl("button", {
+				text: "➕ Add a task",
+				cls: "ft-empty-btn",
+			});
 			addBtn.addEventListener("click", () => {
 				const { QuickEntryModal } = require("./quick-entry");
 				new QuickEntryModal(this.app, this.plugin).open();
@@ -630,7 +724,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		}
 
 		// ── Column visibility toggle ──
-		const colBtn = toolbar.createEl("button", { text: "☰ Columns", cls: "ft-col-btn" });
+		const colBtn = toolbar.createEl("button", {
+			text: "☰ Columns",
+			cls: "ft-col-btn",
+		});
 		const colDD = document.createElement("div");
 		colDD.className = "ft-col-dd";
 
@@ -666,7 +763,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		const toggleDD = () => {
 			const r = colBtn.getBoundingClientRect();
 			colDD.style.left = r.left + "px";
-			colDD.style.top = (r.bottom + 4) + "px";
+			colDD.style.top = r.bottom + 4 + "px";
 			colDD.classList.toggle("ft-col-dd-open");
 			document.body.appendChild(colDD);
 		};
@@ -683,7 +780,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		document.addEventListener("click", closeDD, true);
 
 		// ── Filter button ──
-		const filterBtn = toolbar.createEl("button", { text: "🔍 Filter", cls: "ft-filter-btn" });
+		const filterBtn = toolbar.createEl("button", {
+			text: "🔍 Filter",
+			cls: "ft-filter-btn",
+		});
 		if (this._activeFilter) {
 			filterBtn.addClass("ft-filter-active-btn");
 		} else {
@@ -728,10 +828,20 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				opSel.createEl("option", { text: o.label, value: o.id });
 			}
 
-			const valInput = row.createEl("input", { type: "text", placeholder: "Value", cls: "ft-filter-val" });
+			const valInput = row.createEl("input", {
+				type: "text",
+				placeholder: "Value",
+				cls: "ft-filter-val",
+			});
 
-			const applyBtn = row.createEl("button", { text: "Apply", cls: "ft-filter-apply" });
-			const clearBtn = row.createEl("button", { text: "✕ Clear", cls: "ft-filter-clear" });
+			const applyBtn = row.createEl("button", {
+				text: "Apply",
+				cls: "ft-filter-apply",
+			});
+			const clearBtn = row.createEl("button", {
+				text: "✕ Clear",
+				cls: "ft-filter-clear",
+			});
 
 			// Show active filter indicator
 			if (this._activeFilter) {
@@ -751,8 +861,16 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				} else if (val) {
 					// Parse number if numeric field
 					const numericFields = ["duration"];
-					const parsedVal = numericFields.includes(field) ? (isNaN(Number(val)) ? val : Number(val)) : val;
-					this._activeFilter = { field, op, value: op === "contains" ? val : parsedVal };
+					const parsedVal = numericFields.includes(field)
+						? isNaN(Number(val))
+							? val
+							: Number(val)
+						: val;
+					this._activeFilter = {
+						field,
+						op,
+						value: op === "contains" ? val : parsedVal,
+					};
 				} else {
 					return; // No value, no filter
 				}
@@ -776,7 +894,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			} else {
 				const r = filterBtn.getBoundingClientRect();
 				filterPanel.style.left = r.left + "px";
-				filterPanel.style.top = (r.bottom + 4) + "px";
+				filterPanel.style.top = r.bottom + 4 + "px";
 				buildFilterUI();
 				filterPanel.classList.add("ft-filter-open");
 				document.body.appendChild(filterPanel);
@@ -785,7 +903,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
 		const closePanel = () => {
 			filterPanel.classList.remove("ft-filter-open");
-			if (filterPanel.parentNode) filterPanel.parentNode.removeChild(filterPanel);
+			if (filterPanel.parentNode)
+				filterPanel.parentNode.removeChild(filterPanel);
 		};
 
 		const closeFilterPanelOnOutside = (e) => {
@@ -801,9 +920,13 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		});
 
 		// ── Group By dropdowns ──
-		if (!this._groupConfig) this._groupConfig = { primary: null, secondary: null };
+		if (!this._groupConfig)
+			this._groupConfig = { primary: null, secondary: null };
 
-		const groupLabel = toolbar.createEl("span", { text: "Group:", cls: "ft-group-label" });
+		const groupLabel = toolbar.createEl("span", {
+			text: "Group:",
+			cls: "ft-group-label",
+		});
 
 		const groupSel = toolbar.createEl("select", { cls: "ft-group-select" });
 		groupSel.createEl("option", { text: "None", value: "" });
@@ -813,7 +936,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		groupSel.createEl("option", { text: "Status", value: "status" });
 		if (this._groupConfig.primary) groupSel.value = this._groupConfig.primary;
 
-		const subLabel = toolbar.createEl("span", { text: "then:", cls: "ft-group-label" });
+		const subLabel = toolbar.createEl("span", {
+			text: "then:",
+			cls: "ft-group-label",
+		});
 		const subSel = toolbar.createEl("select", { cls: "ft-group-select" });
 		subSel.createEl("option", { text: "None", value: "" });
 		subSel.createEl("option", { text: "Bucket", value: "bucket" });
@@ -844,27 +970,31 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
 		const sortByColumn = (field) => (e) => {
 			if (e.shiftKey) {
-				const existing = this._sortConfig.findIndex(s => s.field === field);
+				const existing = this._sortConfig.findIndex((s) => s.field === field);
 				if (existing >= 0) {
 					this._sortConfig.splice(existing, 1);
 				} else {
-					this._sortConfig.push({ field, direction: 'asc' });
+					this._sortConfig.push({ field, direction: "asc" });
 				}
 			} else {
-				if (this._sortConfig.length === 1 && this._sortConfig[0].field === field) {
-					this._sortConfig[0].direction = this._sortConfig[0].direction === 'asc' ? 'desc' : 'asc';
+				if (
+					this._sortConfig.length === 1 &&
+					this._sortConfig[0].field === field
+				) {
+					this._sortConfig[0].direction =
+						this._sortConfig[0].direction === "asc" ? "desc" : "asc";
 				} else {
-					this._sortConfig = [{ field, direction: 'asc' }];
+					this._sortConfig = [{ field, direction: "asc" }];
 				}
 			}
-			this._sortMode = 'custom';
+			this._sortMode = "custom";
 			this.loadTasks().then(() => {
 				this.renderTable();
 			});
 		};
 
 		const sortIndicator = (field) => {
-			const s = this._sortConfig.find(s => s.field === field);
+			const s = this._sortConfig.find((s) => s.field === field);
 			if (!s) return "";
 			return s.direction === "asc" ? "▲" : "▼";
 		};
@@ -875,7 +1005,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			if (width) th.style.width = width;
 			th.createEl("span", { text: label });
 			if (field) {
-				th.createEl("span", { cls: "ft-sort-indicator", text: sortIndicator(field) });
+				th.createEl("span", {
+					cls: "ft-sort-indicator",
+					text: sortIndicator(field),
+				});
 				th.addEventListener("click", sortByColumn(field));
 			}
 			return th;
@@ -890,7 +1023,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		if (isCompact) {
 			if (this._columnVisibility.check !== false)
 				makeSortableHeader("✓", "status", "col-check", "36px");
-			if (this._columnVisibility.priority !== false && this._columnVisibility.priority)
+			if (
+				this._columnVisibility.priority !== false &&
+				this._columnVisibility.priority
+			)
 				makeSortableHeader("!", "priority", "col-priority", "28px");
 			if (this._columnVisibility.soon !== false && this._columnVisibility.soon)
 				makeSortableHeader("~", "soon", "col-soon", "36px");
@@ -911,7 +1047,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				makeSortableHeader("Time", "time", "col-time", "22%");
 			if (this._columnVisibility.check !== false)
 				makeSortableHeader("✓", "status", "col-check", "36px");
-			if (this._columnVisibility.priority !== false && this._columnVisibility.priority)
+			if (
+				this._columnVisibility.priority !== false &&
+				this._columnVisibility.priority
+			)
 				makeSortableHeader("!", "priority", "col-priority", "28px");
 			if (this._columnVisibility.soon !== false && this._columnVisibility.soon)
 				makeSortableHeader("~", "soon", "col-soon", "36px");
@@ -936,15 +1075,20 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		if (this.mode === "today" && this.plugin?.settings?.dailyCap > 0) {
 			const dailyCap = this.plugin.settings.dailyCap;
 			const refTdy = this._refDate();
-			const totalToday = this.tasks.reduce((sum, t) => {
-				if (t.taskDate === refTdy) {
-					return sum + (t.durationMinutes || 0);
-				}
-				return sum;
-			}, 0) / 60;
+			const totalToday =
+				this.tasks.reduce((sum, t) => {
+					if (t.taskDate === refTdy) {
+						return sum + (t.durationMinutes || 0);
+					}
+					return sum;
+				}, 0) / 60;
 			const capRow = this.containerEl.createEl("div", { cls: "ft-daily-cap" });
 			capRow.createEl("span", { text: "Daily Budget: ", cls: "ft-cap-label" });
-			const bar = renderProgressBar(totalToday, dailyCap, `${formatHours(totalToday)}h / ${dailyCap}h`);
+			const bar = renderProgressBar(
+				totalToday,
+				dailyCap,
+				`${formatHours(totalToday)}h / ${dailyCap}h`,
+			);
 			bar.style.minWidth = "200px";
 			capRow.appendChild(bar);
 		}
@@ -954,24 +1098,43 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		this.containerEl.empty();
 
 		// Title
-		this.containerEl.createEl("h3", { text: "Budget Overview", cls: "ft-budget-title" });
+		this.containerEl.createEl("h3", {
+			text: "Budget Overview",
+			cls: "ft-budget-title",
+		});
 
 		// Daily cap summary
 		if (this._budgetDailyCap > 0) {
-			const capSection = this.containerEl.createEl("div", { cls: "ft-budget-section" });
-			capSection.createEl("div", { text: "Daily Budget", cls: "ft-budget-section-title" });
+			const capSection = this.containerEl.createEl("div", {
+				cls: "ft-budget-section",
+			});
+			capSection.createEl("div", {
+				text: "Daily Budget",
+				cls: "ft-budget-section-title",
+			});
 			const capRow = capSection.createEl("div", { cls: "ft-budget-row" });
-			const bar = renderProgressBar(this._budgetDailyCapUsed, this._budgetDailyCap, `${formatHours(this._budgetDailyCapUsed)}h / ${this._budgetDailyCap}h`);
+			const bar = renderProgressBar(
+				this._budgetDailyCapUsed,
+				this._budgetDailyCap,
+				`${formatHours(this._budgetDailyCapUsed)}h / ${this._budgetDailyCap}h`,
+			);
 			bar.style.minWidth = "250px";
 			capRow.appendChild(bar);
 		}
 
 		// Bucket budget summary
-		const section = this.containerEl.createEl("div", { cls: "ft-budget-section" });
-		section.createEl("div", { text: "Weekly Bucket Budgets", cls: "ft-budget-section-title" });
+		const section = this.containerEl.createEl("div", {
+			cls: "ft-budget-section",
+		});
+		section.createEl("div", {
+			text: "Weekly Bucket Budgets",
+			cls: "ft-budget-section-title",
+		});
 
 		// Sort buckets by sortOrder
-		const sorted = [...this.tasks].sort((a, b) => (a._bucketDef?.sortOrder || 0) - (b._bucketDef?.sortOrder || 0));
+		const sorted = [...this.tasks].sort(
+			(a, b) => (a._bucketDef?.sortOrder || 0) - (b._bucketDef?.sortOrder || 0),
+		);
 
 		for (const task of sorted) {
 			const def = task._bucketDef;
@@ -987,14 +1150,21 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
 			// Progress bar
 			const usedHours = task.durationMinutes / 60;
-			const bar = renderProgressBar(usedHours, def.weeklyLimit, `${formatHours(usedHours)}h / ${def.weeklyLimit}h`);
+			const bar = renderProgressBar(
+				usedHours,
+				def.weeklyLimit,
+				`${formatHours(usedHours)}h / ${def.weeklyLimit}h`,
+			);
 			bar.style.minWidth = "200px";
 			row.appendChild(bar);
 		}
 
 		// Empty state
 		if (sorted.length === 0) {
-			section.createEl("p", { text: "No buckets configured. Add buckets in Settings.", cls: "ft-budget-empty" });
+			section.createEl("p", {
+				text: "No buckets configured. Add buckets in Settings.",
+				cls: "ft-budget-empty",
+			});
 		}
 	}
 
@@ -1024,7 +1194,9 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			const groups = {};
 			for (const task of this.tasks) {
 				const key = this._getGroupValue(task, primary);
-				const subKey = secondary ? this._getGroupValue(task, secondary) : "__all__";
+				const subKey = secondary
+					? this._getGroupValue(task, secondary)
+					: "__all__";
 				if (!groups[key]) groups[key] = {};
 				if (!groups[key][subKey]) groups[key][subKey] = [];
 				groups[key][subKey].push(task);
@@ -1057,8 +1229,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			}
 		} else {
 			// Standard flat rendering — separate @soon tasks
-			const normalTasks = this.tasks.filter(t => !t.isSoon);
-			const soonTasks = this.tasks.filter(t => t.isSoon);
+			const normalTasks = this.tasks.filter((t) => !t.isSoon);
+			const soonTasks = this.tasks.filter((t) => t.isSoon);
 
 			for (const task of normalTasks) {
 				this._renderTaskRow(tbody, task, tdy, od, _dw, wk, pj, isCompact);
@@ -1092,7 +1264,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				const timeRow = tc.createEl("div", { cls: "ft-time-row" });
 
 				// Start time combobox (text input + datalist)
-				const startId = "ft-time-list-" + (this.rowData.length || 0) + Math.random().toString(36).slice(2, 6);
+				const startId =
+					"ft-time-list-" +
+					(this.rowData.length || 0) +
+					Math.random().toString(36).slice(2, 6);
 				const startGroup = timeRow.createEl("div", { cls: "ft-time-group" });
 				si = startGroup.createEl("input", {
 					type: "text",
@@ -1101,13 +1276,18 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 					cls: "ft-start-input",
 					attr: { list: startId },
 				});
-				const startList = startGroup.createEl("datalist", { attr: { id: startId } });
+				const startList = startGroup.createEl("datalist", {
+					attr: { id: startId },
+				});
 				for (const t of this.startOpts) {
 					startList.createEl("option", { attr: { value: t } });
 				}
 
 				// Duration combobox (text input + datalist)
-				const durId = "ft-dur-list-" + (this.rowData.length || 0) + Math.random().toString(36).slice(2, 6);
+				const durId =
+					"ft-dur-list-" +
+					(this.rowData.length || 0) +
+					Math.random().toString(36).slice(2, 6);
 				const durGroup = timeRow.createEl("div", { cls: "ft-time-group" });
 				ds = durGroup.createEl("input", {
 					type: "text",
@@ -1135,19 +1315,30 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 						timer = setTimeout(() => this._autoSaveTime(task, si, ds), 300);
 					};
 				})();
-				si.addEventListener("input", () => { up(); debounceSave(); });
-				ds.addEventListener("input", () => { up(); debounceSave(); });
+				si.addEventListener("input", () => {
+					up();
+					debounceSave();
+				});
+				ds.addEventListener("input", () => {
+					up();
+					debounceSave();
+				});
 				up();
 			}
 		}
 
 		// Checkbox column
-		if (this._columnVisibility.check !== false)
-			this._buildCheckCell(row, task);
+		if (this._columnVisibility.check !== false) this._buildCheckCell(row, task);
 
 		// v0.4.0: Priority column (hidden by default)
-		if (this._columnVisibility.priority !== false && this._columnVisibility.priority) {
-			const pc = row.createEl("td", { cls: "ft-priority-cell", attr: { style: "text-align:center" } });
+		if (
+			this._columnVisibility.priority !== false &&
+			this._columnVisibility.priority
+		) {
+			const pc = row.createEl("td", {
+				cls: "ft-priority-cell",
+				attr: { style: "text-align:center" },
+			});
 			if (task.priority) {
 				pc.createEl("span", { text: task.priority, cls: "ft-priority-badge" });
 			}
@@ -1155,15 +1346,17 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
 		// v0.4.0: Soon badge column (hidden by default)
 		if (this._columnVisibility.soon !== false && this._columnVisibility.soon) {
-			const sc = row.createEl("td", { cls: "ft-soon-cell", attr: { style: "text-align:center" } });
+			const sc = row.createEl("td", {
+				cls: "ft-soon-cell",
+				attr: { style: "text-align:center" },
+			});
 			if (task.isSoon) {
 				sc.createEl("span", { text: "◌", cls: "ft-soon-badge" });
 			}
 		}
 
 		// Task cell: priority + text
-		if (this._columnVisibility.task !== false)
-			this._buildTaskCell(row, task);
+		if (this._columnVisibility.task !== false) this._buildTaskCell(row, task);
 
 		if (this._columnVisibility.project !== false) {
 			const pc = row.createEl("td", { cls: "ft-project-cell" });
@@ -1188,14 +1381,18 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			const bucketId = task.bucket;
 			if (bucketId) {
 				const buckets = this.plugin?.settings?.buckets || [];
-				const bucketDef = buckets.find(b => b.id === bucketId);
+				const bucketDef = buckets.find((b) => b.id === bucketId);
 				if (bucketDef) {
 					// Bucket name text above
 					bc.createEl("div", { text: bucketDef.name, cls: "ft-bucket-label" });
 					// Progress bar below (if has limit)
 					if (bucketDef.weeklyLimit > 0) {
 						const used = (this.bucketTotals?.[bucketId] || 0) / 60;
-						const bar = renderProgressBar(used, bucketDef.weeklyLimit, `${formatHours(used)}h / ${bucketDef.weeklyLimit}h`);
+						const bar = renderProgressBar(
+							used,
+							bucketDef.weeklyLimit,
+							`${formatHours(used)}h / ${bucketDef.weeklyLimit}h`,
+						);
 						bar.style.minWidth = "100px";
 						bc.appendChild(bar);
 					} else {
@@ -1339,7 +1536,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		} else if (!isCompact && this._columnVisibility.timer !== false) {
 			// Check if there's an active status timer to resync with
 			const activeTimer = this.plugin?.statusTimer?.getState?.();
-			const matchActive = activeTimer && activeTimer.taskName === task.cleanText;
+			const matchActive =
+				activeTimer && activeTimer.taskName === task.cleanText;
 			const ts = {
 				remaining: matchActive ? activeTimer.remaining : (dur || 0) * 60,
 				total: matchActive ? activeTimer.total : (dur || 0) * 60,
@@ -1349,7 +1547,9 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			const tmr = row.createEl("td", { cls: "ft-timer-cell" });
 			const tr2 = tmr.createEl("div", { cls: "ft-timer-row" });
 			const pb = tr2.createEl("button", { text: "▶", cls: "ft-timer-play" });
-			const tmrBar = tr2.createEl("div", { cls: "ft-timer-progress ft-state-normal" });
+			const tmrBar = tr2.createEl("div", {
+				cls: "ft-timer-progress ft-state-normal",
+			});
 			const tmrFill = tmrBar.createEl("div", { cls: "ft-timer-progress-fill" });
 			const disp = tr2.createEl("span", {
 				text: formatTimer(ts.remaining),
@@ -1359,7 +1559,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			const ud = () => {
 				disp.setText(formatTimer(ts.remaining));
 				disp.toggleClass("ft-timer-expired", ts.remaining <= 0);
-				const pct = ts.total > 0 ? ((ts.total - ts.remaining) / ts.total) * 100 : 0;
+				const pct =
+					ts.total > 0 ? ((ts.total - ts.remaining) / ts.total) * 100 : 0;
 				tmrFill.style.width = Math.min(pct, 100) + "%";
 				if (pct >= 100) {
 					tmrBar.className = "ft-timer-progress ft-state-over";
@@ -1447,7 +1648,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 						}
 					}
 				}, 1000);
-					// Start status bar timer first (stops any previous, records its session)
+				// Start status bar timer first (stops any previous, records its session)
 				if (this.plugin?.statusTimer?.start) {
 					const dm = ds ? parseInt(ds.value, 10) : dur;
 					this.plugin.statusTimer.start(task.cleanText, dm * 60);
@@ -1464,7 +1665,9 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				ts.running = true;
 				pb.setText("⏸");
 				ts.interval = setInterval(() => {
-					ts.remaining = this.plugin?.statusTimer?.currentTimer?.remaining ?? (ts.remaining - 1);
+					ts.remaining =
+						this.plugin?.statusTimer?.currentTimer?.remaining ??
+						ts.remaining - 1;
 					if (ts.remaining < 0) ts.remaining = 0;
 					ud();
 					if (ts.remaining <= 0) {
@@ -1492,7 +1695,9 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				}
 			});
 			rb.addEventListener("click", () => {
-				const isActiveTimer = ts.running || this.plugin?.statusTimer?.currentTimer?.taskName === task.cleanText;
+				const isActiveTimer =
+					ts.running ||
+					this.plugin?.statusTimer?.currentTimer?.taskName === task.cleanText;
 				if (isActiveTimer) {
 					stp(); // Full stop — clears status bar and this row
 				} else {
@@ -1511,7 +1716,9 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			});
 			if (ds) {
 				ds.addEventListener("change", () => {
-					const isActiveTimer = ts.running || this.plugin?.statusTimer?.currentTimer?.taskName === task.cleanText;
+					const isActiveTimer =
+						ts.running ||
+						this.plugin?.statusTimer?.currentTimer?.taskName === task.cleanText;
 					if (isActiveTimer) {
 						stp(); // Stop active timer
 					}
@@ -1531,14 +1738,21 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		if (task.priority) {
 			tc.createEl("span", { text: task.priority, cls: "ft-priority" });
 		}
-		const textEl = tc.createEl("span", { text: task.cleanText, cls: "ft-task-text" });
+		const textEl = tc.createEl("span", {
+			text: task.cleanText,
+			cls: "ft-task-text",
+		});
 		if (task.status === "x" || task.status === "X") {
 			row.addClass("ft-task-done");
 			textEl.addClass("ft-task-done-text");
 		}
 		textEl.addEventListener("click", (e) => {
 			e.stopPropagation();
-			this._showTaskDetail(task, textEl, new Date().toISOString().split("T")[0]);
+			this._showTaskDetail(
+				task,
+				textEl,
+				new Date().toISOString().split("T")[0],
+			);
 		});
 	}
 
@@ -1589,18 +1803,21 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 	 * Show floating detail popup for a task (hidden fields).
 	 */
 	_showTaskDetail(task, anchorBtn, tdy) {
-		document.querySelectorAll(".ft-detail-popup").forEach(e => e.remove());
+		document.querySelectorAll(".ft-detail-popup").forEach((e) => e.remove());
 
 		const popup = document.createElement("div");
 		popup.className = "ft-detail-popup";
 
 		const r = anchorBtn.getBoundingClientRect();
 		popup.style.left = Math.min(r.left, window.innerWidth - 320) + "px";
-		popup.style.top = (r.bottom + 4) + "px";
+		popup.style.top = r.bottom + 4 + "px";
 
 		// Task text
 		const taskRow = popup.createEl("div", { cls: "ft-detail-row" });
-		taskRow.createEl("span", { text: task.cleanText, cls: "ft-detail-task-text" });
+		taskRow.createEl("span", {
+			text: task.cleanText,
+			cls: "ft-detail-task-text",
+		});
 
 		// Track pending changes
 		let pendingDate = null;
@@ -1622,7 +1839,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 					if (line) {
 						const hasBucketDir = /@(?:bucket|b):[^\s]+/.test(line);
 						if (hasBucketDir) {
-							lines[task.line] = line.replace(/@(?:bucket|b):[^\s]+/g, pendingBucket ? `@b:${pendingBucket}` : "");
+							lines[task.line] = line.replace(
+								/@(?:bucket|b):[^\s]+/g,
+								pendingBucket ? `@b:${pendingBucket}` : "",
+							);
 						} else if (pendingBucket) {
 							lines[task.line] = line + ` @b:${pendingBucket}`;
 						}
@@ -1645,7 +1865,9 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		const dateRow = popup.createEl("div", { cls: "ft-detail-row" });
 		dateRow.createEl("label", { text: "Date: ", cls: "ft-detail-label" });
 		const dateInput = dateRow.createEl("input", {
-			type: "date", value: task.taskDate || "", cls: "ft-detail-input",
+			type: "date",
+			value: task.taskDate || "",
+			cls: "ft-detail-input",
 		});
 		dateInput.addEventListener("change", () => {
 			pendingDate = dateInput.value || "";
@@ -1690,12 +1912,17 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		});
 		if (task.file) {
 			srcLink.addEventListener("click", () =>
-				this.app.workspace.openLinkText(task.file.path, "", false, { line: task.line + 1 }),
+				this.app.workspace.openLinkText(task.file.path, "", false, {
+					line: task.line + 1,
+				}),
 			);
 		}
 
 		// Close button — save pending changes, then remove
-		const closeBtn = popup.createEl("button", { text: "✕", cls: "ft-detail-close" });
+		const closeBtn = popup.createEl("button", {
+			text: "✕",
+			cls: "ft-detail-close",
+		});
 		closeBtn.addEventListener("click", async () => await saveAndClose());
 
 		// Close on outside click — save pending changes, then remove
@@ -1706,7 +1933,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			document.removeEventListener("click", closeOnOutside, true);
 			saveAndClose();
 		};
-		setTimeout(() => document.addEventListener("click", closeOnOutside, true), 200);
+		setTimeout(
+			() => document.addEventListener("click", closeOnOutside, true),
+			200,
+		);
 
 		document.body.appendChild(popup);
 	}
@@ -1728,7 +1958,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		const line = lines[task.line];
 		if (!line) return;
 		if (nd) {
-			const re = /[@⏳📅]\s*\d{4}-\d{2}-\d{2}/;
+			const re = /[@⏳📅]\s*\d{4}-\d{2}-\d{2}/u;
 			lines[task.line] = re.test(line)
 				? line.replace(re, "@" + nd)
 				: line.replace(
@@ -1736,7 +1966,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 						(_, p, r) => p + r + " @" + nd,
 					);
 		} else {
-			lines[task.line] = line.replace(/\s*[@⏳📅]\s*\d{4}-\d{2}-\d{2}/, "");
+			lines[task.line] = line.replace(/\s*[@⏳📅]\s*\d{4}-\d{2}-\d{2}/u, "");
 		}
 		await this.app.vault.modify(task.file, lines.join("\n"));
 	}
@@ -1755,78 +1985,131 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		this.containerEl.empty();
 
 		if (!this.plugin?.sessionStore) {
-			this.containerEl.createEl("p", { text: "Session store not available.", cls: "flowtime-empty" });
+			this.containerEl.createEl("p", {
+				text: "Session store not available.",
+				cls: "flowtime-empty",
+			});
 			return;
 		}
 
 		const buckets = this.plugin.settings.buckets || [];
 
 		// ── Filter controls ──
-		const filterBar = this.containerEl.createEl("div", { cls: "ft-sesh-filter-bar" });
+		const filterBar = this.containerEl.createEl("div", {
+			cls: "ft-sesh-filter-bar",
+		});
 
 		// Bucket filter
-		filterBar.createEl("label", { text: "Bucket: ", cls: "ft-sesh-filter-label" });
-		const bucketFilter = filterBar.createEl("select", { cls: "ft-sesh-filter" });
+		filterBar.createEl("label", {
+			text: "Bucket: ",
+			cls: "ft-sesh-filter-label",
+		});
+		const bucketFilter = filterBar.createEl("select", {
+			cls: "ft-sesh-filter",
+		});
 		bucketFilter.createEl("option", { text: "All", value: "" });
 		for (const b of buckets) {
 			bucketFilter.createEl("option", { text: b.name, value: b.id });
 		}
 
 		// Type filter
-		filterBar.createEl("label", { text: "Type: ", cls: "ft-sesh-filter-label" });
+		filterBar.createEl("label", {
+			text: "Type: ",
+			cls: "ft-sesh-filter-label",
+		});
 		const typeFilter = filterBar.createEl("select", { cls: "ft-sesh-filter" });
-		for (const [val, label] of [["", "All"], ["session", "Sessions"], ["completion", "Completions"]]) {
+		for (const [val, label] of [
+			["", "All"],
+			["session", "Sessions"],
+			["completion", "Completions"],
+		]) {
 			typeFilter.createEl("option", { text: label, value: val });
 		}
 
 		// Limit
-		filterBar.createEl("label", { text: "Show: ", cls: "ft-sesh-filter-label" });
+		filterBar.createEl("label", {
+			text: "Show: ",
+			cls: "ft-sesh-filter-label",
+		});
 		const limitFilter = filterBar.createEl("select", { cls: "ft-sesh-filter" });
 		for (const n of [20, 50, 100, 500]) {
-			limitFilter.createEl("option", { text: String(n), value: String(n), selected: n === 50 });
+			limitFilter.createEl("option", {
+				text: String(n),
+				value: String(n),
+				selected: n === 50,
+			});
 		}
 
 		// ── Analytics Summary ──
-		const summaryEl = this.containerEl.createEl("div", { cls: "ft-sesh-summary" });
+		const summaryEl = this.containerEl.createEl("div", {
+			cls: "ft-sesh-summary",
+		});
 
 		// Daily totals (today)
 		const todayStr = new Date().toISOString().split("T")[0];
-		const todayTotals = await this.plugin.sessionStore.getDailyTotals({ dateFrom: todayStr, dateTo: todayStr });
+		const todayTotals = await this.plugin.sessionStore.getDailyTotals({
+			dateFrom: todayStr,
+			dateTo: todayStr,
+		});
 
 		if (todayTotals.length > 0) {
-			const section = summaryEl.createEl("div", { cls: "ft-sesh-analytics-section" });
-			section.createEl("div", { text: "📊 Today", cls: "ft-sesh-analytics-title" });
+			const section = summaryEl.createEl("div", {
+				cls: "ft-sesh-analytics-section",
+			});
+			section.createEl("div", {
+				text: "📊 Today",
+				cls: "ft-sesh-analytics-title",
+			});
 			for (const t of todayTotals) {
 				const row = section.createEl("div", { cls: "ft-sesh-analytics-row" });
-				const bDef = buckets.find(b => b.id === t.bucket);
+				const bDef = buckets.find((b) => b.id === t.bucket);
 				if (bDef) {
 					const swatch = row.createEl("span", { cls: "ft-bucket-swatch" });
 					swatch.style.backgroundColor = bDef.color;
-					row.createEl("span", { text: bDef.name, cls: "ft-sesh-analytics-name" });
+					row.createEl("span", {
+						text: bDef.name,
+						cls: "ft-sesh-analytics-name",
+					});
 				} else {
-					row.createEl("span", { text: t.bucket || "unassigned", cls: "ft-sesh-analytics-name" });
+					row.createEl("span", {
+						text: t.bucket || "unassigned",
+						cls: "ft-sesh-analytics-name",
+					});
 				}
-				row.createEl("span", { text: `${Math.round(t.total_minutes)}m (${(t.total_minutes / 60).toFixed(1)}h)`, cls: "ft-sesh-analytics-value" });
+				row.createEl("span", {
+					text: `${Math.round(t.total_minutes)}m (${(t.total_minutes / 60).toFixed(1)}h)`,
+					cls: "ft-sesh-analytics-value",
+				});
 			}
 		}
 
 		// Weekly totals
 		const weeklyTotals = await this.plugin.sessionStore.getWeeklyTotals();
 		if (weeklyTotals.length > 0) {
-			const section = summaryEl.createEl("div", { cls: "ft-sesh-analytics-section" });
-			section.createEl("div", { text: "📅 This Week", cls: "ft-sesh-analytics-title" });
+			const section = summaryEl.createEl("div", {
+				cls: "ft-sesh-analytics-section",
+			});
+			section.createEl("div", {
+				text: "📅 This Week",
+				cls: "ft-sesh-analytics-title",
+			});
 
 			// Show current week only (first entry if sorted desc)
 			const currentWeekStart = weeklyTotals[0]?.weekStart;
 			if (currentWeekStart) {
-				const thisWeek = weeklyTotals.filter(w => w.weekStart === currentWeekStart);
+				const thisWeek = weeklyTotals.filter(
+					(w) => w.weekStart === currentWeekStart,
+				);
 				for (const w of thisWeek) {
 					const row = section.createEl("div", { cls: "ft-sesh-analytics-row" });
-					const bDef = buckets.find(b => b.id === w.bucket);
+					const bDef = buckets.find((b) => b.id === w.bucket);
 					if (bDef) {
 						const swatch = row.createEl("span", { cls: "ft-bucket-swatch" });
 						swatch.style.backgroundColor = bDef.color;
-						row.createEl("span", { text: bDef.name, cls: "ft-sesh-analytics-name" });
+						row.createEl("span", {
+							text: bDef.name,
+							cls: "ft-sesh-analytics-name",
+						});
 
 						// Show vs weekly limit
 						const limitHours = bDef.weeklyLimit;
@@ -1843,7 +2126,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 							});
 						}
 					} else {
-						row.createEl("span", { text: w.bucket || "unassigned", cls: "ft-sesh-analytics-name" });
+						row.createEl("span", {
+							text: w.bucket || "unassigned",
+							cls: "ft-sesh-analytics-name",
+						});
 						row.createEl("span", {
 							text: `${(w.total_minutes / 60).toFixed(1)}h`,
 							cls: "ft-sesh-analytics-value",
@@ -1854,14 +2140,28 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		}
 
 		// Last 5 completions
-		const completions = await this.plugin.sessionStore.query({ types: ["completion"], limit: 5 });
+		const completions = await this.plugin.sessionStore.query({
+			types: ["completion"],
+			limit: 5,
+		});
 		if (completions.length > 0) {
-			const section = summaryEl.createEl("div", { cls: "ft-sesh-analytics-section" });
-			section.createEl("div", { text: "✅ Recent Completions", cls: "ft-sesh-analytics-title" });
+			const section = summaryEl.createEl("div", {
+				cls: "ft-sesh-analytics-section",
+			});
+			section.createEl("div", {
+				text: "✅ Recent Completions",
+				cls: "ft-sesh-analytics-title",
+			});
 			for (const c of completions) {
 				const row = section.createEl("div", { cls: "ft-sesh-analytics-row" });
-				row.createEl("span", { text: `☑ ${c.task_text || "—"}`, cls: "ft-sesh-analytics-name" });
-				row.createEl("span", { text: c.date, cls: "ft-sesh-analytics-value ft-sesh-faint" });
+				row.createEl("span", {
+					text: `☑ ${c.task_text || "—"}`,
+					cls: "ft-sesh-analytics-name",
+				});
+				row.createEl("span", {
+					text: c.date,
+					cls: "ft-sesh-analytics-value ft-sesh-faint",
+				});
 			}
 		}
 
@@ -1869,7 +2169,9 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		summaryEl.createEl("hr", { cls: "ft-sesh-divider" });
 
 		// Results container
-		const resultsEl = this.containerEl.createEl("div", { cls: "ft-sesh-results" });
+		const resultsEl = this.containerEl.createEl("div", {
+			cls: "ft-sesh-results",
+		});
 
 		const loadResults = async () => {
 			resultsEl.empty();
@@ -1883,7 +2185,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			const records = await this.plugin.sessionStore.query(opts);
 
 			if (records.length === 0) {
-				resultsEl.createEl("p", { text: "No sessions yet. Start a timer to see records here.", cls: "ft-sesh-empty" });
+				resultsEl.createEl("p", {
+					text: "No sessions yet. Start a timer to see records here.",
+					cls: "ft-sesh-empty",
+				});
 				return;
 			}
 
@@ -1928,12 +2233,18 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				// Bucket
 				const bucketCell = row.createEl("td", { cls: "ft-sesh-bucket" });
 				if (rec.bucket) {
-					const bDef = buckets.find(b => b.id === rec.bucket);
+					const bDef = buckets.find((b) => b.id === rec.bucket);
 					if (bDef) {
-						const badge = bucketCell.createEl("span", { text: bDef.name, cls: "ft-sesh-badge" });
+						const badge = bucketCell.createEl("span", {
+							text: bDef.name,
+							cls: "ft-sesh-badge",
+						});
 						badge.style.borderLeftColor = bDef.color;
 					} else {
-						bucketCell.createEl("span", { text: rec.bucket, cls: "ft-sesh-badge-unknown" });
+						bucketCell.createEl("span", {
+							text: rec.bucket,
+							cls: "ft-sesh-badge-unknown",
+						});
 					}
 				} else {
 					bucketCell.createEl("span", { text: "—", cls: "ft-sesh-faint" });
@@ -1997,7 +2308,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		const rec = parseRecurrence(completedLine);
 		if (!rec) return;
 
-		let baseDate = task.taskDate
+		const baseDate = task.taskDate
 			? new Date(task.taskDate + "T00:00:00")
 			: new Date();
 
@@ -2017,7 +2328,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
 		const newTaskLine = completedLine
 			.replace(/\[x\]/i, "[ ]")
-			.replace(/[@⏳📅]\s*\d{4}-\d{2}-\d{2}/, "@" + nextDate);
+			.replace(/[@⏳📅]\s*\d{4}-\d{2}-\d{2}/u, "@" + nextDate);
 
 		const content = await this.app.vault.read(task.file);
 		const lines = content.split("\n");

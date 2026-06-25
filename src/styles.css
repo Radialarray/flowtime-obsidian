@@ -64,8 +64,8 @@
 .flowtime-table tr:nth-child(even):not(.ft-project-group):not(.ft-subgroup-header) td {
 	background: color-mix(in srgb, var(--background-primary-alt) var(--ft-stripe-opacity, 40%), var(--background-primary));
 }
-.flowtime-table tr:hover td {
-	background: var(--background-primary-alt) !important;
+.flowtime-table tr:not(.ft-project-group):not(.ft-subgroup-header):hover td {
+	background: var(--background-primary-alt);
 }
 
 .ft-check-cell {
@@ -1388,31 +1388,31 @@ body.ft-wide-xl {
  * .cm-sizer: also gets margin: auto for horizontal centering.
  * Reading view: .markdown-preview-view gets both max-width + centering.
  */
-body.ft-wide-s .markdown-source-view.mod-cm6 .cm-sizer,
-body.ft-wide-s .markdown-source-view.mod-cm6 .cm-content,
-body.ft-wide-s .markdown-reading-view .markdown-preview-view,
-body.ft-wide-m .markdown-source-view.mod-cm6 .cm-sizer,
-body.ft-wide-m .markdown-source-view.mod-cm6 .cm-content,
-body.ft-wide-m .markdown-reading-view .markdown-preview-view,
-body.ft-wide-l .markdown-source-view.mod-cm6 .cm-sizer,
-body.ft-wide-l .markdown-source-view.mod-cm6 .cm-content,
-body.ft-wide-l .markdown-reading-view .markdown-preview-view,
-body.ft-wide-xl .markdown-source-view.mod-cm6 .cm-sizer,
-body.ft-wide-xl .markdown-source-view.mod-cm6 .cm-content,
-body.ft-wide-xl .markdown-reading-view .markdown-preview-view {
-	max-width: var(--ft-content-maxw) !important;
+body.ft-wide-s .markdown-source-view.mod-cm6 .cm-sizer.cm-sizer,
+body.ft-wide-s .markdown-source-view.mod-cm6 .cm-content.cm-content,
+body.ft-wide-s .markdown-reading-view .markdown-preview-view.markdown-preview-view,
+body.ft-wide-m .markdown-source-view.mod-cm6 .cm-sizer.cm-sizer,
+body.ft-wide-m .markdown-source-view.mod-cm6 .cm-content.cm-content,
+body.ft-wide-m .markdown-reading-view .markdown-preview-view.markdown-preview-view,
+body.ft-wide-l .markdown-source-view.mod-cm6 .cm-sizer.cm-sizer,
+body.ft-wide-l .markdown-source-view.mod-cm6 .cm-content.cm-content,
+body.ft-wide-l .markdown-reading-view .markdown-preview-view.markdown-preview-view,
+body.ft-wide-xl .markdown-source-view.mod-cm6 .cm-sizer.cm-sizer,
+body.ft-wide-xl .markdown-source-view.mod-cm6 .cm-content.cm-content,
+body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-view {
+	max-width: var(--ft-content-maxw);
 }
 
-body.ft-wide-s .markdown-source-view.mod-cm6 .cm-sizer,
-body.ft-wide-s .markdown-reading-view .markdown-preview-view,
-body.ft-wide-m .markdown-source-view.mod-cm6 .cm-sizer,
-body.ft-wide-m .markdown-reading-view .markdown-preview-view,
-body.ft-wide-l .markdown-source-view.mod-cm6 .cm-sizer,
-body.ft-wide-l .markdown-reading-view .markdown-preview-view,
-body.ft-wide-xl .markdown-source-view.mod-cm6 .cm-sizer,
-body.ft-wide-xl .markdown-reading-view .markdown-preview-view {
-	margin-left: auto !important;
-	margin-right: auto !important;
+body.ft-wide-s .markdown-source-view.mod-cm6 .cm-sizer.cm-sizer,
+body.ft-wide-s .markdown-reading-view .markdown-preview-view.markdown-preview-view,
+body.ft-wide-m .markdown-source-view.mod-cm6 .cm-sizer.cm-sizer,
+body.ft-wide-m .markdown-reading-view .markdown-preview-view.markdown-preview-view,
+body.ft-wide-l .markdown-source-view.mod-cm6 .cm-sizer.cm-sizer,
+body.ft-wide-l .markdown-reading-view .markdown-preview-view.markdown-preview-view,
+body.ft-wide-xl .markdown-source-view.mod-cm6 .cm-sizer.cm-sizer,
+body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-view {
+	margin-left: auto;
+	margin-right: auto;
 }
 
 /* ── @-Completion Popup ── */
@@ -2096,26 +2096,35 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view {
 	color: var(--text-normal);
 }
 
-.ft-settings-group .setting-item {
-	border-top: none !important;
+.ft-settings-group .setting-item.setting-item {
+	border-top: none;
 	padding-top: 6px;
 }
 
-.ft-settings-group .setting-item + .setting-item {
-	border-top: 1px solid var(--background-modifier-border) !important;
+.ft-settings-group .setting-item.setting-item + .setting-item.setting-item {
+	border-top: 1px solid var(--background-modifier-border);
 }
 
-.ft-settings-group .setting-item-heading {
-	border-top: none !important;
+.ft-settings-group .setting-item-heading.setting-item-heading {
+	border-top: none;
 }
 
 /* ── Reduced Motion ── */
 @media (prefers-reduced-motion: reduce) {
-	*,
-	*::before,
-	*::after {
-		animation-duration: 0.01ms !important;
-		animation-iteration-count: 1 !important;
-		transition-duration: 0.01ms !important;
+	.flowtime-table,
+	.flowtime-table *,
+	.flowtime-table *::before,
+	.flowtime-table *::after,
+	.ft-sesh-table,
+	.ft-sesh-table *,
+	.ft-sesh-table *::before,
+	.ft-sesh-table *::after,
+	.ft-tg-grid,
+	.ft-tg-grid *,
+	.ft-tg-grid *::before,
+	.ft-tg-grid *::after {
+		animation-duration: 0.01ms;
+		animation-iteration-count: 1;
+		transition-duration: 0.01ms;
 	}
 }

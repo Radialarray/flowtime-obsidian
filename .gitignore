@@ -14,3 +14,4 @@ dist/
 
 # Release builds
 release/
+*.zip

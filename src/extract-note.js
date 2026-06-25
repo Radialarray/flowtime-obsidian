@@ -45,6 +45,13 @@ class ExtractNoteHandler {
 			return;
 		}
 
+		// ── Resolve current file ──
+		const currentFile = this.view.file;
+		if (!currentFile) {
+			new Notice("No active file to extract from");
+			return;
+		}
+
 		// ── Derive title from first line ──
 		const title = this._cleanTitle(firstLine);
 		const safeName = this._sanitizeFilename(title);
@@ -54,15 +61,10 @@ class ExtractNoteHandler {
 		}
 
 		// ── Resolve target folder ──
-		const currentFile = this.view.file;
-		if (!currentFile) {
-			new Notice("No active file to extract from");
-			return;
-		}
-
-		const folderPath = currentFile.parent
+		const rawFolder = currentFile.parent
 			? currentFile.parent.path
 			: "";
+		const folderPath = rawFolder === "/" ? "" : rawFolder;
 
 		// ── Ensure unique path ──
 		const { path: newPath, name: finalName } =
@@ -90,10 +92,18 @@ class ExtractNoteHandler {
 			},
 		);
 
-		// ── Open the new note ──
+		// ── Store extract info for Undo Extract command ──
+		this.plugin._lastExtract = {
+			newFilePath: newPath,
+			fileName: finalName,
+			timestamp: Date.now(),
+		};
+
+		// ── Open the new note in a new tab ──
+		// Preserves the source leaf so its undo history survives.
 		const newFile = this.app.vault.getAbstractFileByPath(newPath);
 		if (newFile) {
-			await this.app.workspace.getLeaf().openFile(newFile);
+			await this.app.workspace.getLeaf("tab").openFile(newFile);
 		}
 
 		this.plugin.notify(`✅ Extracted to "${finalName}"`);
@@ -147,10 +157,12 @@ class ExtractNoteHandler {
 		let finalName = name;
 		let counter = 1;
 		const buildPath = (n) => {
-			const p = folderPath
+			let p = folderPath
 				? `${folderPath}/${n}.md`
 				: `${n}.md`;
-			return p.startsWith("/") ? p.slice(1) : p;
+			// Strip duplicate leading slashes
+			while (p.startsWith("/")) p = p.slice(1);
+			return p;
 		};
 
 		let path = buildPath(finalName);

@@ -730,6 +730,36 @@ module.exports = class FlowtimePlugin extends Plugin {
 			},
 		});
 
+		// ── Undo Extract command ──
+		this.addCommand({
+			id: "undo-extract",
+			name: "Undo extract (delete created note)",
+			editorCallback: (editor, view) => {
+				const ext = this._lastExtract;
+				if (!ext || Date.now() - ext.timestamp > 30000) {
+					new Notice("No recent extract to undo");
+					return;
+				}
+				// Undo the editor change
+				editor.undo();
+				// Delete the created file
+				const file = this.app.vault.getAbstractFileByPath(
+					ext.newFilePath,
+				);
+				if (file) {
+					this.app.vault
+						.delete(file)
+						.then(() =>
+							this.notify(
+								`↩️ Undo extract: deleted "${ext.fileName}"`,
+							),
+						)
+						.catch(() => {});
+				}
+				this._lastExtract = null;
+			},
+		});
+
 		// ── Append to Inbox command ──
 		this.addCommand({
 			id: "append-to-inbox",

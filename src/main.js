@@ -860,6 +860,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 			["flowtime-project", "project"],
 			["flowtime-buckets", "budget"],
 			["flowtime-sessions", "sessions"],
+			["flowtime-sprints", "sprints"], // v0.6.0
 		]) {
 			this.registerMarkdownCodeBlockProcessor(name, (_src, el, ctx) => {
 				const r = new FlowtimeRenderer(

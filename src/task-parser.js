@@ -18,6 +18,11 @@ function parseTaskLine(line, file, lineIndex) {
 
 	const status = m[2].trim();
 
+	// v0.6.0: Extract indent level (leading whitespace before task marker)
+	// Normalize: depth = Math.floor(indent / 2) so 2 or 4 spaces = 1 level
+	const indentSpaces = m[1].match(/^\s*/)[0].length;
+	const indent = indentSpaces;
+
 	// Extract date: /[@⏳📅]\s*(\d{4}-\d{2}-\d{2})/
 	const dateMatch = m[3].match(/[@⏳📅]\s*(\d{4}-\d{2}-\d{2})/);
 	const taskDate = (dateMatch || [])[1] || "";
@@ -42,6 +47,11 @@ function parseTaskLine(line, file, lineIndex) {
 
 	// v0.4.0: @soon tag — marks task as upcoming backlog
 	const isSoon = !!rest.match(/@soon\b/);
+
+	// v0.6.0: Extract sprint: @sprint:<id>
+	let sprint = null;
+	const sprintMatch = rest.match(/@sprint:([^\s]+)/);
+	if (sprintMatch) sprint = sprintMatch[1];
 
 	// Extract bucket: @bucket:<name> or @b:<name>
 	let bucket = null;
@@ -85,6 +95,8 @@ function parseTaskLine(line, file, lineIndex) {
 		bucket,
 		projectTag,     // v0.4.0: @p:Name or null
 		isSoon,         // v0.4.0: @soon tag
+		indent,         // v0.6.0: leading whitespace length for subtask hierarchy
+		sprint,         // v0.6.0: @sprint:id or null
 	};
 }
 
@@ -98,6 +110,7 @@ function cleanTaskText(text) {
 		.replace(/@(?:bucket|b):[^\s]+/g, "") // bucket directive
 		.replace(/@p:[^\s]+/g, "")             // v0.4.0: project directive
 		.replace(/@(?:high|med|low|soon)\b/gi, "") // v0.4.0: priority/status tags
+		.replace(/@sprint:[^\s]+/g, "")             // v0.6.0: sprint tag
 		.replace(/[🟥🟨🟩]/g, "")
 		.replace(/🔁 every .+$/gm, "") // v0.5.0: all recurrence markers
 		.replace(/#\S+/g, "")
@@ -295,4 +308,86 @@ function formatTimer(seconds) {
 		: `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-module.exports = { parseTaskLine, cleanTaskText, parseRecurrence, isRecurrenceDue, formatDuration, formatTimer };
+/**
+ * v0.6.0: Build a parent-child tree from a flat list of parsed tasks.
+ * Hierarchy is determined by indent level.
+ * Returns array of root nodes, each with: { task, children: [], depth }
+ */
+function buildTaskTree(tasks) {
+	const roots = [];
+	const stack = [{ children: roots, depth: -1 }];
+
+	for (const task of tasks) {
+		const depth = Math.floor(task.indent / 2);
+		const node = { task, children: [], depth };
+
+		// Pop until we find a parent shallower than this node
+		while (stack.length > 0 && stack[stack.length - 1].depth >= depth) {
+			stack.pop();
+		}
+
+		// Attach to parent or root
+		if (stack.length > 0) {
+			stack[stack.length - 1].children.push(node);
+		} else {
+			roots.push(node);
+		}
+
+		stack.push(node);
+	}
+
+	return roots;
+}
+
+/**
+ * v0.6.0: Flatten a task tree into a display list.
+ * Collapsed parents omit their children.
+ * Each item gets { task, depth, hasChildren, childrenCount, collapsed, childrenTasks }
+ */
+function flattenTree(roots, collapsedIds = new Set()) {
+	const items = [];
+
+	function walk(node, collapseParent) {
+		const id = taskId(node.task);
+		const isCollapsed = collapsedIds.has(id) || collapseParent;
+		items.push({
+			task: node.task,
+			depth: node.depth,
+			hasChildren: node.children.length > 0,
+			childrenCount: node.children.length,
+			childrenTasks: node.children.map(c => c.task), // actual child task refs
+			collapsed: isCollapsed,
+			taskId: id,
+		});
+		if (!isCollapsed) {
+			for (const child of node.children) {
+				walk(child, false);
+			}
+		}
+	}
+
+	for (const root of roots) {
+		walk(root, false);
+	}
+
+	return items;
+}
+
+/**
+ * v0.6.0: Unique string ID for a task (file:line).
+ */
+function taskId(task) {
+	return (task.file?.path || "") + ":" + task.line;
+}
+
+module.exports = {
+	parseTaskLine,
+	cleanTaskText,
+	parseRecurrence,
+	isRecurrenceDue,
+	formatDuration,
+	formatTimer,
+	buildTaskTree,   // v0.6.0
+	flattenTree,     // v0.6.0
+	taskId,          // v0.6.0
+};

@@ -69,6 +69,18 @@ const DEFAULT_SETTINGS = {
 	// Saved Views
 	savedViews: {},
 
+	// Sprints (v0.6.0)
+	sprints: [
+		{
+			id: "q2-staging",
+			name: "Q2 Staging",
+			start: "2026-04-01",
+			end: "2026-06-30",
+			goal: "Launch staging environment",
+			color: "#2d9ce0",
+		},
+	],
+
 	// Routines (v0.5.0)
 	routinesFolder: "Routines/",
 	vacationMode: false,
@@ -405,6 +417,104 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 						await this.plugin._openTodayNote();
 					}),
 			);
+
+		// ── Sprints (v0.6.0) ──
+		containerEl.createEl("h2", { text: "Sprints" });
+
+		const sprints = this.plugin.settings.sprints || [];
+		for (const sprint of sprints) {
+			const sprintSetting = new Setting(containerEl)
+				.setName(sprint.name || sprint.id)
+				.setDesc(`${sprint.goal || ""}  ·  ${sprint.start} → ${sprint.end}`)
+				.addText((text) =>
+					text
+						.setPlaceholder("Name")
+						.setValue(sprint.name)
+						.onChange(async (value) => {
+							sprint.name = value;
+							sprint.id = value
+								.toLowerCase()
+								.replace(/\s+/g, "-")
+								.replace(/[^a-z0-9-]/g, "");
+							await this.plugin.saveData(this.plugin.settings);
+						}),
+				)
+				.addText((text) =>
+					text
+						.setPlaceholder("Goal")
+						.setValue(sprint.goal || "")
+						.onChange(async (value) => {
+							sprint.goal = value;
+							await this.plugin.saveData(this.plugin.settings);
+						}),
+				);
+
+			// Start date
+			sprintSetting.addText((text) =>
+				text
+					.setPlaceholder("Start (YYYY-MM-DD)")
+					.setValue(sprint.start || "")
+					.onChange(async (value) => {
+						sprint.start = value;
+						await this.plugin.saveData(this.plugin.settings);
+					}),
+			);
+
+			// End date
+			sprintSetting.addText((text) =>
+				text
+					.setPlaceholder("End (YYYY-MM-DD)")
+					.setValue(sprint.end || "")
+					.onChange(async (value) => {
+						sprint.end = value;
+						await this.plugin.saveData(this.plugin.settings);
+					}),
+			);
+
+			// Color picker
+			sprintSetting.addColorPicker((picker) =>
+				picker.setValue(sprint.color || "#2d9ce0").onChange(async (value) => {
+					sprint.color = value;
+					await this.plugin.saveData(this.plugin.settings);
+					this.display();
+				}),
+			);
+
+			// Delete button
+			sprintSetting.addExtraButton((btn) =>
+				btn
+					.setIcon("trash")
+					.setTooltip("Delete sprint")
+					.onClick(async () => {
+						this.plugin.settings.sprints = sprints.filter(
+							(s) => s.id !== sprint.id,
+						);
+						await this.plugin.saveData(this.plugin.settings);
+						this.display();
+					}),
+			);
+		}
+
+		// Add Sprint button
+		new Setting(containerEl).setName("Add new sprint").addButton((btn) =>
+			btn
+				.setButtonText("+ Add Sprint")
+				.setCta()
+				.onClick(async () => {
+					const s = this.plugin.settings.sprints || [];
+					s.push({
+						id: "sprint-" + (s.length + 1),
+						name: "New Sprint",
+						start: "",
+						end: "",
+						goal: "",
+						color: "#2d9ce0",
+					});
+					this.plugin.settings.sprints = s;
+					await this.plugin.saveData(this.plugin.settings);
+					this.display();
+				}),
+		);
 
 		// ── Display ──
 		containerEl.createEl("h2", { text: "Display" });

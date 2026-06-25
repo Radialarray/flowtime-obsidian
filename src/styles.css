@@ -1927,3 +1927,49 @@ body.ft-wide .markdown-reading-view .markdown-preview-sizer {
 	flex: 1;
 	margin-bottom: 0;
 }
+
+/* ═══════════════════════════════════════
+   Subtask Tree (v0.6.0)
+   ═══════════════════════════════════════ */
+
+.ft-tree-toggle {
+	cursor: pointer;
+	user-select: none;
+	margin-right: 4px;
+	font-size: 10px;
+	color: var(--text-muted);
+	vertical-align: middle;
+	display: inline-block;
+	width: 14px;
+	text-align: center;
+	flex-shrink: 0;
+}
+
+.ft-tree-toggle:hover {
+	color: var(--text-normal);
+}
+
+/* ── Sprint Badge ── */
+.ft-sprint-badge {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: var(--radius-s);
+	font-size: var(--font-ui-small);
+	background: var(--background-modifier-hover);
+	border-left: 3px solid var(--interactive-accent);
+	max-width: 120px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ft-sub-progress {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	margin-left: 4px;
+	white-space: nowrap;
+}
+
+.ft-task-cell {
+	vertical-align: middle;
+}

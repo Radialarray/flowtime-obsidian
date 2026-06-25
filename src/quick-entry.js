@@ -57,6 +57,9 @@ class QuickEntryModal extends Modal {
 			}
 			const bucket = bucketSelect.value;
 			if (bucket) line += " @b:" + bucket;
+			// Add parent indent if set
+			const parentLine = parentSelect ? parentSelect.value : "";
+			if (parentLine) line = "  " + line;
 			previewCode.setText(line);
 		};
 
@@ -182,6 +185,65 @@ class QuickEntryModal extends Modal {
 		bucketSelect.addEventListener("change", updateLivePreview);
 		updateLivePreview();
 
+		// v0.6.0: Parent task dropdown for subtask hierarchy
+		contentEl.createEl("label", { text: "Subtask of", cls: "flowtime-label" });
+		const parentSelect = contentEl.createEl("select", { cls: "flowtime-select" });
+		parentSelect.createEl("option", { text: "None (top-level)", value: "" });
+
+		// Load parent candidates from the target file
+		const loadParents = async () => {
+			const activeFile = this.app.workspace.getActiveFile();
+			let target = activeFile;
+			const targetSetting = this.plugin.settings.quickEntryTargetFile;
+
+			if (targetSetting === "daily-note") {
+				const today = new Date().toISOString().split("T")[0];
+				const allFiles = this.app.vault.getMarkdownFiles();
+				const dailyFile = allFiles.find((f) => f.basename === today);
+				if (dailyFile) target = dailyFile;
+			} else if (targetSetting === "inbox") {
+				const inbox = this.app.vault.getAbstractFileByPath(
+					this.plugin.settings.inboxPath || "Inbox.md",
+				);
+				if (inbox) target = inbox;
+			}
+
+			if (!target) return;
+
+			try {
+				const content = await this.app.vault.read(target);
+				const lines = content.split("\n");
+				const { parseTaskLine } = require("./task-parser");
+
+				// Collect top-level tasks (indent===0) for parent candidates
+				const candidates = [];
+				for (let i = 0; i < lines.length; i++) {
+					const parsed = parseTaskLine(lines[i], target, i);
+					if (parsed && parsed.indent === 0 && parsed.status !== "x") {
+						candidates.push(parsed);
+					}
+				}
+
+				// Populate dropdown (keep existing selection if possible)
+				const currentVal = parentSelect.value;
+				parentSelect.empty();
+				parentSelect.createEl("option", { text: "None (top-level)", value: "" });
+				for (const c of candidates.slice(0, 20)) {
+					const opt = parentSelect.createEl("option", {
+						text: c.cleanText.slice(0, 60),
+						value: String(c.line),
+					});
+					if (currentVal && String(c.line) === currentVal) {
+						opt.selected = true;
+					}
+				}
+			} catch (_) {}
+		};
+		loadParents();
+
+		// Parent select changes update preview
+		parentSelect.addEventListener("change", updateLivePreview);
+
 		// ── Buttons ──
 		const btnRow = contentEl.createEl("div", { cls: "flowtime-btn-row" });
 		const cancelBtn = btnRow.createEl("button", {
@@ -207,7 +269,8 @@ class QuickEntryModal extends Modal {
 			const project = projInput.value.trim();
 
 			// Build task line
-			let line = "- [ ] " + task;
+			const parentIndent = parentSelect.value ? "  " : "";
+			let line = parentIndent + "- [ ] " + task;
 			if (project) line += " #" + this.plugin.settings.tagPrefix + project;
 			if (date) line += " @" + date;
 			const dur = parseInt(durSelect.value, 10);

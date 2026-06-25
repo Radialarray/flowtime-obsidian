@@ -383,28 +383,47 @@ class AtCompletionsSuggest extends EditorSuggest {
 
 		// @inbox — capture preceding text to Inbox.md
 		if (suggestion.label === "@inbox") {
-			// Get the line content before @inbox
 			const line = editor.getLine(start.line);
 			const beforeText = line.slice(0, start.ch).trim();
-
-			// Build the inbox line
+			if (!beforeText) {
+				this.plugin.notify(
+					"\u{1F4E5} Nothing to capture — type task text before @inbox",
+					true,
+				);
+				return;
+			}
 			let inboxLine = beforeText;
 			if (!inboxLine.startsWith("- [ ]") && !inboxLine.startsWith("- [x]")) {
 				inboxLine = "- [ ] " + inboxLine;
 			}
-
-			// Clear the entire line
 			editor.replaceRange("", { line: start.line, ch: 0 }, end);
-
 			this._appendToInbox(inboxLine);
 			return;
 		}
 
+		// @p:Project — capture preceding text to that project's Tasks.md
+		if (suggestion.type === "project" && suggestion.label.startsWith("@p:")) {
+			const line = editor.getLine(start.line);
+			const beforeText = line.slice(0, start.ch).trim();
+			if (!beforeText) {
+				this.plugin.notify(
+					"\u{1F4C1} Nothing to capture — type task text before @p:",
+					true,
+				);
+				return;
+			}
+			let taskLine = beforeText;
+			if (!taskLine.startsWith("- [ ]") && !taskLine.startsWith("- [x]")) {
+				taskLine = "- [ ] " + taskLine;
+			}
+			editor.replaceRange("", { line: start.line, ch: 0 }, end);
+			this._appendToProject(taskLine, suggestion.label.slice(3));
+			return;
+		}
+
 		if (suggestion.type === "macro") {
-			// Replace the entire line with the expanded macro
 			editor.replaceRange(suggestion.insert, start, end);
 		} else {
-			// Replace @query with the completed directive
 			editor.replaceRange(suggestion.label + " ", start, end);
 		}
 	}
@@ -433,6 +452,43 @@ class AtCompletionsSuggest extends EditorSuggest {
 			this.plugin.notify("\u{1F4E5} Added to inbox");
 		} catch (e) {
 			console.warn("Flowtime: failed to append to inbox:", e.message);
+		}
+	}
+
+	/**
+	 * Append a task line to a project's Tasks.md file.
+	 */
+	async _appendToProject(line, projectName) {
+		try {
+			const projects = await this.plugin.projectEngine.getAllProjects();
+			const match = projects.find(
+				(p) => p.name.toLowerCase() === projectName.toLowerCase(),
+			);
+			if (!match) {
+				this.plugin.notify(
+					"\u{1F4C1} Project '" + projectName + "' not found",
+					true,
+				);
+				return;
+			}
+			// Derive Tasks.md path from project note path
+			const folder = match.path.substring(0, match.path.lastIndexOf("/"));
+			const tasksPath = folder + "/" + match.name + " Tasks.md";
+			const app = this.plugin.app;
+			let tasksFile = app.vault.getAbstractFileByPath(tasksPath);
+			if (!tasksFile) {
+				// Fall back to folder note
+				tasksFile = app.vault.getAbstractFileByPath(match.path);
+			}
+			if (!tasksFile) return;
+			const content = await app.vault.read(tasksFile);
+			await app.vault.modify(
+				tasksFile,
+				content.trimEnd() + "\n" + line.trimEnd() + "\n",
+			);
+			this.plugin.notify("\u{1F4C1} Added to " + match.name);
+		} catch (e) {
+			console.warn("Flowtime: failed to append to project:", e.message);
 		}
 	}
 }

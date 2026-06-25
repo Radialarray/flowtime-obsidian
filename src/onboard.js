@@ -451,7 +451,7 @@ class ProjectStepModal extends Modal {
 			this.state.scaffoldFirstProject = !!this.state.firstProjectName;
 			this.state.scaffoldTasks = tasksCheck.checked;
 			this.state.scaffoldWiki = wikiCheck.checked;
-			this.state.step = steps.length; // exit loop
+			this.state.step = 6; // exit loop
 			this.close();
 			this.onDone();
 		});

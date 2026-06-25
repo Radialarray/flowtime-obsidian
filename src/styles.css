@@ -1,9 +1,6 @@
 .flowtime-table {
-	width: 100%;
-	border-collapse: collapse;
 	table-layout: fixed;
 	margin: 0.5em 0;
-	font-size: var(--font-ui-small);
 }
 
 /* Scrollable table wrapper — horizontal scroll when columns overflow */
@@ -13,6 +10,32 @@
 	-webkit-overflow-scrolling: touch;
 }
 
+.ft-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: var(--font-ui-small);
+}
+.ft-table th {
+	padding: 6px 8px;
+	border-bottom: 2px solid var(--background-modifier-border);
+	font-weight: var(--font-semibold);
+	color: var(--text-muted);
+}
+.ft-table td {
+	padding: 6px 8px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	vertical-align: middle;
+}
+.ft-table tr:hover td {
+	background: var(--background-primary-alt);
+}
+.ft-table,
+.ft-table tbody,
+.ft-table tr,
+.ft-table td {
+	overflow: visible;
+}
+
 /* Override Obsidian's forced min-width (6ch) on rendered table cells */
 .flowtime-table th,
 .flowtime-table td {
@@ -20,32 +43,11 @@
 }
 
 .flowtime-table th {
-	text-align: left;
-	padding: 6px 8px;
-	border-bottom: 2px solid var(--background-modifier-border);
-	font-weight: var(--font-semibold);
-	color: var(--text-muted);
-}
-
-.flowtime-table,
-.flowtime-table tbody,
-.flowtime-table tr,
-.flowtime-table td {
-	overflow: visible;
+	min-width: 0;
 }
 
 .flowtime-table td {
-	padding: 5px 8px;
-	border-bottom: 1px solid var(--background-modifier-border);
-	vertical-align: middle;
-}
-
-.flowtime-table tr {
-	line-height: 1.5;
-}
-
-.flowtime-table tr:hover td {
-	background-color: var(--background-primary-alt);
+	min-width: 0;
 }
 
 .flowtime-table th.col-check {
@@ -1011,29 +1013,13 @@
 	max-height: 400px;
 	overflow-y: auto;
 }
-.ft-sesh-table {
-	width: 100%;
-	border-collapse: collapse;
-	font-size: var(--font-ui-small);
-}
+
 .ft-sesh-table th {
-	text-align: left;
-	padding: 4px 8px;
-	border-bottom: 2px solid var(--background-modifier-border);
-	font-weight: var(--font-semibold);
-	color: var(--text-muted);
 	position: sticky;
 	top: 0;
 	background: var(--background-primary);
 }
-.ft-sesh-table td {
-	padding: 4px 8px;
-	border-bottom: 1px solid var(--background-modifier-border);
-	vertical-align: middle;
-}
-.ft-sesh-table tr:hover td {
-	background: var(--background-primary-alt);
-}
+
 .ft-sesh-type-icon {
 	font-size: 14px;
 }

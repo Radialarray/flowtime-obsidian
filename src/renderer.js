@@ -26,6 +26,21 @@ const {
 	updateDate,
 } = require("./task-utils");
 
+const COLUMNS = [
+	{ id: 'time',     label: 'Time',    sortField: 'time',    width: '22%',   compactOnly: false, compactSkip: true,  defaultHide: false },
+	{ id: 'check',    label: '✓',       sortField: 'status',  width: '36px',  compactOnly: false, compactSkip: false, defaultHide: false },
+	{ id: 'priority', label: '!',       sortField: 'priority',width: '28px',  compactOnly: false, compactSkip: false, defaultHide: true },
+	{ id: 'soon',     label: '~',       sortField: 'soon',    width: '36px',  compactOnly: false, compactSkip: false, defaultHide: true },
+	{ id: 'task',     label: 'Task',    sortField: 'text',    width: 'auto',  compactOnly: false, compactSkip: false, defaultHide: false },
+	{ id: 'project',  label: 'Project', sortField: 'project', width: 'auto',  compactOnly: false, compactSkip: false, defaultHide: false },
+	{ id: 'bucket',   label: 'Bucket',  sortField: 'bucket',  width: 'auto',  compactOnly: false, compactSkip: false, defaultHide: false },
+	{ id: 'sprint',   label: 'Sprint',  sortField: 'sprint',  width: 'auto',  compactOnly: false, compactSkip: false, defaultHide: true },
+	{ id: 'source',   label: 'Source',  sortField: 'source',  width: 'auto',  compactOnly: false, compactSkip: false, defaultHide: false },
+	{ id: 'date',     label: 'Date',    sortField: 'date',    width: 'auto',  compactOnly: false, compactSkip: false, defaultHide: false },
+	{ id: 'actions',  label: ' ',       sortField: null,      width: 'auto',  compactOnly: true,  compactSkip: false, defaultHide: false },
+	{ id: 'timer',    label: ' ',       sortField: null,      width: '22%',   compactOnly: false, compactSkip: true,  defaultHide: false },
+];
+
 class FlowtimeRenderer extends MarkdownRenderChild {
 	constructor(app, containerEl, mode, projectEngine, sourcePath) {
 		super(containerEl);
@@ -282,27 +297,12 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 	_visibleColCount(isCompact) {
 		const v = this._columnVisibility || {};
 		let count = 0;
-		if (isCompact) {
-			if (v.check !== false) count++;
-			if (v.priority !== false && v.priority) count++; // v0.4.0
-			if (v.soon !== false && v.soon) count++; // v0.4.0
-			if (v.task !== false) count++;
-			if (v.project !== false) count++;
-			if (v.bucket !== false) count++;
-			if (v.source !== false) count++;
-			if (v.date !== false) count++;
-			if (v.actions !== false) count++;
-		} else {
-			if (v.time !== false) count++;
-			if (v.check !== false) count++;
-			if (v.priority !== false && v.priority) count++; // v0.4.0
-			if (v.soon !== false && v.soon) count++; // v0.4.0
-			if (v.task !== false) count++;
-			if (v.project !== false) count++;
-			if (v.bucket !== false) count++;
-			if (v.source !== false) count++;
-			if (v.date !== false) count++;
-			if (v.timer !== false) count++;
+		for (const col of COLUMNS) {
+			if (col.compactOnly && !isCompact) continue;
+			if (col.compactSkip && isCompact) continue;
+			if (v[col.id] === false) continue;
+			if (col.defaultHide && !v[col.id]) continue;
+			count++;
 		}
 		return count || 1;
 	}
@@ -1018,7 +1018,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			cls: "ft-table-wrap",
 		});
 		const table = tableWrap.createEl("table", {
-			cls: "flowtime-table",
+			cls: "flowtime-table ft-table",
 		});
 		const hr = table.createEl("thead").createEl("tr");
 
@@ -1074,62 +1074,24 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			return th;
 		};
 
-		if (isCompact) {
-			if (this._columnVisibility.check !== false)
-				makeSortableHeader("✓", "status", "col-check", "36px");
-			if (
-				this._columnVisibility.priority !== false &&
-				this._columnVisibility.priority
-			)
-				makeSortableHeader("!", "priority", "col-priority", "28px");
-			if (this._columnVisibility.soon !== false && this._columnVisibility.soon)
-				makeSortableHeader("~", "soon", "col-soon", "36px");
-			if (this._columnVisibility.task !== false)
-				makeSortableHeader("Task", "text", "col-task", "auto");
-			if (this._columnVisibility.project !== false)
-				makeSortableHeader("Project", "project", "col-project", "auto");
-			if (this._columnVisibility.bucket !== false)
-				makeSortableHeader("Bucket", "bucket", "col-bucket", "auto");
-			if (
-				this._columnVisibility.sprint !== false &&
-				this._columnVisibility.sprint
-			)
-				makeSortableHeader("Sprint", "sprint", "col-sprint", "auto");
-			if (this._columnVisibility.source !== false)
-				makeSortableHeader("Source", "source", "col-source", "auto");
-			if (this._columnVisibility.date !== false)
-				makeSortableHeader(dw ? "Due" : "Date", "date", "col-date", "auto");
-			if (this._columnVisibility.actions !== false)
-				makeHeader("col-actions", "auto");
-		} else {
-			if (this._columnVisibility.time !== false)
-				makeSortableHeader("Time", "time", "col-time", "22%");
-			if (this._columnVisibility.check !== false)
-				makeSortableHeader("✓", "status", "col-check", "36px");
-			if (
-				this._columnVisibility.priority !== false &&
-				this._columnVisibility.priority
-			)
-				makeSortableHeader("!", "priority", "col-priority", "28px");
-			if (this._columnVisibility.soon !== false && this._columnVisibility.soon)
-				makeSortableHeader("~", "soon", "col-soon", "36px");
-			if (this._columnVisibility.task !== false)
-				makeSortableHeader("Task", "text", "col-task", "auto");
-			if (this._columnVisibility.project !== false)
-				makeSortableHeader("Project", "project", "col-project", "auto");
-			if (this._columnVisibility.bucket !== false)
-				makeSortableHeader("Bucket", "bucket", "col-bucket", "auto");
-			if (
-				this._columnVisibility.sprint !== false &&
-				this._columnVisibility.sprint
-			)
-				makeSortableHeader("Sprint", "sprint", "col-sprint", "auto");
-			if (this._columnVisibility.source !== false)
-				makeSortableHeader("Source", "source", "col-source", "auto");
-			if (this._columnVisibility.date !== false)
-				makeSortableHeader("Date", "date", "col-date", "auto");
-			if (this._columnVisibility.timer !== false)
-				makeHeader("col-timer", "22%");
+		for (const col of COLUMNS) {
+			// Skip compact-only columns in non-compact mode
+			if (col.compactOnly && !isCompact) continue;
+			// Skip compact-skip columns in compact mode
+			if (col.compactSkip && isCompact) continue;
+			// Check visibility
+			if (this._columnVisibility[col.id] === false) continue;
+			// Handle default-hidden columns (priority, soon, sprint)
+			if (col.defaultHide && !this._columnVisibility[col.id]) continue;
+
+			// Dynamic label for date column in due-week mode
+			const label = (col.id === 'date' && dw) ? 'Due' : col.label;
+
+			if (col.sortField) {
+				makeSortableHeader(label, col.sortField, `col-${col.id}`, col.width);
+			} else {
+				makeHeader(`col-${col.id}`, col.width);
+			}
 		}
 		const tbody = table.createEl("tbody");
 		this.bucketTotals = this._computeBucketTotals();
@@ -2467,7 +2429,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				return;
 			}
 
-			const table = resultsEl.createEl("table", { cls: "ft-sesh-table" });
+			const table = resultsEl.createEl("table", { cls: "ft-sesh-table ft-table" });
 			const thead = table.createEl("thead").createEl("tr");
 			thead.createEl("th", { text: "Type" });
 			thead.createEl("th", { text: "Date" });

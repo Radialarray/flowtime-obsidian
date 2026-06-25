@@ -220,6 +220,7 @@ class LayoutStepModal extends Modal {
 			this.onDone();
 		});
 		nextBtn.addEventListener("click", () => {
+			this.state.proceed = true;
 			this.state.layoutType =
 				document.querySelector('input[name="layout"]:checked')?.value || "flat";
 			this.state.projectsRoot =
@@ -288,6 +289,7 @@ class DashboardStepModal extends Modal {
 			this.onDone();
 		});
 		nextBtn.addEventListener("click", () => {
+			this.state.proceed = true;
 			this.state.createDailyDashboard = dailyCheck.checked;
 			this.state.createWeeklyDashboard = weeklyCheck.checked;
 			this.close();
@@ -350,6 +352,7 @@ class BucketStepModal extends Modal {
 			this.onDone();
 		});
 		nextBtn.addEventListener("click", () => {
+			this.state.proceed = true;
 			const sel =
 				document.querySelector('input[name="buckets"]:checked')?.value ||
 				"keep";
@@ -414,6 +417,7 @@ class DailyNotesStepModal extends Modal {
 			this.onDone();
 		});
 		nextBtn.addEventListener("click", () => {
+			this.state.proceed = true;
 			this.state.dailyNotesFolder = folderInput.value.trim() || "Daily";
 			this.close();
 			this.onDone();
@@ -486,6 +490,7 @@ class RoutineStepModal extends Modal {
 			this.onDone();
 		});
 		nextBtn.addEventListener("click", () => {
+			this.state.proceed = true;
 			this.state.createRoutines = createCheck.checked;
 			this.close();
 			this.onDone();

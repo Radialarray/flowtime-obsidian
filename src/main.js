@@ -17,7 +17,7 @@ class AddTaskSuggest extends EditorSuggest {
 		this.plugin = plugin;
 	}
 
-	onTrigger(cursor, editor, file) {
+	onTrigger(cursor, editor, _file) {
 		const line = editor.getLine(cursor.line);
 		const before = line.slice(0, cursor.ch);
 		const match = before.match(/\/add-task\s*$/);
@@ -31,7 +31,7 @@ class AddTaskSuggest extends EditorSuggest {
 		return null;
 	}
 
-	getSuggestions(context) {
+	getSuggestions(_context) {
 		return [{ label: "Add a task", description: "Open the quick entry modal" }];
 	}
 
@@ -40,7 +40,7 @@ class AddTaskSuggest extends EditorSuggest {
 		el.createEl("small", { text: suggestion.description });
 	}
 
-	selectSuggestion(suggestion, event) {
+	selectSuggestion(_suggestion, _event) {
 		if (this.context) {
 			const editor = this.context.editor;
 			const { start, end } = this.context;
@@ -72,7 +72,7 @@ class AtCompletionsSuggest extends EditorSuggest {
 		this.plugin = plugin;
 	}
 
-	onTrigger(cursor, editor, file) {
+	onTrigger(cursor, editor, _file) {
 		const line = editor.getLine(cursor.line);
 		const before = line.slice(0, cursor.ch);
 		const atIndex = before.lastIndexOf("@");
@@ -382,7 +382,7 @@ class AtCompletionsSuggest extends EditorSuggest {
 		}
 	}
 
-	selectSuggestion(suggestion, event) {
+	selectSuggestion(suggestion, _event) {
 		if (!this.context) return;
 		const editor = this.context.editor;
 		const { start, end } = this.context;
@@ -525,12 +525,27 @@ module.exports = class FlowtimePlugin extends Plugin {
 
 		this.addSettingTab(new FlowtimeSettingsTab(this.app, this));
 
-		// Apply content width if set
-		if (this.settings.contentWidth > 0) {
-			document.body.classList.add("ft-wide");
-			document.body.style.setProperty(
-				"--ft-content-width",
-				this.settings.contentWidth + "px",
+		// v1.2.0: Migrate old contentWidth slider to preset
+		if (
+			this.settings.contentWidth !== undefined &&
+			this.settings.contentWidthPreset === undefined
+		) {
+			const cw = this.settings.contentWidth;
+			if (cw <= 0 || cw <= 800) this.settings.contentWidthPreset = "s";
+			else if (cw <= 1100) this.settings.contentWidthPreset = "m";
+			else if (cw <= 1500) this.settings.contentWidthPreset = "l";
+			else this.settings.contentWidthPreset = "xl";
+			delete this.settings.contentWidth;
+		}
+		// Default to "s" if not set
+		if (!this.settings.contentWidthPreset) {
+			this.settings.contentWidthPreset = "s";
+		}
+
+		// Apply content width preset
+		if (this.settings.contentWidthPreset) {
+			document.body.classList.add(
+				"ft-wide-" + this.settings.contentWidthPreset,
 			);
 		}
 
@@ -544,6 +559,8 @@ module.exports = class FlowtimePlugin extends Plugin {
 		this._cacheSaveTimer = null;
 		this._cacheFilePath = () =>
 			this.app.vault.configDir + "/plugins/flowtime/task-cache.json";
+		// Track whether we've shown the cache-clean notice this session
+		this._notifiedCacheClean = false;
 
 		this._loadTaskCache = async () => {
 			try {
@@ -551,7 +568,6 @@ module.exports = class FlowtimePlugin extends Plugin {
 				if (await this.app.vault.adapter.exists(cachePath)) {
 					const raw = await this.app.vault.adapter.read(cachePath);
 					const parsed = JSON.parse(raw);
-					this._lastEvictedCount = parsed._lastEvictedCount || 0;
 					this.taskCache.fromJSON(parsed);
 				} else if (savedData && savedData._taskCache) {
 					this.taskCache.fromJSON(savedData._taskCache);
@@ -563,7 +579,6 @@ module.exports = class FlowtimePlugin extends Plugin {
 		this._saveTaskCache = async () => {
 			try {
 				const data = this.taskCache.toJSON();
-				data._lastEvictedCount = this._lastEvictedCount || 0;
 				await this.app.vault.adapter.write(
 					this._cacheFilePath(),
 					JSON.stringify(data, null, 2),
@@ -573,12 +588,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 
 		// Load cache from separate file (with legacy fallback)
 		await this._loadTaskCache();
-		console.log(
-			"Flowtime cache: loaded, _lastEvictedCount =",
-			this._lastEvictedCount,
-			"cache size =",
-			this.taskCache.size,
-		);
+		console.log("Flowtime cache: loaded, cache size =", this.taskCache.size);
 
 		// Cross-session staleness: files modified while Obsidian was closed
 		const staleCount = await this.taskCache.evictStale(this.app.vault.adapter);
@@ -594,16 +604,15 @@ module.exports = class FlowtimePlugin extends Plugin {
 		console.log(
 			"Flowtime cache: evicted =",
 			evicted,
-			"_lastEvictedCount =",
-			this._lastEvictedCount,
+			"_notifiedCacheClean =",
+			this._notifiedCacheClean,
 		);
 		if (evicted > 0) {
-			// Only notify if count changed (so it fires once per unique eviction)
-			const isNew = evicted !== this._lastEvictedCount;
-			this._lastEvictedCount = evicted;
 			await this._saveTaskCache();
-			console.log("Flowtime cache: saved, isNew =", isNew);
-			if (isNew) {
+			console.log("Flowtime cache: saved after autoEvict");
+			// Show notice at most once per session to avoid repeating the same count
+			if (!this._notifiedCacheClean) {
+				this._notifiedCacheClean = true;
 				this.notify(`🧹 Task cache cleaned: ${evicted} stale entries removed`);
 			}
 		}
@@ -897,7 +906,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 		this.addCommand({
 			id: "insert-daily-dashboard",
 			name: "Insert daily dashboard",
-			editorCallback: (editor) => {
+			editorCallback: (_editor) => {
 				this.templateEngine.insertDaily();
 			},
 		});
@@ -905,7 +914,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 		this.addCommand({
 			id: "insert-weekly-dashboard",
 			name: "Insert weekly dashboard",
-			editorCallback: (editor) => {
+			editorCallback: (_editor) => {
 				this.templateEngine.insertWeekly();
 			},
 		});
@@ -913,7 +922,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 		this.addCommand({
 			id: "insert-weekplan",
 			name: "Insert weekplan",
-			editorCallback: (editor) => {
+			editorCallback: (_editor) => {
 				this.templateEngine.insertWeekplan();
 			},
 		});
@@ -1423,8 +1432,13 @@ module.exports = class FlowtimePlugin extends Plugin {
 				clearTimeout(this._dailyGenTimer);
 				this._dailyGenTimer = null;
 			}
-			// Clean up wide mode body class
-			document.body.classList.remove("ft-wide");
+			// Clean up content width preset classes
+			document.body.classList.remove(
+				"ft-wide-s",
+				"ft-wide-m",
+				"ft-wide-l",
+				"ft-wide-xl",
+			);
 		});
 	}
 

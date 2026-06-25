@@ -3,7 +3,7 @@
   "version": "1.1.0",
   "private": true,
   "scripts": {
-    "build": "node esbuild.config.mjs production",
+    "build": "node esbuild.config.mjs production && cp manifest.json src/styles.css dist/",
     "dev": "node esbuild.config.mjs",
     "lint": "eslint src/",
     "release": "npm run build && mkdir -p dist/skills && cp manifest.json src/styles.css README.md dist/ && cp -r skills/flowtime/ dist/skills/flowtime/; echo 'Release ready at dist/'"

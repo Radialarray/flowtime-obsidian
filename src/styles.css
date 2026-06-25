@@ -1304,11 +1304,94 @@
 	opacity: 0.7;
 }
 
-/* ── Wide Mode ── */
-body.ft-wide .markdown-source-view .cm-sizer,
-body.ft-wide .markdown-source-view .cm-content,
-body.ft-wide .markdown-reading-view .markdown-preview-sizer {
-	max-width: var(--ft-content-width);
+/* ── Content Width Presets (v1.2.0) ──
+ * S/M/L/XL dropdown replaces the old slider.
+ * XL = full-width (no margin), L = small margin, M/S = progressively narrower.
+ * All centred via margin: 0 auto.
+ * On mobile, all presets near-full-width but still differ from each other.
+ *
+ * Obsidian 1.8.7+ targets:
+ *   Source/Live Preview: .markdown-source-view.mod-cm6 .cm-*
+ *   Reading View:        .markdown-reading-view .markdown-preview-view
+ */
+
+/* ── Preset custom properties (desktop) ── */
+body.ft-wide-s {
+	--ft-content-maxw: 700px;
+}
+body.ft-wide-m {
+	--ft-content-maxw: 1000px;
+}
+body.ft-wide-l {
+	--ft-content-maxw: 1400px;
+}
+body.ft-wide-xl {
+	--ft-content-maxw: 100%;
+}
+
+/* ── Tablet: moderate differentiation ── */
+@media (max-width: 1024px) {
+	body.ft-wide-s {
+		--ft-content-maxw: 75%;
+	}
+	body.ft-wide-m {
+		--ft-content-maxw: 85%;
+	}
+	body.ft-wide-l {
+		--ft-content-maxw: 92%;
+	}
+	body.ft-wide-xl {
+		--ft-content-maxw: 100%;
+	}
+}
+
+/* ── Phone: all near-full-width but still differ from each other ── */
+@media (max-width: 600px) {
+	body.ft-wide-s {
+		--ft-content-maxw: 88%;
+	}
+	body.ft-wide-m {
+		--ft-content-maxw: 93%;
+	}
+	body.ft-wide-l {
+		--ft-content-maxw: 97%;
+	}
+	body.ft-wide-xl {
+		--ft-content-maxw: 100%;
+	}
+}
+
+/* ── Apply max-width + centering to content containers ──
+ * .cm-scroller: excluded entirely — it must fill the full viewport.
+ * .cm-sizer + .cm-content: get max-width to constrain content.
+ * .cm-sizer: also gets margin: auto for horizontal centering.
+ * Reading view: .markdown-preview-view gets both max-width + centering.
+ */
+body.ft-wide-s .markdown-source-view.mod-cm6 .cm-sizer,
+body.ft-wide-s .markdown-source-view.mod-cm6 .cm-content,
+body.ft-wide-s .markdown-reading-view .markdown-preview-view,
+body.ft-wide-m .markdown-source-view.mod-cm6 .cm-sizer,
+body.ft-wide-m .markdown-source-view.mod-cm6 .cm-content,
+body.ft-wide-m .markdown-reading-view .markdown-preview-view,
+body.ft-wide-l .markdown-source-view.mod-cm6 .cm-sizer,
+body.ft-wide-l .markdown-source-view.mod-cm6 .cm-content,
+body.ft-wide-l .markdown-reading-view .markdown-preview-view,
+body.ft-wide-xl .markdown-source-view.mod-cm6 .cm-sizer,
+body.ft-wide-xl .markdown-source-view.mod-cm6 .cm-content,
+body.ft-wide-xl .markdown-reading-view .markdown-preview-view {
+	max-width: var(--ft-content-maxw) !important;
+}
+
+body.ft-wide-s .markdown-source-view.mod-cm6 .cm-sizer,
+body.ft-wide-s .markdown-reading-view .markdown-preview-view,
+body.ft-wide-m .markdown-source-view.mod-cm6 .cm-sizer,
+body.ft-wide-m .markdown-reading-view .markdown-preview-view,
+body.ft-wide-l .markdown-source-view.mod-cm6 .cm-sizer,
+body.ft-wide-l .markdown-reading-view .markdown-preview-view,
+body.ft-wide-xl .markdown-source-view.mod-cm6 .cm-sizer,
+body.ft-wide-xl .markdown-reading-view .markdown-preview-view {
+	margin-left: auto !important;
+	margin-right: auto !important;
 }
 
 /* ── @-Completion Popup ── */
@@ -1972,4 +2055,35 @@ body.ft-wide .markdown-reading-view .markdown-preview-sizer {
 
 .ft-task-cell {
 	vertical-align: middle;
+}
+
+/* ── Settings Group Cards ── */
+.ft-settings-group {
+	background: var(--background-primary-alt);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	padding: 8px 16px 4px;
+	margin-bottom: 20px;
+}
+
+.ft-settings-group h2 {
+	margin: 0 0 8px 0;
+	padding: 0 0 8px 0;
+	border-bottom: 1px solid var(--background-modifier-border);
+	font-size: var(--font-ui-medium);
+	font-weight: var(--font-semibold);
+	color: var(--text-normal);
+}
+
+.ft-settings-group .setting-item {
+	border-top: none !important;
+	padding-top: 6px;
+}
+
+.ft-settings-group .setting-item + .setting-item {
+	border-top: 1px solid var(--background-modifier-border) !important;
+}
+
+.ft-settings-group .setting-item-heading {
+	border-top: none !important;
 }

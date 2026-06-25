@@ -42,7 +42,7 @@ const DEFAULT_SETTINGS = {
 	// Display
 	dateFormat: "YYYY-MM-DD",
 	statusBarTimer: true,
-	contentWidth: 0,
+	contentWidthPreset: "s",
 
 	// Notifications
 	timerSound: true,
@@ -97,13 +97,15 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 		this.plugin = plugin;
 	}
 
-	_applyContentWidth(px) {
-		if (px > 0) {
-			document.body.classList.add("ft-wide");
-			document.body.style.setProperty("--ft-content-width", px + "px");
-		} else {
-			document.body.classList.remove("ft-wide");
-			document.body.style.removeProperty("--ft-content-width");
+	_applyWidthPreset(preset) {
+		document.body.classList.remove(
+			"ft-wide-s",
+			"ft-wide-m",
+			"ft-wide-l",
+			"ft-wide-xl",
+		);
+		if (preset && ["s", "m", "l", "xl"].includes(preset)) {
+			document.body.classList.add("ft-wide-" + preset);
 		}
 	}
 
@@ -111,10 +113,15 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		// ── Project Detection ──
-		containerEl.createEl("h2", { text: "Project Detection" });
+		let _g;
 
-		new Setting(containerEl)
+		// ═══════════════════════════════════════
+		//  Projects
+		// ═══════════════════════════════════════
+		_g = containerEl.createEl("div", { cls: "ft-settings-group" });
+		_g.createEl("h2", { text: "Projects" });
+
+		new Setting(_g)
 			.setName("Frontmatter key")
 			.setDesc("Frontmatter field that marks a note as a project root")
 			.addText((text) =>
@@ -127,7 +134,7 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 					}),
 			);
 
-		new Setting(containerEl)
+		new Setting(_g)
 			.setName("Frontmatter value")
 			.setDesc("Value of the frontmatter key that triggers project detection")
 			.addText((text) =>
@@ -140,7 +147,7 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 					}),
 			);
 
-		new Setting(containerEl)
+		new Setting(_g)
 			.setName("Project name key")
 			.setDesc("Frontmatter field used as the project display name")
 			.addText((text) =>
@@ -153,10 +160,10 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 					}),
 			);
 
-		new Setting(containerEl)
+		new Setting(_g)
 			.setName("Fallback to folder name")
 			.setDesc(
-				"Use folder name as the project name when no frontmatter marker is found",
+				"Use folder name as the project display name when no frontmatter marker is found",
 			)
 			.addToggle((toggle) =>
 				toggle
@@ -167,7 +174,7 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 					}),
 			);
 
-		new Setting(containerEl)
+		new Setting(_g)
 			.setName("Tag prefix")
 			.setDesc(
 				"Prefix for @p: project tags (e.g. @p:Website). Legacy #project/ prefix is deprecated.",
@@ -182,7 +189,7 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 					}),
 			);
 
-		new Setting(containerEl)
+		new Setting(_g)
 			.setName("Projects root")
 			.setDesc(
 				"Root folder for projects — leave empty to scan the entire vault",
@@ -195,7 +202,6 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 						const oldRoot = this.plugin.settings.projectsRoot;
 						this.plugin.settings.projectsRoot = value;
 						await this.plugin.saveData(this.plugin.settings);
-						// Detect change and offer to rebuild cache
 						if (oldRoot !== value) {
 							this.plugin.taskCache?.clear();
 							new Notice(
@@ -206,29 +212,13 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 					}),
 			);
 
-		// ── Quick Entry ──
-		containerEl.createEl("h2", { text: "Quick Entry" });
+		// ═══════════════════════════════════════
+		//  Buckets & Budget
+		// ═══════════════════════════════════════
+		_g = containerEl.createEl("div", { cls: "ft-settings-group" });
+		_g.createEl("h2", { text: "Buckets & Budget" });
 
-		new Setting(containerEl)
-			.setName("Default target file")
-			.setDesc("Where new tasks are saved by default")
-			.addDropdown((dropdown) =>
-				dropdown
-					.addOption("daily-note", "Daily note")
-					.addOption("active-file", "Active file")
-					.addOption("project-file", "Project file")
-					.addOption("inbox", "Inbox")
-					.setValue(this.plugin.settings.quickEntryTargetFile)
-					.onChange(async (value) => {
-						this.plugin.settings.quickEntryTargetFile = value;
-						await this.plugin.saveData(this.plugin.settings);
-					}),
-			);
-
-		// ── Buckets ──
-		containerEl.createEl("h2", { text: "Buckets" });
-
-		new Setting(containerEl)
+		new Setting(_g)
 			.setName("Bucket tag prefix")
 			.setDesc("Prefix used for bucket tags (e.g. @budget:deep-work)")
 			.addText((text) =>
@@ -241,9 +231,9 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 					}),
 			);
 
-		new Setting(containerEl)
-			.setName("Daily budget cap (hours)")
-			.setDesc("Maximum scheduled hours per day before warning")
+		new Setting(_g)
+			.setName("Daily budget cap")
+			.setDesc("Maximum scheduled hours per day before warning (hours)")
 			.addText((text) =>
 				text
 					.setPlaceholder("12")
@@ -257,12 +247,11 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 					}),
 			);
 
-		containerEl.createEl("h3", { text: "Configure Buckets" });
+		containerEl.createEl("h3", { text: "Bucket definitions" });
 
-		// Render each bucket
 		const buckets = this.plugin.settings.buckets || [];
 		for (const bucket of buckets) {
-			new Setting(containerEl)
+			new Setting(_g)
 				.setName(bucket.name)
 				.setDesc(
 					`Weekly limit: ${bucket.weeklyLimit}h · Color: ${bucket.color}`,
@@ -295,7 +284,6 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 				.addColorPicker((picker) =>
 					picker.setValue(bucket.color).onChange(async (value) => {
 						bucket.color = value;
-						// Update the swatch in the description
 						await this.plugin.saveData(this.plugin.settings);
 						this.display();
 					}),
@@ -308,13 +296,12 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 							this.plugin.settings.buckets =
 								this.plugin.settings.buckets.filter((b) => b.id !== bucket.id);
 							await this.plugin.saveData(this.plugin.settings);
-							this.display(); // Re-render
+							this.display();
 						}),
 				);
 		}
 
-		// Add Bucket button
-		new Setting(containerEl).setName("Add new bucket").addButton((btn) =>
+		new Setting(_g).setName("Add new bucket").addButton((btn) =>
 			btn
 				.setButtonText("+ Add Bucket")
 				.setCta()
@@ -330,15 +317,34 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 					buckets.push(newBucket);
 					this.plugin.settings.buckets = buckets;
 					await this.plugin.saveData(this.plugin.settings);
-					this.display(); // Re-render
+					this.display();
 				}),
 		);
 
-		// ── Inbox ──
-		containerEl.createEl("h2", { text: "Inbox" });
+		// ═══════════════════════════════════════
+		//  Task Capture
+		// ═══════════════════════════════════════
+		_g = containerEl.createEl("div", { cls: "ft-settings-group" });
+		_g.createEl("h2", { text: "Task Capture" });
 
-		new Setting(containerEl)
-			.setName("Inbox file path")
+		new Setting(_g)
+			.setName("Quick Entry target")
+			.setDesc("Where new tasks are saved by default")
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("daily-note", "Daily note")
+					.addOption("active-file", "Active file")
+					.addOption("project-file", "Project file")
+					.addOption("inbox", "Inbox")
+					.setValue(this.plugin.settings.quickEntryTargetFile)
+					.onChange(async (value) => {
+						this.plugin.settings.quickEntryTargetFile = value;
+						await this.plugin.saveData(this.plugin.settings);
+					}),
+			);
+
+		new Setting(_g)
+			.setName("Inbox file")
 			.setDesc(
 				"Path to the inbox file where you capture tasks. Relative to vault root.",
 			)
@@ -352,9 +358,11 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 					}),
 			);
 
-		new Setting(containerEl)
-			.setName("Default duration (minutes)")
-			.setDesc("Pre-filled duration when processing inbox items as tasks")
+		new Setting(_g)
+			.setName("Default duration")
+			.setDesc(
+				"Pre-filled duration (minutes) when processing inbox items as tasks",
+			)
 			.addText((text) =>
 				text
 					.setPlaceholder("30")
@@ -368,10 +376,10 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 					}),
 			);
 
-		new Setting(containerEl)
+		new Setting(_g)
 			.setName("Default bucket")
 			.setDesc(
-				"Pre-filled bucket when processing inbox items as tasks (leave empty for none)",
+				"Pre-filled bucket when processing inbox items (leave empty for none)",
 			)
 			.addDropdown((dropdown) => {
 				dropdown.addOption("", "None");
@@ -388,242 +396,14 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 				return dropdown;
 			});
 
-		// ── Today Note ──
-		containerEl.createEl("h2", { text: "Today Note" });
-
-		new Setting(containerEl)
-			.setName("Today note path")
-			.setDesc(
-				"Path for the persistent Today note at vault root. Shows today's tasks, overdue, and upcoming items via dynamic code blocks.",
-			)
-			.addText((text) =>
-				text
-					.setPlaceholder("Today.md")
-					.setValue(this.plugin.settings.todayNotePath)
-					.onChange(async (value) => {
-						this.plugin.settings.todayNotePath = value || "Today.md";
-						await this.plugin.saveData(this.plugin.settings);
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName("Open Today Note")
-			.setDesc("Open or create the Today note")
-			.addButton((btn) =>
-				btn
-					.setButtonText("Open")
-					.setCta()
-					.onClick(async () => {
-						await this.plugin._openTodayNote();
-					}),
-			);
-
-		// ── Sprints (v0.6.0) ──
-		containerEl.createEl("h2", { text: "Sprints" });
-
-		const sprints = this.plugin.settings.sprints || [];
-		for (const sprint of sprints) {
-			const sprintSetting = new Setting(containerEl)
-				.setName(sprint.name || sprint.id)
-				.setDesc(`${sprint.goal || ""}  ·  ${sprint.start} → ${sprint.end}`)
-				.addText((text) =>
-					text
-						.setPlaceholder("Name")
-						.setValue(sprint.name)
-						.onChange(async (value) => {
-							sprint.name = value;
-							sprint.id = value
-								.toLowerCase()
-								.replace(/\s+/g, "-")
-								.replace(/[^a-z0-9-]/g, "");
-							await this.plugin.saveData(this.plugin.settings);
-						}),
-				)
-				.addText((text) =>
-					text
-						.setPlaceholder("Goal")
-						.setValue(sprint.goal || "")
-						.onChange(async (value) => {
-							sprint.goal = value;
-							await this.plugin.saveData(this.plugin.settings);
-						}),
-				);
-
-			// Start date
-			sprintSetting.addText((text) =>
-				text
-					.setPlaceholder("Start (YYYY-MM-DD)")
-					.setValue(sprint.start || "")
-					.onChange(async (value) => {
-						sprint.start = value;
-						await this.plugin.saveData(this.plugin.settings);
-					}),
-			);
-
-			// End date
-			sprintSetting.addText((text) =>
-				text
-					.setPlaceholder("End (YYYY-MM-DD)")
-					.setValue(sprint.end || "")
-					.onChange(async (value) => {
-						sprint.end = value;
-						await this.plugin.saveData(this.plugin.settings);
-					}),
-			);
-
-			// Color picker
-			sprintSetting.addColorPicker((picker) =>
-				picker.setValue(sprint.color || "#2d9ce0").onChange(async (value) => {
-					sprint.color = value;
-					await this.plugin.saveData(this.plugin.settings);
-					this.display();
-				}),
-			);
-
-			// Delete button
-			sprintSetting.addExtraButton((btn) =>
-				btn
-					.setIcon("trash")
-					.setTooltip("Delete sprint")
-					.onClick(async () => {
-						this.plugin.settings.sprints = sprints.filter(
-							(s) => s.id !== sprint.id,
-						);
-						await this.plugin.saveData(this.plugin.settings);
-						this.display();
-					}),
-			);
-		}
-
-		// Add Sprint button
-		new Setting(containerEl).setName("Add new sprint").addButton((btn) =>
-			btn
-				.setButtonText("+ Add Sprint")
-				.setCta()
-				.onClick(async () => {
-					const s = this.plugin.settings.sprints || [];
-					s.push({
-						id: "sprint-" + (s.length + 1),
-						name: "New Sprint",
-						start: "",
-						end: "",
-						goal: "",
-						color: "#2d9ce0",
-					});
-					this.plugin.settings.sprints = s;
-					await this.plugin.saveData(this.plugin.settings);
-					this.display();
-				}),
-		);
-
-		// ── Display ──
-		containerEl.createEl("h2", { text: "Display" });
-
-		new Setting(containerEl)
-			.setName("Date format")
-			.setDesc("Format string for dates (uses moment.js syntax)")
-			.addText((text) =>
-				text
-					.setPlaceholder("YYYY-MM-DD")
-					.setValue(this.plugin.settings.dateFormat)
-					.onChange(async (value) => {
-						this.plugin.settings.dateFormat = value;
-						await this.plugin.saveData(this.plugin.settings);
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName("Show timer in status bar")
-			.setDesc("Display the running countdown timer in the status bar")
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.statusBarTimer)
-					.onChange(async (value) => {
-						this.plugin.settings.statusBarTimer = value;
-						await this.plugin.saveData(this.plugin.settings);
-					}),
-			);
-
-		let cwSlider;
-		new Setting(containerEl)
-			.setName("Content width")
-			.setDesc(
-				"Max width of the content area in pixels — 0 uses Obsidian's default width",
-			)
-			.addSlider((slider) => {
-				cwSlider = slider;
-				slider
-					.setLimits(0, 1920, 20)
-					.setValue(this.plugin.settings.contentWidth)
-					.setDynamicTooltip()
-					.onChange(async (value) => {
-						this.plugin.settings.contentWidth = value;
-						await this.plugin.saveData(this.plugin.settings);
-						this._applyContentWidth(value);
-					});
-			})
-			.addExtraButton((btn) =>
-				btn
-					.setIcon("reset")
-					.setTooltip("Reset to default")
-					.onClick(async () => {
-						this.plugin.settings.contentWidth = 0;
-						await this.plugin.saveData(this.plugin.settings);
-						cwSlider.setValue(0);
-						this._applyContentWidth(0);
-					}),
-			);
-
-		// ── Notifications ──
-		containerEl.createEl("h2", { text: "Notifications" });
-
-		new Setting(containerEl)
-			.setName("Play sound on timer expiry")
-			.setDesc("Beep when a countdown timer reaches zero")
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.timerSound)
-					.onChange(async (value) => {
-						this.plugin.settings.timerSound = value;
-						await this.plugin.saveData(this.plugin.settings);
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName("Notice duration")
-			.setDesc(
-				"How long notifications stay visible, in milliseconds (0 = persistent)",
-			)
-			.addText((text) =>
-				text
-					.setPlaceholder("4000")
-					.setValue(String(this.plugin.settings.noticeDuration))
-					.onChange(async (value) => {
-						const num = parseInt(value, 10);
-						if (!isNaN(num) && num >= 0) {
-							this.plugin.settings.noticeDuration = num;
-							await this.plugin.saveData(this.plugin.settings);
-						}
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName("Quiet mode")
-			.setDesc("Suppress all non-error notifications")
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.quietMode)
-					.onChange(async (value) => {
-						this.plugin.settings.quietMode = value;
-						await this.plugin.saveData(this.plugin.settings);
-					}),
-			);
-
-		// ── Templates ──
-		containerEl.createEl("h2", { text: "Templates" });
+		// ═══════════════════════════════════════
+		//  Templates
+		// ═══════════════════════════════════════
+		_g = containerEl.createEl("div", { cls: "ft-settings-group" });
+		_g.createEl("h2", { text: "Templates" });
 
 		let dailyTaEl;
-		new Setting(containerEl)
+		new Setting(_g)
 			.setName("Daily template")
 			.setDesc("Template used for the daily note dashboard")
 			.addTextArea((text) => {
@@ -651,7 +431,7 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 			);
 
 		let weeklyTaEl;
-		new Setting(containerEl)
+		new Setting(_g)
 			.setName("Weekly template")
 			.setDesc("Template used for the weekly review note")
 			.addTextArea((text) => {
@@ -680,7 +460,7 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 			);
 
 		let projTaEl;
-		new Setting(containerEl)
+		new Setting(_g)
 			.setName("Project template")
 			.setDesc("Template used when creating a new project folder note")
 			.addTextArea((text) => {
@@ -708,17 +488,137 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 					}),
 			);
 
-		// ── Routines (v0.5.0) ──
-		containerEl.createEl("h2", { text: "Routines" });
+		// ═══════════════════════════════════════
+		//  Planning & Routines
+		// ═══════════════════════════════════════
+		_g = containerEl.createEl("div", { cls: "ft-settings-group" });
+		_g.createEl("h2", { text: "Planning & Routines" });
 
-		new Setting(containerEl)
+		new Setting(_g)
+			.setName("Today note")
+			.setDesc(
+				"Path for the persistent Today note. Shows tasks, overdue, and upcoming items.",
+			)
+			.addText((text) =>
+				text
+					.setPlaceholder("Today.md")
+					.setValue(this.plugin.settings.todayNotePath)
+					.onChange(async (value) => {
+						this.plugin.settings.todayNotePath = value || "Today.md";
+						await this.plugin.saveData(this.plugin.settings);
+					}),
+			)
+			.addButton((btn) =>
+				btn
+					.setButtonText("Open")
+					.setCta()
+					.onClick(async () => {
+						await this.plugin._openTodayNote();
+					}),
+			);
+
+		containerEl.createEl("h3", { text: "Sprints" });
+
+		const sprints = this.plugin.settings.sprints || [];
+		for (const sprint of sprints) {
+			const sprintSetting = new Setting(_g)
+				.setName(sprint.name || sprint.id)
+				.setDesc(`${sprint.goal || ""}  ·  ${sprint.start} → ${sprint.end}`)
+				.addText((text) =>
+					text
+						.setPlaceholder("Name")
+						.setValue(sprint.name)
+						.onChange(async (value) => {
+							sprint.name = value;
+							sprint.id = value
+								.toLowerCase()
+								.replace(/\s+/g, "-")
+								.replace(/[^a-z0-9-]/g, "");
+							await this.plugin.saveData(this.plugin.settings);
+						}),
+				)
+				.addText((text) =>
+					text
+						.setPlaceholder("Goal")
+						.setValue(sprint.goal || "")
+						.onChange(async (value) => {
+							sprint.goal = value;
+							await this.plugin.saveData(this.plugin.settings);
+						}),
+				);
+
+			sprintSetting.addText((text) =>
+				text
+					.setPlaceholder("Start (YYYY-MM-DD)")
+					.setValue(sprint.start || "")
+					.onChange(async (value) => {
+						sprint.start = value;
+						await this.plugin.saveData(this.plugin.settings);
+					}),
+			);
+
+			sprintSetting.addText((text) =>
+				text
+					.setPlaceholder("End (YYYY-MM-DD)")
+					.setValue(sprint.end || "")
+					.onChange(async (value) => {
+						sprint.end = value;
+						await this.plugin.saveData(this.plugin.settings);
+					}),
+			);
+
+			sprintSetting.addColorPicker((picker) =>
+				picker.setValue(sprint.color || "#2d9ce0").onChange(async (value) => {
+					sprint.color = value;
+					await this.plugin.saveData(this.plugin.settings);
+					this.display();
+				}),
+			);
+
+			sprintSetting.addExtraButton((btn) =>
+				btn
+					.setIcon("trash")
+					.setTooltip("Delete sprint")
+					.onClick(async () => {
+						this.plugin.settings.sprints = sprints.filter(
+							(s) => s.id !== sprint.id,
+						);
+						await this.plugin.saveData(this.plugin.settings);
+						this.display();
+					}),
+			);
+		}
+
+		new Setting(_g).setName("Add new sprint").addButton((btn) =>
+			btn
+				.setButtonText("+ Add Sprint")
+				.setCta()
+				.onClick(async () => {
+					const s = this.plugin.settings.sprints || [];
+					s.push({
+						id: "sprint-" + (s.length + 1),
+						name: "New Sprint",
+						start: "",
+						end: "",
+						goal: "",
+						color: "#2d9ce0",
+					});
+					this.plugin.settings.sprints = s;
+					await this.plugin.saveData(this.plugin.settings);
+					this.display();
+				}),
+		);
+
+		containerEl.createEl("h3", { text: "Routines" });
+
+		new Setting(_g)
 			.setName("Routines folder")
 			.setDesc(
 				"Folder where routine template markdown files live. Each task line with 🔁 becomes a routine.",
 			)
 			.addText((text) =>
 				text
-					.setPlaceholder("flowtime/routines/")
+					.setPlaceholder("Routines/")
 					.setValue(this.plugin.settings.routinesFolder)
 					.onChange(async (value) => {
 						this.plugin.settings.routinesFolder = value;
@@ -726,10 +626,10 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 					}),
 			);
 
-		new Setting(containerEl)
+		new Setting(_g)
 			.setName("Vacation mode")
 			.setDesc(
-				"Pause all routine generation. No new routine tasks will be created until this is turned off.",
+				"Pause all routine generation. No new routine tasks will be created until turned off.",
 			)
 			.addToggle((toggle) =>
 				toggle
@@ -740,7 +640,7 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 					}),
 			);
 
-		new Setting(containerEl)
+		new Setting(_g)
 			.setName("Auto-generate on startup")
 			.setDesc("Run routine engine when the plugin loads.")
 			.addToggle((toggle) =>
@@ -752,8 +652,8 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 					}),
 			);
 
-		new Setting(containerEl)
-			.setName("Auto-generate on open daily note")
+		new Setting(_g)
+			.setName("Auto-generate on open daily")
 			.setDesc("Generate routines when today's daily note is opened.")
 			.addToggle((toggle) =>
 				toggle
@@ -764,10 +664,10 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 					}),
 			);
 
-		new Setting(containerEl)
+		new Setting(_g)
 			.setName("Workdays")
 			.setDesc(
-				"Which days are considered workdays for the 🔁 every workday recurrence. Comma-separated numbers (0=Sun, 1=Mon, ... 6=Sat). Default: 1,2,3,4,5",
+				"Days considered workdays for 🔁 every workday recurrence. Comma-separated (0=Sun … 6=Sat). Default: 1,2,3,4,5",
 			)
 			.addText((text) =>
 				text
@@ -787,7 +687,7 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 					}),
 			);
 
-		new Setting(containerEl)
+		new Setting(_g)
 			.setName("Week start day")
 			.setDesc(
 				"First day of the week for the weekplan view. 0=Sunday, 1=Monday.",
@@ -803,7 +703,7 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 					}),
 			);
 
-		new Setting(containerEl)
+		new Setting(_g)
 			.setName("Hide completed routines")
 			.setDesc("Don't show checked-off routine tasks in the weekplan view.")
 			.addToggle((toggle) =>
@@ -811,6 +711,104 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.hideCompletedRoutines)
 					.onChange(async (value) => {
 						this.plugin.settings.hideCompletedRoutines = value;
+						await this.plugin.saveData(this.plugin.settings);
+					}),
+			);
+
+		// ═══════════════════════════════════════
+		//  Display & Layout
+		// ═══════════════════════════════════════
+		_g = containerEl.createEl("div", { cls: "ft-settings-group" });
+		_g.createEl("h2", { text: "Display & Layout" });
+
+		new Setting(_g)
+			.setName("Date format")
+			.setDesc("Format string for dates (uses moment.js syntax)")
+			.addText((text) =>
+				text
+					.setPlaceholder("YYYY-MM-DD")
+					.setValue(this.plugin.settings.dateFormat)
+					.onChange(async (value) => {
+						this.plugin.settings.dateFormat = value;
+						await this.plugin.saveData(this.plugin.settings);
+					}),
+			);
+
+		new Setting(_g)
+			.setName("Content width")
+			.setDesc(
+				"S = ~700px · M = ~1000px · L = ~1400px · XL = full width (centered)",
+			)
+			.addDropdown((dropdown) => {
+				dropdown
+					.addOption("s", "S — Narrow (~700px)")
+					.addOption("m", "M — Medium (~1000px)")
+					.addOption("l", "L — Wide (~1400px)")
+					.addOption("xl", "XL — Full width")
+					.setValue(this.plugin.settings.contentWidthPreset)
+					.onChange(async (value) => {
+						this.plugin.settings.contentWidthPreset = value;
+						await this.plugin.saveData(this.plugin.settings);
+						this._applyWidthPreset(value);
+					});
+			});
+
+		new Setting(_g)
+			.setName("Show timer in status bar")
+			.setDesc("Display the running countdown timer in the status bar")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.statusBarTimer)
+					.onChange(async (value) => {
+						this.plugin.settings.statusBarTimer = value;
+						await this.plugin.saveData(this.plugin.settings);
+					}),
+			);
+
+		// ═══════════════════════════════════════
+		//  Notifications
+		// ═══════════════════════════════════════
+		_g = containerEl.createEl("div", { cls: "ft-settings-group" });
+		_g.createEl("h2", { text: "Notifications" });
+
+		new Setting(_g)
+			.setName("Play sound on timer expiry")
+			.setDesc("Beep when a countdown timer reaches zero")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.timerSound)
+					.onChange(async (value) => {
+						this.plugin.settings.timerSound = value;
+						await this.plugin.saveData(this.plugin.settings);
+					}),
+			);
+
+		new Setting(_g)
+			.setName("Notice duration")
+			.setDesc(
+				"How long notifications stay visible, in milliseconds (0 = persistent)",
+			)
+			.addText((text) =>
+				text
+					.setPlaceholder("4000")
+					.setValue(String(this.plugin.settings.noticeDuration))
+					.onChange(async (value) => {
+						const num = parseInt(value, 10);
+						if (!isNaN(num) && num >= 0) {
+							this.plugin.settings.noticeDuration = num;
+							await this.plugin.saveData(this.plugin.settings);
+						}
+					}),
+			);
+
+		new Setting(_g)
+			.setName("Quiet mode")
+			.setDesc("Suppress all non-error notifications")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.quietMode)
+					.onChange(async (value) => {
+						this.plugin.settings.quietMode = value;
 						await this.plugin.saveData(this.plugin.settings);
 					}),
 			);

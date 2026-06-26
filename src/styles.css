@@ -2354,6 +2354,10 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-v
 	text-align: center;
 	overflow: hidden;
 	text-overflow: ellipsis;
+	cursor: pointer;
+}
+.ft-list-time:hover {
+	color: var(--text-accent);
 }
 
 /* Inline timer — reuses .ft-timer-* components, stepped down for list rows */

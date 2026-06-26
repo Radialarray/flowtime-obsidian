@@ -596,7 +596,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
         sprint: false,
       };
     }
-    if (this.mode === "today") { this._columnVisibility.date = false; this._columnVisibility.actions = false; }
+    if (this.mode === "today") { this._columnVisibility.actions = false; }
     if (this.mode === "sessions") { this._renderSessionHistory(); return; }
     if (this.mode === "budget") { this._renderBudgetView(); return; }
     if (this.mode === "sprints") { this._renderSprintOverview(); return; }

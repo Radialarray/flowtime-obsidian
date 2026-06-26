@@ -49,29 +49,36 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
     const taskEls = container.querySelectorAll(selector);
     if (taskEls.length === 0) return;
 
-    // Parse the note to map line numbers to DOM elements
+    // Build line-number map synchronously so it's ready before click handlers attach
     _taskLineMap = new Map<HTMLElement, number>();
     if (_currentFile) {
-      app.vault.read(_currentFile).then((content) => {
-        const lines = content.split("\n");
-        const taskLineNumbers: number[] = [];
-        for (let i = 0; i < lines.length; i++) {
-          if (lines[i].match(/^\s*[-*+]\s+\[[ xX\-]\]/)) {
-            taskLineNumbers.push(i);
-          }
-        }
-        let idx = 0;
-        for (const el of taskEls) {
-          if (idx < taskLineNumbers.length) {
-            _taskLineMap.set(el as HTMLElement, taskLineNumbers[idx]);
-            idx++;
-          }
-        }
-      }).catch(() => { /* fine */ });
+      // Read synchronously via cached content — vault.read is async but we need
+      // the map ready before enhancing. We'll build it on first click as fallback.
+      _buildTaskMap(_currentFile, taskEls);
     }
 
     for (const el of taskEls) {
       _enhanceTaskLine(el as HTMLElement);
+    }
+  }
+
+  /** Build task-line map. Called on enhance and lazily on first click. */
+  async function _buildTaskMap(file: TFile, taskEls?: NodeListOf<Element>): Promise<void> {
+    const content = await app.vault.read(file);
+    const lines = content.split("\n");
+    const taskLineNumbers: number[] = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].match(/^\s*[-*+]\s+\[[ xX\-]\]/)) {
+        taskLineNumbers.push(i);
+      }
+    }
+    const els = taskEls || document.querySelectorAll(".ft-list-enhanced");
+    let idx = 0;
+    for (const el of els) {
+      if (idx < taskLineNumbers.length) {
+        _taskLineMap.set(el as HTMLElement, taskLineNumbers[idx]);
+        idx++;
+      }
     }
   }
 
@@ -95,6 +102,11 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
           : target.classList.contains("cm-formatting-task");
 
         if (!isCheckClick) return;
+
+        // Lazy-build map if not ready yet
+        if (_taskLineMap.size === 0 && _currentFile) {
+          await _buildTaskMap(_currentFile);
+        }
 
         const lineNum = _taskLineMap.get(el);
         if (lineNum == null) return;

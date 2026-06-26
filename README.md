@@ -79,9 +79,13 @@ With a task as the first line, `@`-directives are stripped from the filename and
 - [ ] Merge branch
 ```
 
-## Tables
+## Views
 
-Every code block renders as an interactive table with inline editing.
+Every code block renders as an interactive table **or list** — toggle with the `☰ List` / `⊞ Table` button in the toolbar. Set your preferred default in Settings → Display → Default view.
+
+### Table view
+
+Inline-editable columns with sort, filter, and group:
 
 **Time inputs** — each task row has editable start time and duration fields. Type `7:30`, `45m`, `1.5h` — the end time auto-calculates below. Changes save to the source file after 300ms.
 
@@ -111,11 +115,25 @@ Every code block renders as an interactive table with inline editing.
 
 **Bulk operations** — compact modes have buttons to assign all visible tasks to today, or backlog them all (overdue mode).
 
-**Filter, sort, group** — each table has a toolbar:
+**Filter, sort, group** — each view has a toolbar:
 
 - Filter by bucket, project, date, text, duration, status, or priority. Operators: is, is not, contains, >, <, exists.
-- Sort by clicking column headers. Shift-click for multi-column.
+- Sort by clicking column headers (table) or dragging (list). Shift-click for multi-column sort.
 - Group by bucket, project, date, or status — with nested sub-headers.
+
+### List view
+
+A lightweight alternative to the table — tasks as compact div rows:
+
+```
+⠿ ☐ Task text here                     09:00—09:30  ▶ 30:00 ↺
+```
+
+- **⠿ Drag handle** — grab to reorder. Tasks get a sort index (`@i:number` in the source file) that persists the new order. Drop between two timed tasks to assign a midpoint time; drop next to one timed task to share its time.
+- **Time inputs** — tasks without a time show small start/duration fields. Type a value and it auto-saves.
+- **Inline timer** — each row has ▶ play, time display, ↺ reset. Same countdown behavior as the table view.
+- **Hover popover** — hover on task text: a floating card shows project, bucket, sprint, priority, date, and source file.
+- **Table freeze** — when dragging, the list stays in place (no scrolling) so you can reorder without losing your place.
 
 ## Cross-table refresh
 
@@ -213,6 +231,7 @@ Flowtime parses task lines from any markdown file in your vault:
 | `@b:name` or `@bucket:name` | Time bucket | `@b:deep-work` |
 | `🔺⏫🔼🔽⏬` | Priority | |
 | `@p:Name` | Project assignment | `@p:website` |
+| `@i:number` | Sort index (drag reorder) | `@i:5500` |
 | `🔁 every <interval>` | Recurrence | `🔁 every workday` |
 
 Complete example:
@@ -220,6 +239,13 @@ Complete example:
 ```markdown
 - [ ] 09:00—11:30 Code review @2026-06-24 🔼 @1.5h @b:deep-work
 ```
+
+## Upcoming
+
+Features in development:
+
+- **Heading drop zones** — drag a task onto `### Today`, `### Tomorrow`, or `### Soon` headings in your note to change its date/status. The note's own headings become live scheduling targets.
+- **Enhanced markdown notes** — add `type: flowtime-list` to a note's frontmatter to turn it into a fully interactive task list (drag handles, checkboxes, timers) without any code blocks.
 
 ## Setup
 
@@ -289,6 +315,7 @@ In Settings → Flowtime.
 | Notice duration | 4000ms | Notification display time |
 | Quiet mode | off | Suppress non-error notices |
 | **Display** | | |
+| Default view | Table | Default view for code blocks: Table or List |
 | Date format | YYYY-MM-DD | Moment.js format for dates |
 | Show timer in status bar | on | Show/hide the persistent countdown |
 | Content width | 0 | Slider (0–1920px). 0 = use Obsidian default width |

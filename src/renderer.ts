@@ -116,13 +116,13 @@ const COLUMNS: ColumnDef[] = [
   { id: "check",    label: "\u2713",       sortField: "status",  width: "36px",  compactOnly: false, compactSkip: false, defaultHide: false },
   { id: "priority", label: "!",       sortField: "priority",width: "28px",  compactOnly: false, compactSkip: false, defaultHide: true },
   { id: "soon",     label: "~",       sortField: "soon",    width: "36px",  compactOnly: false, compactSkip: false, defaultHide: true },
-  { id: "task",     label: "Task",    sortField: "text",    width: "auto",  compactOnly: false, compactSkip: false, defaultHide: false },
+  { id: "task",     label: "Task",    sortField: "text",    width: "35%",   compactOnly: false, compactSkip: false, defaultHide: false },
   { id: "project",  label: "Project", sortField: "project", width: "auto",  compactOnly: false, compactSkip: false, defaultHide: false },
   { id: "bucket",   label: "Bucket",  sortField: "bucket",  width: "auto",  compactOnly: false, compactSkip: false, defaultHide: false },
   { id: "sprint",   label: "Sprint",  sortField: "sprint",  width: "auto",  compactOnly: false, compactSkip: false, defaultHide: true },
   { id: "source",   label: "Source",  sortField: "source",  width: "auto",  compactOnly: false, compactSkip: false, defaultHide: false },
   { id: "date",     label: "Date",    sortField: "date",    width: "85px",  compactOnly: false, compactSkip: false, defaultHide: false },
-  { id: "actions",  label: " ",       sortField: null,      width: "72px",  compactOnly: true,  compactSkip: false, defaultHide: false },
+  { id: "actions",  label: " ",       sortField: null,      width: "auto",  compactOnly: true,  compactSkip: false, defaultHide: false },
   { id: "timer",    label: " ",       sortField: null,      width: "22%",   compactOnly: false, compactSkip: true,  defaultHide: false },
 ];
 

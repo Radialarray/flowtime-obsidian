@@ -1203,14 +1203,26 @@ export default class FlowtimePlugin extends Plugin {
 						if (backPath) {
 							const backFile = this.app.vault.getAbstractFileByPath(backPath);
 							if (backFile) {
-								this.app.workspace.getLeaf().openFile(backFile as TFile);
+								// If back-file is already open in a leaf, focus it; otherwise open in active leaf
+								const existingLeaf = this.app.workspace.getLeavesOfType("markdown")
+									.find((l) => (l.view as MarkdownView)?.file?.path === backPath);
+								if (existingLeaf) {
+									this.app.workspace.setActiveLeaf(existingLeaf);
+								} else {
+									this.app.workspace.getLeaf().openFile(backFile as TFile);
+								}
 							}
 						}
 					}
 				}
 
-				// Push current file to history
+				// Push current file to history (deduplicate: remove old entry if re-entering)
 				if (newPath && (!this._tabHistory.length || this._tabHistory[this._tabHistory.length - 1] !== newPath)) {
+					// Remove any prior occurrence so switching back doesn't create duplicates
+					const prevIdx = this._tabHistory.lastIndexOf(newPath);
+					if (prevIdx >= 0 && prevIdx !== this._tabHistory.length - 1) {
+						this._tabHistory.splice(prevIdx, 1);
+					}
 					this._tabHistory.push(newPath);
 					if (this._tabHistory.length > this._tabHistoryMax) {
 						this._tabHistory.shift();

@@ -586,6 +586,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
   renderTable(): void {
     this.containerEl.empty();
     this.rowData = [];
+    // Sync view mode from global settings (cross-renderer consistency)
+    if (this.plugin?.settings?.defaultView && !this.plugin.isMobile) {
+      this._viewMode = this.plugin.settings.defaultView;
+    }
     if (!this._columnVisibility) {
       // Mobile/narrow: show only essential columns (check, task, date)
       const isNarrow = typeof window !== "undefined" && window.innerWidth < 600;
@@ -687,7 +691,15 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     document.addEventListener("click", closeDD, true);
 
     const viewBtn = toolbar.createEl("button", { text: this._viewMode === "list" ? "\u229e Table" : "\u2630 List", cls: "ft-view-btn" });
-    viewBtn.addEventListener("click", () => { this._viewMode = this._viewMode === "list" ? "table" : "list"; this.renderTable(); });
+    viewBtn.addEventListener("click", () => {
+      this._viewMode = this._viewMode === "list" ? "table" : "list";
+      // Persist globally and sync all renderers
+      if (this.plugin?.settings) {
+        this.plugin.settings.defaultView = this._viewMode;
+      }
+      this._refreshSiblings();
+      this.renderTable();
+    });
 
     const filterBtn = toolbar.createEl("button", { text: "\ud83d\udd0d Filter", cls: "ft-filter-btn" });
     if (this._activeFilter) { filterBtn.addClass("ft-filter-active-btn"); } else { filterBtn.removeClass("ft-filter-active-btn"); }

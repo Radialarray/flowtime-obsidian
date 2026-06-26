@@ -1465,10 +1465,6 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     try { await this.saveTime(task, nt); task.time = nt; } catch (_) { /* silent */ }
   }
 
-  _showTaskDetail(_task: TaskRow, _anchorBtn: HTMLElement, _tdy: string): void {
-    /* → _showFloatingEditor */
-  }
-
   async saveTime(task: TaskRow, time: string): Promise<void> {
     const lines = (await this.app.vault.read(task.file!)).split("\n"); const m = lines[task.line].match(/^(\s*[-*+]\s*\[[^\]]*\]\s*)(.*)$/); if (!m) throw Error("Could not parse task line");
     const rest = m[2].replace(/^\d{1,2}:\d{2}(\s*[\u2014\-\u2013]\s*\d{1,2}:\d{2})?\s*/, "");

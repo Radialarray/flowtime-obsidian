@@ -1824,6 +1824,9 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
 					console.log("FT WRITTEN", JSON.stringify({ newIndex: newIdx, timeStr: timeStr || "(empty)" }));
 
+					// Clear column header sort so index-based sort takes over
+					this._sortConfig = [];
+					this._sortMode = null;
 					this._sort();
 					this.renderTable();
 					this.plugin?.notify?.("🔄 Time updated");

@@ -1348,7 +1348,6 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		const row = container.createEl("div", {
 			cls: "ft-list-row",
 			attr: {
-				draggable: "true",
 				"data-task-id": tid || "",
 				"data-source-path": task.file?.path || "",
 				"data-line": String(task.line || 0),
@@ -1485,7 +1484,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		};
 
 		const stp = () => {
-			if (this.plugin) this.plugin._activeRowTimer = null;
+			if (this.plugin) {
+				this.plugin._activeRowTimer = null;
+				this.plugin._activeRowTimerStop = null; // break cycle with statusTimer.onTimerStop
+			}
 			if (ts.interval) {
 				clearInterval(ts.interval);
 				ts.interval = null;
@@ -1615,108 +1617,122 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		setTimeout(() => document.addEventListener("click", close, true), 0);
 	}
 
-	/** Drag-and-drop between list rows and onto page headings */
+	/** Custom mouse-based drag-and-drop (bypasses Obsidian's HTML5 DnD interception) */
 	_setupListDragDrop(listWrap) {
-		let dragData = null;
-
-		// Each row sets dragstart on itself in _renderListRow via attr
-		// Here we handle dragstart delegation on the container to filter by handle
-		listWrap.addEventListener("dragstart", (e) => {
-			const row = e.target.closest(".ft-list-row");
-			if (!row) return;
-			// Only start drag from the drag handle
-			if (!e.target.matches(".ft-list-drag")) {
-				e.preventDefault();
-				return;
-			}
-			dragData = {
-				path: row.dataset.sourcePath,
-				line: parseInt(row.dataset.line, 10),
-				taskId: row.dataset.taskId,
-				row,
-			};
-			row.classList.add("ft-list-dragging");
-			e.dataTransfer.effectAllowed = "move";
-			e.dataTransfer.setData("text/plain", row.dataset.taskId || "");
-		});
+		let dragState = null; // { path, line, row, startX, startY, ghost? }
 
 		const dragRoot = this.containerEl;
 
-		listWrap.addEventListener("dragend", () => {
+		const clearIndicators = () => {
 			dragRoot
-				.querySelectorAll(".ft-list-dragging,.ft-list-drop-target")
-				.forEach((el) => {
-					el.classList.remove("ft-list-dragging", "ft-list-drop-target");
-				});
+				.querySelectorAll(".ft-list-drop-target,.ft-list-dragging,.ft-list-drop-before,.ft-list-drop-after")
+				.forEach((el) => el.classList.remove("ft-list-drop-target", "ft-list-dragging", "ft-list-drop-before", "ft-list-drop-after"));
 			dragRoot
 				.querySelectorAll(".ft-list-heading-active")
 				.forEach((el) => el.classList.remove("ft-list-heading-active"));
-			dragData = null;
+		};
+
+		const findTaskByRow = (row) => {
+			const path = row.dataset.sourcePath;
+			const line = parseInt(row.dataset.line, 10);
+			return {
+				idx: this.tasks.findIndex((t) => t.file?.path === path && t.line === line),
+				task: this.tasks.find((t) => t.file?.path === path && t.line === line),
+			};
+		};
+
+		// ── mousedown on drag handle starts the drag ──
+		listWrap.addEventListener("mousedown", (e) => {
+			// Only from the drag handle
+			const handle = e.target.closest(".ft-list-drag");
+			if (!handle) return;
+			const row = handle.closest(".ft-list-row");
+			if (!row) return;
+
+			e.preventDefault(); // prevent text selection
+			clearIndicators();
+
+			dragState = {
+				path: row.dataset.sourcePath,
+				line: parseInt(row.dataset.line, 10),
+				row,
+				startX: e.clientX,
+				startY: e.clientY,
+			};
+			row.classList.add("ft-list-dragging");
 		});
 
-		// ── Drop between rows (time reordering) — document-level to catch all interactions ──
+		// ── mousemove on document: highlight drop target (throttled) ──
+		let moveFrame = null;
+		document.addEventListener("mousemove", (e) => {
+			if (!dragState) return;
+			if (moveFrame) return;
+			moveFrame = requestAnimationFrame(() => {
+				moveFrame = null;
+				// Remove inline row borders from previous frame
+				dragRoot.querySelectorAll(".ft-list-row").forEach((r) => {
+					r.style.borderTop = "";
+					r.style.borderBottom = "";
+				});
+				clearIndicators();
+				dragState.row.classList.add("ft-list-dragging");
 
-		document.addEventListener("dragover", (e) => {
-			// Row-to-row drop
-			const targetRow = e.target.closest(".ft-list-row");
-			if (targetRow && dragData && dragData.row !== targetRow) {
-				e.preventDefault();
-				dragRoot
-					.querySelectorAll(".ft-list-drop-target")
-					.forEach((el) => el.classList.remove("ft-list-drop-target"));
-				targetRow.classList.add("ft-list-drop-target");
+				const el = document.elementFromPoint(e.clientX, e.clientY);
+				if (!el) return;
+
+				// Check for row
+				const targetRow = el.closest(".ft-list-row");
+				if (targetRow && targetRow !== dragState.row) {
+					const rect = targetRow.getBoundingClientRect();
+					if (e.clientY < rect.top + rect.height / 2) {
+						targetRow.classList.add("ft-list-drop-before");
+					} else {
+						targetRow.classList.add("ft-list-drop-after");
+					}
+					return;
+				}
+
+				// Check for heading
+				const heading = el.closest("h1, h2, h3, h4, h5, h6");
+				if (heading && !heading.closest(".ft-list-wrap")) {
+					heading.classList.add("ft-list-heading-active");
+				}
+			});
+		});
+
+		// ── mouseup on document: perform drop ──
+		document.addEventListener("mouseup", async (e) => {
+			if (!dragState) return;
+
+			const el = document.elementFromPoint(e.clientX, e.clientY);
+			clearIndicators();
+
+			const srcInfo = findTaskByRow(dragState.row);
+			if (srcInfo.idx < 0) {
+				dragState = null;
 				return;
 			}
 
-			// Heading drop zones
-			const heading = e.target.closest(
-				"h1, h2, h3, h4, h5, h6",
-			);
-			if (heading && dragData) {
-				e.preventDefault();
-				heading.classList.add("ft-list-heading-active");
-			}
-		});
-
-		document.addEventListener("dragleave", (e) => {
-			const heading = e.target.closest(
-				"h1, h2, h3, h4, h5, h6",
-			);
-			if (heading) heading.classList.remove("ft-list-heading-active");
-		});
-
-		document.addEventListener("drop", async (e) => {
-			// Clear all indicators
-			dragRoot
-				.querySelectorAll(".ft-list-drop-target,.ft-list-dragging")
-				.forEach((el) => el.classList.remove("ft-list-drop-target", "ft-list-dragging"));
-			const heading = e.target.closest(
-				"h1, h2, h3, h4, h5, h6",
-			);
-			if (heading) heading.classList.remove("ft-list-heading-active");
-
-			if (!dragData) return;
-			e.preventDefault();
-
 			// ── Row-to-row drop ──
-			const targetRow = e.target.closest(".ft-list-row");
-			if (targetRow && dragData.row && dragData.row !== targetRow) {
-				const srcIdx = this.tasks.findIndex(
-					(t) => t.file?.path === dragData.path && t.line === dragData.line,
-				);
-				const targetIdx = this.tasks.findIndex(
-					(t) => t.file?.path === targetRow.dataset.sourcePath && t.line === parseInt(targetRow.dataset.line, 10),
-				);
-				if (srcIdx >= 0 && targetIdx >= 0 && srcIdx !== targetIdx) {
-					const srcTask = this.tasks[srcIdx];
-					const targetTask = this.tasks[targetIdx];
+			const targetRow = el?.closest(".ft-list-row");
+			if (targetRow && targetRow !== dragState.row) {
+				// Clean up all row inline borders
+				dragRoot.querySelectorAll(".ft-list-row").forEach((r) => {
+					r.style.borderTop = "";
+					r.style.borderBottom = "";
+				});
+
+				const tgtInfo = findTaskByRow(targetRow);
+				if (tgtInfo.idx >= 0 && tgtInfo.idx !== srcInfo.idx) {
+					const srcTask = srcInfo.task;
+					const targetTask = tgtInfo.task;
 
 					const rect = targetRow.getBoundingClientRect();
 					const midY = rect.top + rect.height / 2;
 					const dropBefore = e.clientY < midY;
 
 					if (dropBefore) {
-						const prevTask = targetIdx > 0 ? this.tasks[targetIdx - 1] : null;
+						const prevTask = tgtInfo.idx > 0 ? this.tasks[tgtInfo.idx - 1] : null;
 						if (targetTask.time && prevTask?.time) {
 							await this._setTaskTime(srcTask, this._midpointTime(prevTask.time, targetTask.time));
 						} else if (targetTask.time) {
@@ -1725,7 +1741,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 							await this._setTaskTime(srcTask, "");
 						}
 					} else {
-						const nextTask = targetIdx < this.tasks.length - 1 ? this.tasks[targetIdx + 1] : null;
+						const nextTask = tgtInfo.idx < this.tasks.length - 1 ? this.tasks[tgtInfo.idx + 1] : null;
 						if (targetTask.time && nextTask?.time) {
 							await this._setTaskTime(srcTask, this._midpointTime(targetTask.time, nextTask.time));
 						} else {
@@ -1736,15 +1752,16 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 					this._sort();
 					this.renderTable();
 					this.plugin?.notify?.("🔄 Time updated");
+					dragState = null;
+					return;
 				}
-				return;
 			}
 
 			// ── Heading drop ──
+			const heading = el?.closest("h1, h2, h3, h4, h5, h6");
 			if (heading) {
-				const srcTask = this.tasks.find(
-					(t) => t.file?.path === dragData.path && t.line === dragData.line,
-				);
+				heading.classList.remove("ft-list-heading-active");
+				const srcTask = srcInfo.task;
 				if (srcTask) {
 					const text = heading.textContent.trim().toLowerCase();
 					if (text === "today") {
@@ -1771,6 +1788,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 					}
 				}
 			}
+
+			dragState = null;
 		});
 	}
 

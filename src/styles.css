@@ -2159,8 +2159,12 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-v
 	opacity: 0.4;
 }
 
-.ft-list-row.ft-list-drop-target {
-	box-shadow: 0 0 0 2px var(--interactive-accent);
+.ft-list-row.ft-list-drop-before {
+	box-shadow: 0 -2px 0 var(--interactive-accent);
+}
+
+.ft-list-row.ft-list-drop-after {
+	box-shadow: 0 2px 0 var(--interactive-accent);
 }
 
 .ft-list-drag {

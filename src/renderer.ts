@@ -184,14 +184,33 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
   override async onload(): Promise<void> {
     this.containerEl.style.marginTop = "6px";
-    // Mobile: always use list view. Table view is incompatible with phone screens.
-    const isMobile = this.plugin?.isMobile || (typeof window !== "undefined" && window.innerWidth < 600);
-    this._viewMode = isMobile
+
+    // Mobile (Platform.isMobile): show link to markdown view instead of custom UI
+    if (this.plugin?.isMobile) {
+      const wrap = this.containerEl.createEl("div", { cls: "ft-empty-state" });
+      wrap.createEl("p", { text: "\u{1F4F1} Mobile view", cls: "flowtime-empty ft-empty-text" });
+      const btn = wrap.createEl("button", {
+        text: "\u{1F4DD} Open as Markdown",
+        cls: "ft-empty-btn",
+      });
+      btn.addEventListener("click", () => {
+        const mobileFile = this.app.vault.getAbstractFileByPath("today-mobile.md");
+        if (mobileFile) {
+          this.app.workspace.openLinkText("today-mobile", "", false);
+        } else {
+          this.plugin?.notify?.("today-mobile.md not found. Create it with type: flowtime-mobile frontmatter.", true);
+        }
+      });
+      return;
+    }
+
+    // Narrow screen (<600px): force list view. Table view is incompatible.
+    const isNarrow = typeof window !== "undefined" && window.innerWidth < 600;
+    this._viewMode = isNarrow
       ? "list"
       : this.plugin?.settings?.defaultView === "list" ? "list" : "table";
 
     // Show loading shimmer
-    const isNarrow = typeof window !== "undefined" && window.innerWidth < 600;
     if (isNarrow) {
       for (let i = 0; i < 3; i++) {
         this.containerEl.createEl("div", { cls: "ft-loading" });

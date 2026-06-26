@@ -30,6 +30,15 @@ export const HEADING_MODES: Record<string, string> = {
   "this week plan": "weekly",
 };
 
+/** Empty state messages — match FlowtimeRenderer's msgs */
+const EMPTY_MSGS: Record<string, string> = {
+  today: "\u{1F4C5} No tasks scheduled for today.",
+  overdue: "\u{1F389} No overdue tasks!",
+  dueweek: "\u{1F389} No tasks due this week!",
+  weekly: "\u{1F389} No tasks this week!",
+  soon: "\u{1F4C5} No tasks tagged with @soon.",
+};
+
 export function resolveHeadingMode(heading: string): string | null {
   const key = heading.toLowerCase().trim();
   return HEADING_MODES[key] || null;
@@ -173,7 +182,7 @@ export async function refreshAll(
   }
 
   // For each heading, determine section bounds and aggregate tasks
-  type SectionPlan = { start: number; end: number; headingLine: string; tasks: TaskRow[] };
+  type SectionPlan = { start: number; end: number; headingLine: string; mode: string; tasks: TaskRow[] };
   const plans: SectionPlan[] = [];
   for (let s = 0; s < found.length; s++) {
     const h = found[s];
@@ -183,6 +192,7 @@ export async function refreshAll(
       start: h.index,
       end: sectionEnd,
       headingLine: lines[h.index],
+      mode: h.mode,
       tasks,
     });
   }
@@ -204,7 +214,7 @@ export async function refreshAll(
       }
       result.push("");
     } else {
-      result.push("*No tasks*");
+      result.push(EMPTY_MSGS[plan.mode] || "*No tasks*");
       result.push("");
     }
     cursor = plan.end;

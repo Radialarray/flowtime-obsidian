@@ -254,6 +254,14 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
           if (!isChecked) {
             await _handleRecurrence(lineNum, line);
           }
+
+          // Trigger re-aggregation so heading sections update
+          if (plugin.onHeadingDrop) {
+            setTimeout(async () => {
+              await plugin.onHeadingDrop?.();
+              setTimeout(() => _enhance(), 400);
+            }, 300);
+          }
         } catch (e) {
           console.warn("Flowtime ListEnhancer: toggle error:", (e as Error).message);
         }

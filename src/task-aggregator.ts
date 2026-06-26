@@ -46,11 +46,10 @@ export function resolveHeadingMode(heading: string): string | null {
 
 /* ─── Markdown formatting ─── */
 
-export function formatTaskLine(task: TaskRow): string {
+export function formatTaskLine(task: TaskRow, checked: boolean = false): string {
   const parts: string[] = [];
 
   // Checkbox
-  const checked = task.status === "x" || task.status === "X";
   parts.push(checked ? "- [x]" : "- [ ]");
 
   // Task text (clean — no time prefix, no directives)
@@ -158,6 +157,8 @@ export async function injectSection(
 
 /**
  * Refresh all recognized heading sections in the file.
+ * Diff-based: preserves checkbox state from existing lines,
+ * adds new tasks from vault, removes tasks that disappeared.
  * Builds the entire file content in memory and writes once.
  */
 export async function refreshAll(
@@ -169,6 +170,7 @@ export async function refreshAll(
   const content = await app.vault.read(file);
   const lines = content.split("\n");
   const headingRegex = /^(#{1,6})\s+(.+)$/;
+  const taskRegex = /^[-*+]\s+\[([ xX\-])\]\s+(.*)$/;
 
   // Collect headings with position and mode
   const found: { index: number; level: number; text: string; mode: string }[] = [];
@@ -189,36 +191,60 @@ export async function refreshAll(
     }
   }
 
-  // For each heading, determine section bounds and cached tasks
-  type SectionPlan = { start: number; end: number; headingLine: string; mode: string; tasks: TaskRow[] };
+  // For each heading, diff existing lines with aggregated tasks
+  type SectionPlan = {
+    start: number;
+    end: number;
+    headingLine: string;
+    mode: string;
+    /** Final task lines to write (formatted, with preserved checkbox state) */
+    outLines: string[];
+  };
   const plans: SectionPlan[] = [];
   for (let s = 0; s < found.length; s++) {
     const h = found[s];
     const sectionEnd = s + 1 < found.length ? found[s + 1].index : lines.length;
-    plans.push({
-      start: h.index,
-      end: sectionEnd,
-      headingLine: lines[h.index],
-      mode: h.mode,
-      tasks: modeCache[h.mode],
-    });
+    const freshTasks = modeCache[h.mode];
+
+    // Parse existing checkbox state from current section
+    const existingChecked = new Map<string, boolean>();
+    for (let i = h.index + 1; i < sectionEnd; i++) {
+      const tm = lines[i].match(taskRegex);
+      if (tm) {
+        // Use the text after checkbox as key (strip trailing directives for matching)
+        const key = normalizeTaskKey(tm[2]);
+        existingChecked.set(key, tm[1].toLowerCase() === "x");
+      }
+    }
+
+    // Build output lines: preserve checked state for matching tasks
+    const outLines: string[] = [];
+    const usedKeys = new Set<string>();
+    for (const task of freshTasks) {
+      const key = normalizeTaskKey(task.cleanText || task.rawText || "");
+      usedKeys.add(key);
+      const wasChecked = existingChecked.get(key) || false;
+      outLines.push(formatTaskLine(task, wasChecked));
+    }
+    // Keep non-task lines (blank lines, comments) from the original section
+    for (let i = h.index + 1; i < sectionEnd; i++) {
+      if (!taskRegex.test(lines[i]) && lines[i].trim() !== "") {
+        outLines.push(lines[i]);
+      }
+    }
+
+    plans.push({ start: h.index, end: sectionEnd, headingLine: lines[h.index], mode: h.mode, outLines });
   }
 
-  // Build new file content (process top-down, adjusting for size changes)
+  // Build new file content
   const result: string[] = [];
   let cursor = 0;
   for (const plan of plans) {
-    // Copy lines before this section
     result.push(...lines.slice(cursor, plan.start));
-    // Heading line
     result.push(plan.headingLine);
-    // Blank line after heading
     result.push("");
-    // Task lines
-    if (plan.tasks.length > 0) {
-      for (const task of plan.tasks) {
-        result.push(formatTaskLine(task));
-      }
+    if (plan.outLines.length > 0) {
+      result.push(...plan.outLines);
       result.push("");
     } else {
       result.push(EMPTY_MSGS[plan.mode] || "*No tasks*");
@@ -226,11 +252,19 @@ export async function refreshAll(
     }
     cursor = plan.end;
   }
-  // Copy remaining lines after last section
   result.push(...lines.slice(cursor));
 
   const newContent = result.join("\n");
   if (newContent !== content) {
     await app.vault.modify(file, newContent);
   }
+}
+
+/** Normalize task text for matching: strip time prefix and bucket/project directives */
+function normalizeTaskKey(text: string): string {
+  return text
+    .replace(/^\d{1,2}:\d{2}(\s*[\u2014\-\u2013]\s*\d{1,2}:\d{2})?\s*/, "") // time prefix
+    .replace(/@[^\s]+/g, "") // directives
+    .trim()
+    .toLowerCase();
 }

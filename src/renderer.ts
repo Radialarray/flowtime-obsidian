@@ -59,6 +59,7 @@ import type {
 interface FlowtimePluginRef {
   settings: FlowtimeSettings;
   notify: (msg: string, isError?: boolean) => void;
+  isMobile?: boolean;
   taskCache?: {
     get(path: string): { parsedTasks: Omit<ParsedTask, "file">[] } | null;
     set(path: string, tasks: Omit<ParsedTask, "file">[]): void;
@@ -188,12 +189,25 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
   override async onload(): Promise<void> {
     this.containerEl.style.marginTop = "6px";
-    this._viewMode =
-      this.plugin?.settings?.defaultView === "list" ? "list" : "table";
+    // Mobile: always use list view. Table view is incompatible with phone screens.
+    const isMobile = this.plugin?.isMobile || (typeof window !== "undefined" && window.innerWidth < 600);
+    this._viewMode = isMobile
+      ? "list"
+      : this.plugin?.settings?.defaultView === "list" ? "list" : "table";
+
+    // Show loading shimmer
+    const isNarrow = typeof window !== "undefined" && window.innerWidth < 600;
+    if (isNarrow) {
+      for (let i = 0; i < 3; i++) {
+        this.containerEl.createEl("div", { cls: "ft-loading" });
+      }
+    }
+
     try {
       await this.loadTasks();
       this.renderTable();
     } catch (e) {
+      this.containerEl.empty();
       this.containerEl.createEl("p", {
         text: "\u26a0\ufe0f Error: " + (e as Error).message,
         cls: "flowtime-empty",
@@ -578,9 +592,13 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     this.containerEl.empty();
     this.rowData = [];
     if (!this._columnVisibility) {
+      // Mobile/narrow: show only essential columns (check, task, date)
+      const isNarrow = typeof window !== "undefined" && window.innerWidth < 600;
       this._columnVisibility = {
         check: true, task: true, priority: false, soon: false,
-        project: false, bucket: false, source: false, date: true, actions: true, time: true, timer: true,
+        project: false, bucket: false, source: false, date: true,
+        actions: !isNarrow, time: !isNarrow, timer: !isNarrow,
+        sprint: false,
       };
     }
     if (this.mode === "today") { this._columnVisibility.date = false; this._columnVisibility.actions = false; }
@@ -660,7 +678,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
     const toggleDD = (): void => {
       const r = colBtn.getBoundingClientRect();
-      colDD.style.left = r.left + "px"; colDD.style.top = r.bottom + 4 + "px";
+      colDD.style.left = Math.max(4, Math.min(r.left, window.innerWidth - colDD.offsetWidth - 8)) + "px";
+      colDD.style.top = Math.min(r.bottom + 4, window.innerHeight - colDD.offsetHeight - 8) + "px";
       colDD.classList.toggle("ft-col-dd-open"); document.body.appendChild(colDD);
     };
     colBtn.addEventListener("click", (e: MouseEvent) => { e.stopPropagation(); toggleDD(); });
@@ -720,7 +739,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       if (filterPanel.classList.contains("ft-filter-open")) { closePanel(); }
       else {
         const r = filterBtn.getBoundingClientRect();
-        filterPanel.style.left = r.left + "px"; filterPanel.style.top = r.bottom + 4 + "px";
+        filterPanel.style.left = Math.max(4, Math.min(r.left, window.innerWidth - 300)) + "px";
+        filterPanel.style.top = Math.min(r.bottom + 4, window.innerHeight - 200) + "px";
         buildFilterUI(); filterPanel.classList.add("ft-filter-open"); document.body.appendChild(filterPanel);
       }
     };
@@ -746,12 +766,24 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     groupSel.addEventListener("change", applyGroup); subSel.addEventListener("change", applyGroup);
 
     if (this._displayItems.length > 0 || this.tasks.length > 0) {
-      toolbar.createEl("span", { text: "|", cls: "ft-group-label" });
-      const expandBtn = toolbar.createEl("button", { text: "\u25c0 Expand", cls: "ft-filter-btn" });
+      toolbar.createEl("span", { text: "|", cls: "ft-group-label ft-toolbar-collapsible" });
+      const expandBtn = toolbar.createEl("button", { text: "\u25c0 Expand", cls: "ft-filter-btn ft-toolbar-collapsible" });
       expandBtn.addEventListener("click", () => { this._collapsed.clear(); this.renderTable(); });
-      const collapseBtn = toolbar.createEl("button", { text: "\u25b6 Collapse", cls: "ft-filter-btn" });
+      const collapseBtn = toolbar.createEl("button", { text: "\u25b6 Collapse", cls: "ft-filter-btn ft-toolbar-collapsible" });
       collapseBtn.addEventListener("click", () => { for (const item of this._displayItems) { if (item.hasChildren) this._collapsed.add(item.taskId); } this.renderTable(); });
     }
+
+    // Responsive: mark secondary toolbar items as collapsible on small screens
+    colBtn.addClass("ft-toolbar-collapsible");
+    filterBtn.addClass("ft-toolbar-collapsible");
+    groupLabel.addClass("ft-toolbar-collapsible");
+    groupSel.addClass("ft-toolbar-collapsible");
+    subLabel.addClass("ft-toolbar-collapsible");
+    subSel.addClass("ft-toolbar-collapsible");
+
+    // Add "More" toggle button (visible only on mobile)
+    const moreBtn = toolbar.createEl("button", { text: "\u22ef", cls: "ft-toolbar-more-btn", attr: { title: "More options" } });
+    moreBtn.addEventListener("click", () => { toolbar.classList.toggle("ft-toolbar-expanded"); });
 
     if (this._viewMode === "list") {
       this._renderListView(tdy);
@@ -959,6 +991,62 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       }
     });
     rb.addEventListener("click", (e: MouseEvent) => { e.stopPropagation(); stp(); ts.remaining = ts.total; ud(); });
+
+    // ── Swipe actions (touch only) ──
+    let swipeStartX = 0;
+    let swipeDeltaX = 0;
+    let swiping = false;
+    const SWIPE_THRESHOLD = 80;
+
+    row.addEventListener("touchstart", (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      swipeStartX = e.touches[0].clientX;
+      swipeDeltaX = 0;
+      swiping = true;
+    }, { passive: true });
+
+    row.addEventListener("touchmove", (e: TouchEvent) => {
+      if (!swiping || e.touches.length !== 1) return;
+      swipeDeltaX = e.touches[0].clientX - swipeStartX;
+      row.style.transform = `translateX(${swipeDeltaX}px)`;
+      row.style.transition = "none";
+    }, { passive: true });
+
+    row.addEventListener("touchend", async () => {
+      if (!swiping) return;
+      swiping = false;
+      row.style.transition = "transform 200ms ease-out";
+      if (swipeDeltaX > SWIPE_THRESHOLD) {
+        // Swipe right → complete
+        row.style.transform = "translateX(100%)";
+        row.style.opacity = "0";
+        setTimeout(async () => {
+          await toggleCheck(this.app.vault, task);
+          task.status = "x";
+          this.plugin?.notify?.("\u2705 Task completed");
+          await this.loadTasks();
+          this.renderTable();
+        }, 200);
+        return;
+      } else if (swipeDeltaX < -SWIPE_THRESHOLD) {
+        // Swipe left → reschedule to tomorrow
+        row.style.transform = "translateX(-100%)";
+        row.style.opacity = "0";
+        setTimeout(async () => {
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          const tomorrowStr = tomorrow.toISOString().split("T")[0];
+          await this.updateDate(task, tomorrowStr);
+          this.plugin?.notify?.("\u{1F4C5} Rescheduled to tomorrow");
+          await this.loadTasks();
+          this.renderTable();
+        }, 200);
+        return;
+      }
+      // Reset position
+      row.style.transform = "";
+    });
+
     return row;
   }
 
@@ -1114,8 +1202,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     });
 
     const rect = anchorEl.getBoundingClientRect();
-    popup.style.left = Math.min(rect.left, window.innerWidth - 360) + "px";
-    popup.style.top = rect.bottom + 4 + "px";
+    const popupW = Math.min(360, window.innerWidth - 16);
+    popup.style.left = Math.max(4, Math.min(rect.left, window.innerWidth - popupW - 8)) + "px";
+    popup.style.top = Math.min(rect.bottom + 4, window.innerHeight - 300) + "px";
+    popup.style.maxWidth = popupW + "px";
 
     const closeOutside = (e: MouseEvent): void => {
       if (popup.contains(e.target as Node)) return;
@@ -1383,7 +1473,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
         document.addEventListener("click", this._closePopups, true);
       }
       (dp as HTMLDivElement & { _badge?: HTMLElement })._badge = ds2;
-      const op = (): void => { const r = dw.getBoundingClientRect(); dp.style.left = r.left + "px"; dp.style.top = r.bottom + 4 + "px"; document.body.appendChild(dp); requestAnimationFrame(() => { if (dp.parentNode) dp.classList.add("ft-dp-open"); }); };
+      const op = (): void => { const r = dw.getBoundingClientRect(); dp.style.left = Math.max(4, Math.min(r.left, window.innerWidth - 190)) + "px"; dp.style.top = Math.min(r.bottom + 4, window.innerHeight - 250) + "px"; document.body.appendChild(dp); requestAnimationFrame(() => { if (dp.parentNode) dp.classList.add("ft-dp-open"); }); };
       const cp = (): void => { dp.classList.remove("ft-dp-open"); setTimeout(() => { if (dp.parentNode) dp.parentNode.removeChild(dp); }, 150); };
       ds2.addEventListener("click", (e: MouseEvent) => { e.stopPropagation(); dp.classList.contains("ft-dp-open") ? cp() : op(); });
       const ap = async (nd: string): Promise<void> => {

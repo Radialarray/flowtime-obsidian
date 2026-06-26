@@ -72,8 +72,8 @@ export class QuickEntryModal extends Modal {
 
     const openDD = (): void => {
       const r = projInput.getBoundingClientRect();
-      projDD.style.left = r.left + "px";
-      projDD.style.top = r.bottom + 4 + "px";
+      projDD.style.left = Math.max(4, Math.min(r.left, window.innerWidth - r.width - 8)) + "px";
+      projDD.style.top = Math.min(r.bottom + 4, window.innerHeight - 220) + "px";
       projDD.style.width = r.width + "px";
       projDD.style.display = "block";
       document.body.appendChild(projDD);

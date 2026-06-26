@@ -35,6 +35,7 @@ import { QuickEntryModal } from "./quick-entry";
 
 interface FlowtimePluginRef {
 	settings: FlowtimeSettings;
+	isMobile?: boolean;
 	projectEngine?: {
 		getAllProjects(): Promise<Array<{ name: string; path: string }>>;
 		resolve(filePath: string): Promise<{ name: string | null; path: string | null; source: string | null }>;
@@ -467,15 +468,20 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			}
 		});
 
-		// v0.5.0: Toggle list/grid view
-		const toggleBtn = toolbar.createEl("button", {
-			text: this.gridMode ? "📋 List View" : "📅 Grid View",
-			cls: "ft-wp-btn ft-wp-btn-toggle",
-		});
-		toggleBtn.addEventListener("click", async () => {
-			this.gridMode = !this.gridMode;
-			this.renderView();
-		});
+		// ── Small screen check (grid requires min 760px) ──
+		const isSmallScreen = this.plugin?.isMobile || (typeof window !== "undefined" && window.innerWidth < 768);
+
+		// v0.5.0: Toggle list/grid view (hidden on small screens where grid is unavailable)
+		if (!isSmallScreen) {
+			const toggleBtn = toolbar.createEl("button", {
+				text: this.gridMode ? "📋 List View" : "📅 Grid View",
+				cls: "ft-wp-btn ft-wp-btn-toggle",
+			});
+			toggleBtn.addEventListener("click", async () => {
+				this.gridMode = !this.gridMode;
+				this.renderView();
+			});
+		}
 
 		const addBtn = toolbar.createEl("button", {
 			text: "➕ Add Task",
@@ -496,6 +502,10 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			});
 		}
 
+		// Grid view needs min 760px — disable on phones and small tablets
+		if (this.gridMode && isSmallScreen) {
+			this.gridMode = false;
+		}
 		if (this.gridMode) {
 			this.renderGridView();
 		} else {
@@ -717,11 +727,14 @@ class WeekplanRenderer extends MarkdownRenderChild {
 
 			// ── Resize handle (v0.5.0) ──
 			const resizeHandle = card.createEl("div", { cls: "ft-tg-resize-handle" });
-			resizeHandle.addEventListener("mousedown", (e: MouseEvent) => {
+			const startResize = (e: MouseEvent | TouchEvent): void => {
 				e.preventDefault();
 				e.stopPropagation();
-				this._startCardResize(e, card, grid, timeLabel);
-			});
+				const ev = "touches" in e ? e.touches[0] : e;
+				this._startCardResize(ev as unknown as MouseEvent, card, grid, timeLabel);
+			};
+			resizeHandle.addEventListener("mousedown", startResize as EventListener);
+			resizeHandle.addEventListener("touchstart", startResize as EventListener, { passive: false });
 
 			// Click to edit popup
 			card.addEventListener("click", (e: MouseEvent) => {
@@ -819,14 +832,19 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			}
 		};
 
-		const onMove = (ev: MouseEvent): void => {
+		const onMove = (ev: MouseEvent | TouchEvent): void => {
 			ev.preventDefault();
-			updateDrag(ev.clientX, ev.clientY);
+			const pt = "touches" in ev ? ev.touches[0] : ev;
+			updateDrag(pt.clientX, pt.clientY);
 		};
+		const touchOnMove = (ev: TouchEvent): void => onMove(ev);
 
-		const onUp = async (_ev: MouseEvent): Promise<void> => {
-			document.removeEventListener("mousemove", onMove, true);
-			document.removeEventListener("mouseup", onUp, true);
+		const cleanup = async (): Promise<void> => {
+			document.removeEventListener("mousemove", onMove as EventListener, true);
+			document.removeEventListener("mouseup", onUp as EventListener, true);
+			document.removeEventListener("touchmove", touchOnMove, true);
+			document.removeEventListener("touchend", onTouchUp, true);
+			document.removeEventListener("touchcancel", onTouchUp, true);
 			dragIndicator.remove();
 
 			const newRowEnd = card._tgRowEnd;
@@ -859,8 +877,14 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			);
 		};
 
-		document.addEventListener("mousemove", onMove, true);
-		document.addEventListener("mouseup", onUp, true);
+		const onUp = (): void => { cleanup(); };
+		const onTouchUp = (): void => { cleanup(); };
+
+		document.addEventListener("mousemove", onMove as EventListener, true);
+		document.addEventListener("mouseup", onUp as EventListener, true);
+		document.addEventListener("touchmove", touchOnMove, true);
+		document.addEventListener("touchend", onTouchUp, true);
+		document.addEventListener("touchcancel", onTouchUp, true);
 
 		// Init position
 		updateDrag(e.clientX, e.clientY);
@@ -893,10 +917,10 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		const popup = document.createElement("div");
 		popup.className = "ft-tg-popup";
 
-		// Position near the card
+		// Position near the card (clamped to viewport)
 		const rect = card.getBoundingClientRect();
-		popup.style.left = rect.left + "px";
-		popup.style.top = rect.bottom + 4 + "px";
+		popup.style.left = Math.max(4, Math.min(rect.left, window.innerWidth - 210)) + "px";
+		popup.style.top = Math.min(rect.bottom + 4, window.innerHeight - 220) + "px";
 
 		// ── Time input ──
 		const timeRow = popup.createEl("div", { cls: "ft-tg-popup-row" });

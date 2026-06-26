@@ -1,4 +1,5 @@
 import {
+	Platform,
 	Plugin,
 	Notice,
 	Modal,
@@ -61,6 +62,7 @@ export default class FlowtimePlugin extends Plugin {
 	statusTimer!: StatusTimer;
 	listEnhancer!: ListEnhancer;
 	renderers: (FlowtimeRenderer | WeekplanRenderer)[] = [];
+	isMobile: boolean = false;
 
 	_activeRowTimer: unknown = null;
 	_activeRowTimerStop: (() => void) | null = null;
@@ -96,6 +98,12 @@ export default class FlowtimePlugin extends Plugin {
 			this.settings.routinesFolder = "Routines/";
 			this.settings.routinesFolderMigrated = true;
 			await this.saveData(this.settings);
+		}
+
+		this.isMobile = Platform.isMobile;
+		// On mobile, force list view regardless of user setting
+		if (this.isMobile && this.settings.defaultView === "table") {
+			// Don't persist — just override in-memory so renderers pick it up
 		}
 
 		this.notify = (message: string, isError: boolean = false): void => {

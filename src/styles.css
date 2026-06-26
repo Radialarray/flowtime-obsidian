@@ -2478,3 +2478,267 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-v
 	background: var(--background-modifier-border-hover);
 	color: var(--text-normal);
 }
+
+/* ═══════════════════════════════════════
+   Mobile & Touch Responsive (v1.5.0)
+   ═══════════════════════════════════════ */
+
+/* ── Tap highlight + touch-action (kill 300ms delay) ── */
+.ft-table-wrap, .ft-tg-wrap, .ft-list-wrap,
+.ft-checkbox, .ft-timer-play, .ft-timer-reset,
+.ft-act-btn, .ft-bulk-btn, .ft-empty-btn,
+.ft-dp-btn, .ft-view-btn, .ft-col-btn,
+.ft-filter-btn, .ft-fe-save, .ft-fe-cancel,
+.ft-wp-btn, .ft-wp-timer-btn, .ft-wp-del-btn,
+.flowtime-btn-submit, .flowtime-btn-cancel,
+.ft-list-timer-play, .ft-list-timer-reset,
+.ft-floating-editor, .ft-date-popup, .ft-filter-panel,
+.ft-col-dd, .ft-tg-popup, .ft-detail-popup {
+	-webkit-tap-highlight-color: transparent;
+	touch-action: manipulation;
+}
+
+/* ── Focus-visible for keyboard navigation ── */
+.ft-checkbox:focus-visible,
+.ft-timer-play:focus-visible,
+.ft-timer-reset:focus-visible,
+.ft-act-btn:focus-visible,
+.ft-bulk-btn:focus-visible,
+.ft-dp-btn:focus-visible,
+.ft-view-btn:focus-visible,
+.ft-col-btn:focus-visible,
+.ft-filter-btn:focus-visible,
+.ft-fe-save:focus-visible,
+.ft-fe-cancel:focus-visible,
+.ft-wp-btn:focus-visible,
+.ft-wp-timer-btn:focus-visible,
+.ft-wp-del-btn:focus-visible,
+.ft-list-timer-play:focus-visible,
+.ft-list-timer-reset:focus-visible,
+.ft-empty-btn:focus-visible,
+.flowtime-btn-submit:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 1px;
+}
+
+/* ── Touch devices: disable sticky hover ── */
+@media (hover: none) {
+	.ft-sesh-table tr:hover td,
+	.flowtime-table tr:not(.ft-project-group):not(.ft-subgroup-header):hover td {
+		background: revert-layer;
+	}
+	.ft-list-row:hover {
+		background: var(--background-primary);
+	}
+	.ft-list-text:hover {
+		background: transparent;
+	}
+	.ft-tg-card:hover {
+		box-shadow: none;
+	}
+	.ft-tg-card:hover .ft-tg-time-label {
+		display: none;
+	}
+	.ft-tg-card:hover .ft-tg-resize-handle {
+		background: transparent;
+	}
+	/* Keep :active press feedback on touch */
+	.ft-checkbox:active,
+	.ft-timer-play:active,
+	.ft-timer-reset:active,
+	.ft-tg-card:active,
+	.ft-act-btn:active,
+	.ft-bulk-btn:active,
+	.ft-empty-btn:active,
+	.ft-dp-btn:active,
+	.ft-view-btn:active,
+	.ft-col-btn:active,
+	.ft-filter-btn:active {
+		transform: scale(0.97);
+	}
+}
+
+/* ── Touch: larger hit targets ── */
+@media (pointer: coarse) {
+	.ft-checkbox {
+		width: 20px;
+		height: 20px;
+	}
+	.ft-checkbox.ft-checked::after {
+		width: 20px;
+		height: 20px;
+	}
+	.ft-timer-play, .ft-timer-reset {
+		width: 36px;
+		height: 36px;
+		font-size: var(--font-ui-medium);
+	}
+	.ft-list-timer-play, .ft-list-timer-reset {
+		font-size: 18px;
+		padding: 4px 6px;
+	}
+	.ft-detail-close {
+		font-size: 16px;
+		padding: 6px 10px;
+	}
+	.ft-col-dd-item {
+		padding: 8px 14px;
+	}
+	.ft-dp-btn {
+		padding: 8px 10px;
+	}
+	.ft-table td {
+		padding: 8px 6px;
+	}
+	.ft-list-row {
+		padding: 10px 8px;
+	}
+	.ft-fe-cancel, .ft-fe-save {
+		font-size: var(--font-ui-small);
+		padding: 6px 14px;
+	}
+	.ft-tg-resize-handle {
+		height: 10px;
+	}
+}
+
+/* ── Phone: < 480px ── */
+@media (max-width: 480px) {
+	/* Floating editor: full-width with margin */
+	.ft-floating-editor {
+		min-width: auto;
+		max-width: calc(100vw - 16px);
+	}
+	.ft-detail-popup {
+		min-width: auto;
+		max-width: calc(100vw - 16px);
+	}
+	.ft-filter-panel {
+		min-width: auto;
+		max-width: calc(100vw - 16px);
+	}
+	.ft-col-dd {
+		min-width: auto;
+		max-width: calc(100vw - 16px);
+	}
+	.ft-date-popup {
+		min-width: auto;
+	}
+
+	/* List view: hide timer on very small screens, hide drag handle */
+	.ft-list-timer-cell { display: none; }
+	.ft-list-time-cell { gap: 2px; }
+	.ft-list-time-input { width: 40px; }
+	.ft-list-dur-input { width: 36px; }
+	.ft-list-preview { display: none; }
+	.ft-list-drag { display: none; }
+	.ft-list-row { gap: 4px; }
+
+	/* Toolbar: tighter spacing */
+	.ft-toolbar-row { gap: 4px; font-size: var(--font-ui-smaller); }
+
+	/* Budget bars: flexible */
+	.ft-progress-bar { min-width: 0; flex: 1; }
+	.ft-daily-cap .ft-progress-bar,
+	.ft-budget-section .ft-progress-bar,
+	.ft-budget-row .ft-progress-bar { min-width: 0; flex: 1; }
+
+	/* Weekplan: stack and compress */
+	.ft-wp-time { min-width: auto; flex-wrap: wrap; gap: 2px; }
+	.ft-wp-day-label { min-width: auto; font-size: var(--font-ui-small); }
+	.ft-wp-header { flex-direction: column; align-items: flex-start; }
+	.ft-wp-title { min-width: auto; }
+	.ft-wp-toolbar { width: 100%; }
+	.ft-wp-start-input, .ft-wp-dur-input { width: 44px; }
+	.ft-wp-end-preview { min-width: 36px; font-size: var(--font-ui-smaller); }
+
+	/* Timer display: smaller */
+	.ft-timer-display { min-width: 45px; font-size: var(--font-ui-smaller); }
+
+	/* Session history: collapse extra columns */
+	.ft-sesh-task { max-width: 120px; }
+
+	/* Scroll shadows on table wrap */
+	.ft-table-wrap {
+		background:
+			linear-gradient(to right, var(--background-primary) 30%, transparent),
+			linear-gradient(to left, var(--background-primary) 30%, transparent) 100% 0,
+			linear-gradient(to right, rgba(0,0,0,0.06), transparent),
+			linear-gradient(to left, rgba(0,0,0,0.06), transparent) 100% 0;
+		background-repeat: no-repeat;
+		background-size: 40px 100%, 40px 100%, 14px 100%, 14px 100%;
+		background-attachment: local, local, scroll, scroll;
+	}
+
+	/* Table row: more breathing room */
+	.ft-table td { padding: 8px 4px; }
+}
+
+/* ── Small tablet: 481px–768px ── */
+@media (min-width: 481px) and (max-width: 768px) {
+	.ft-floating-editor {
+		max-width: 380px;
+	}
+	.ft-list-drag { display: none; }
+	.ft-wp-time { min-width: auto; }
+	.ft-wp-day-label { min-width: 100px; }
+	.ft-progress-bar { min-width: 100px; }
+	.ft-wp-start-input, .ft-wp-dur-input { width: 50px; }
+	.ft-tg-grid { min-width: 0; } /* allow grid to shrink on tablets */
+}
+
+/* ── Tablet: 769px–1024px ── */
+@media (min-width: 769px) and (max-width: 1024px) {
+	.ft-wp-time { min-width: 130px; }
+	.ft-progress-bar { min-width: 120px; }
+}
+
+/* ── Responsive toolbar collapse ── */
+.ft-toolbar-more-btn {
+	display: none;
+	background: none;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	padding: 2px 8px;
+	cursor: pointer;
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+}
+
+.ft-toolbar-more-btn:hover {
+	background: var(--background-modifier-hover);
+}
+
+@media (max-width: 600px) {
+	.ft-toolbar-collapsible {
+		display: none;
+	}
+	.ft-toolbar-more-btn {
+		display: inline-flex;
+	}
+	.ft-toolbar-expanded .ft-toolbar-collapsible {
+		display: inline-flex;
+	}
+	.ft-toolbar-expanded {
+		flex-wrap: wrap;
+	}
+}
+
+/* ── Loading shimmer ── */
+@keyframes ft-shimmer {
+	0% { background-position: -200px 0; }
+	100% { background-position: calc(200px + 100%) 0; }
+}
+.ft-loading {
+	animation: ft-shimmer 1.5s ease-in-out infinite;
+	background: linear-gradient(
+		90deg,
+		var(--background-primary-alt) 0px,
+		var(--background-modifier-border) 80px,
+		var(--background-primary-alt) 160px
+	);
+	background-size: 200px 100%;
+	border-radius: var(--radius-s);
+	height: 32px;
+	margin: 4px 0;
+}

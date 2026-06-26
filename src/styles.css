@@ -2697,6 +2697,46 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-v
 	}
 }
 
+/* ── ListEnhancer: drag handles + timer buttons on native markdown tasks ── */
+.ft-enhance-drag {
+	cursor: grab;
+	color: var(--text-muted);
+	font-size: 16px;
+	line-height: 1;
+	padding: 0 4px;
+	flex-shrink: 0;
+	user-select: none;
+	display: inline-block;
+	vertical-align: middle;
+}
+.ft-enhance-drag:active {
+	cursor: grabbing;
+}
+.ft-enhance-timer {
+	cursor: pointer;
+	margin-left: 6px;
+	font-size: 0.85em;
+	opacity: 0.5;
+	user-select: none;
+	display: inline-block;
+	vertical-align: middle;
+}
+.ft-enhance-timer:hover {
+	opacity: 1;
+}
+.ft-list-enhanced {
+	position: relative;
+}
+.ft-list-enhanced.ft-list-dragging {
+	opacity: 0.4;
+}
+.ft-list-enhanced.ft-list-drop-before {
+	box-shadow: 0 -2px 0 var(--interactive-accent);
+}
+.ft-list-enhanced.ft-list-drop-after {
+	box-shadow: 0 2px 0 var(--interactive-accent);
+}
+
 /* ── Loading shimmer ── */
 @keyframes ft-shimmer {
 	0% { background-position: -200px 0; }

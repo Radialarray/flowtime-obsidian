@@ -1247,9 +1247,13 @@ export default class FlowtimePlugin extends Plugin {
 	}
 
 	_isMobileAggregateFile(file: TFile): boolean {
+		// Check frontmatter via metadata cache
 		const cache = this.app.metadataCache.getCache(file.path);
 		const fm = cache?.frontmatter as Record<string, unknown> | undefined;
-		return fm?.type === "flowtime-list" || fm?.type === "flowtime-mobile";
+		if (fm?.type === "flowtime-list" || fm?.type === "flowtime-mobile") return true;
+		// Fallback: check raw content for frontmatter (cache may not be ready yet)
+		if (!cache) return file.path.endsWith("mobile.md") || file.basename.includes("mobile");
+		return false;
 	}
 
 	/**

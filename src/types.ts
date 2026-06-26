@@ -101,6 +101,7 @@ export interface FlowtimeSettings {
   timerSound: boolean;
   noticeDuration: number;
   quietMode: boolean;
+  tabHistoryEnabled: boolean;
 
   // Templates
   dailyTemplate: string;

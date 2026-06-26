@@ -28,6 +28,7 @@ export const DEFAULT_SETTINGS: FlowtimeSettings = {
   timerSound: true,
   noticeDuration: 4000,
   quietMode: false,
+  tabHistoryEnabled: true,
 
   dailyTemplate:
     "## 🔄 Carry Over\n```flowtime-overdue\n```\n\n## 🎯 Today\n```flowtime-today\n```\n\n## ⚠️ Due This Week\n```flowtime-dueweek\n```\n\n## 📝 Notes\n- [ ] Morning review 🔺 🔁 every day @{{DATE}}\n- [ ] Quick note @{{DATE}}\n",
@@ -749,6 +750,18 @@ export class FlowtimeSettingsTab extends PluginSettingTab {
           .setValue(this.plugin.settings.quietMode)
           .onChange(async (value) => {
             this.plugin.settings.quietMode = value;
+            await this.plugin.saveData(this.plugin.settings);
+          }),
+      );
+
+    new Setting(_g)
+      .setName("Tab history")
+      .setDesc("When closing a tab opened from a Flowtime link, navigate back to the previous tab instead of the next one")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.tabHistoryEnabled)
+          .onChange(async (value) => {
+            this.plugin.settings.tabHistoryEnabled = value;
             await this.plugin.saveData(this.plugin.settings);
           }),
       );

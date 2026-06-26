@@ -73,6 +73,8 @@ export default class FlowtimePlugin extends Plugin {
 	_dailyGenTimer: ReturnType<typeof setTimeout> | null = null;
 	_routineWatchTimer: ReturnType<typeof setTimeout> | null = null;
 	_previousProjectsRoot: string = "";
+	_tabHistory: string[] = [];
+	_tabHistoryMax: number = 20;
 
 	_scheduleCacheSave!: (force?: boolean) => void;
 	_loadTaskCache!: () => Promise<void>;
@@ -1166,9 +1168,50 @@ export default class FlowtimePlugin extends Plugin {
 
 		// v1.3.0: ListEnhancer — interactive markdown task notes
 		this.listEnhancer = new ListEnhancer(this.app, this);
+
+		// v1.4.0: Tab history — navigate back to previous tab on close
+		let _prevLeafFile: string | null = null;
 		this.registerEvent(
-			this.app.workspace.on("active-leaf-change", () => {
+			this.app.workspace.on("active-leaf-change", (leaf) => {
 				this.listEnhancer.check();
+
+				if (!this.settings.tabHistoryEnabled) return;
+
+				const newFile = (leaf?.view as MarkdownView | null)?.file;
+				const newPath = newFile?.path || null;
+
+				// Detect tab close: if the previously active file is no longer open in any leaf
+				if (_prevLeafFile && _prevLeafFile !== newPath) {
+				const stillOpen = this.app.workspace.getLeavesOfType("markdown")
+					.some((l) => (l.view as MarkdownView)?.file?.path === _prevLeafFile);
+					if (!stillOpen && this._tabHistory.length > 0) {
+						// Pop history (skip self) and navigate back
+						let backPath: string | null = null;
+						while (this._tabHistory.length > 0) {
+							const candidate = this._tabHistory.pop()!;
+							if (candidate !== _prevLeafFile) {
+								backPath = candidate;
+								break;
+							}
+						}
+						if (backPath) {
+							const backFile = this.app.vault.getAbstractFileByPath(backPath);
+							if (backFile) {
+								this.app.workspace.getLeaf().openFile(backFile as TFile);
+							}
+						}
+					}
+				}
+
+				// Push current file to history
+				if (newPath && (!this._tabHistory.length || this._tabHistory[this._tabHistory.length - 1] !== newPath)) {
+					this._tabHistory.push(newPath);
+					if (this._tabHistory.length > this._tabHistoryMax) {
+						this._tabHistory.shift();
+					}
+				}
+
+				_prevLeafFile = newPath;
 			}),
 		);
 		this.app.workspace.onLayoutReady(() => {

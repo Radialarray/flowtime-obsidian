@@ -2352,6 +2352,8 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-v
 	align-items: center;
 	gap: 4px;
 	flex-shrink: 0;
+	width: 150px;
+	justify-content: center;
 }
 
 .ft-list-time {
@@ -2362,6 +2364,9 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-v
 	background: var(--background-secondary);
 	border-radius: 4px;
 	white-space: nowrap;
+	text-align: center;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .ft-list-time-input,
@@ -2392,6 +2397,10 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-v
 	color: var(--text-faint);
 	font-family: var(--font-monospace);
 	white-space: nowrap;
+	width: 50px;
+	text-align: center;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 /* Inline timer — reuses .ft-timer-* components, stepped down for list rows */

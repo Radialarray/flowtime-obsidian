@@ -59,11 +59,14 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		this._groupConfig = { primary: null, secondary: null };
 		this._collapsed = new Set(); // v0.6.0: collapsed tree nodes by taskId
 		this._displayItems = []; // v0.6.0: flattened tree display list
+		this._viewMode = "table"; // 'table' or 'list' — set in onload() from settings
 	}
 
 	async onload() {
 		// Add some spacing above the code block for breathing room
 		this.containerEl.style.marginTop = "6px";
+		this._viewMode =
+			this.plugin?.settings?.defaultView === "list" ? "list" : "table";
 		try {
 			await this.loadTasks();
 			this.renderTable();
@@ -791,6 +794,16 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		};
 		document.addEventListener("click", closeDD, true);
 
+		// ── List/Table view toggle ──
+		const viewBtn = toolbar.createEl("button", {
+			text: this._viewMode === "list" ? "⊞ Table" : "☰ List",
+			cls: "ft-view-btn",
+		});
+		viewBtn.addEventListener("click", () => {
+			this._viewMode = this._viewMode === "list" ? "table" : "list";
+			this.renderTable();
+		});
+
 		// ── Filter button ──
 		const filterBtn = toolbar.createEl("button", {
 			text: "🔍 Filter",
@@ -1002,6 +1015,14 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		// ── Save/Load View (placeholder — needs Modal, prompt() unavailable in Obsidian) ──
 		// To be re-implemented with Obsidian Modal API in future release
 
+		if (this._viewMode === "list") {
+			this._renderListView(tdy);
+			if (this.mode === "today" && this.plugin?.settings?.dailyCap > 0) {
+				this._renderDailyCap();
+			}
+			return;
+		}
+
 		const tableWrap = this.containerEl.createEl("div", {
 			cls: "ft-table-wrap",
 		});
@@ -1086,26 +1107,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		this.buildRows(tbody);
 
 		// Daily cap summary (today mode only)
-		if (this.mode === "today" && this.plugin?.settings?.dailyCap > 0) {
-			const dailyCap = this.plugin.settings.dailyCap;
-			const refTdy = this._refDate();
-			const totalToday =
-				this.tasks.reduce((sum, t) => {
-					if (t.taskDate === refTdy) {
-						return sum + (t.durationMinutes || 0);
-					}
-					return sum;
-				}, 0) / 60;
-			const capRow = this.containerEl.createEl("div", { cls: "ft-daily-cap" });
-			capRow.createEl("span", { text: "Daily Budget: ", cls: "ft-cap-label" });
-			const bar = renderProgressBar(
-				totalToday,
-				dailyCap,
-				`${formatHours(totalToday)}h / ${dailyCap}h`,
-			);
-			bar.style.minWidth = "200px";
-			capRow.appendChild(bar);
-		}
+		this._renderDailyCap();
 	}
 
 	_renderBudgetView() {
@@ -1290,6 +1292,456 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 					cls: "ft-sprint-empty",
 				});
 			}
+		}
+	}
+
+	/* ─── List View ─── */
+
+	/** Daily cap summary bar (shared by table + list view) */
+	_renderDailyCap() {
+		if (this.mode !== "today" || !this.plugin?.settings?.dailyCap) return;
+		const dailyCap = this.plugin.settings.dailyCap;
+		const refTdy = this._refDate();
+		const totalToday =
+			this.tasks.reduce((sum, t) => {
+				if (t.taskDate === refTdy) return sum + (t.durationMinutes || 0);
+				return sum;
+			}, 0) / 60;
+		const capRow = this.containerEl.createEl("div", { cls: "ft-daily-cap" });
+		capRow.createEl("span", { text: "Daily Budget: ", cls: "ft-cap-label" });
+		const bar = renderProgressBar(
+			totalToday,
+			dailyCap,
+			`${formatHours(totalToday)}h / ${dailyCap}h`,
+		);
+		bar.style.minWidth = "200px";
+		capRow.appendChild(bar);
+	}
+
+	/** Render today/soon tasks as a lightweight list (no table) */
+	_renderListView(tdy) {
+		const listWrap = this.containerEl.createEl("div", {
+			cls: "ft-list-wrap",
+			attr: { "data-mode": this.mode },
+		});
+
+		// v0.6.0: Build display tree
+		this._displayItems = this._buildDisplayTree(this.tasks);
+
+		for (const item of this._displayItems) {
+			this._renderListRow(listWrap, item, tdy);
+		}
+
+		// Register drag/drop after rows exist
+		this._setupListDragDrop(listWrap);
+	}
+
+	/** Render a single list-view row as a div */
+	_renderListRow(container, item, tdy) {
+		const task = item.task || item;
+		const depth = item.depth !== undefined ? item.depth : 0;
+		const hasChildren = !!item.hasChildren;
+		const collapsed = !!item.collapsed;
+		const tid = item.taskId || "";
+		const { start, dur } = this._parseStored(task.time);
+
+		const row = container.createEl("div", {
+			cls: "ft-list-row",
+			attr: {
+				draggable: "true",
+				"data-task-id": tid || "",
+				"data-source-path": task.file?.path || "",
+				"data-line": String(task.line || 0),
+			},
+		});
+
+		// Drag handle
+		row.createEl("span", {
+			text: "⠿",
+			cls: "ft-list-drag",
+			attr: { title: "Drag to reorder or drop on a heading" },
+		});
+
+		// Checkbox
+		const checkCell = row.createEl("span", { cls: "ft-list-check" });
+		const cb = checkCell.createEl("input", { type: "checkbox" });
+		cb.checked = !!(task.status && task.status.trim());
+		cb.addEventListener("change", async () => {
+			await toggleCheck(this.app.vault, task, this.plugin?.taskCache);
+			task.status = cb.checked ? "x" : " ";
+			this.plugin?.notify?.(
+				cb.checked ? "✅ Task completed" : "↩️ Task reopened",
+			);
+		});
+
+		// Task text (click to open, hover for popover)
+		const textSpan = row.createEl("span", {
+			text: task.cleanText || task.rawText || "",
+			cls: "ft-list-text",
+		});
+		textSpan.addEventListener("click", () => {
+			if (task.file?.path)
+				this.app.workspace.openLinkText(task.file.path, "", false, {
+					line: task.line + 1,
+				});
+		});
+		textSpan.addEventListener("mouseenter", (e) => {
+			this._showListPopover(task, textSpan, e);
+		});
+		textSpan.addEventListener("mouseleave", () => {
+			document.querySelectorAll(".ft-list-popover").forEach((p) => p.remove());
+		});
+
+		// Time range (if set)
+		if (start) {
+			const timeEl = row.createEl("span", { cls: "ft-list-time" });
+			if (dur && dur > 0) {
+				timeEl.setText(start + " → " + this._calcEnd(start, dur));
+			} else {
+				timeEl.setText(start);
+			}
+		}
+
+		// Timer button
+		if (this._columnVisibility.timer !== false) {
+			const timerBtn = row.createEl("button", {
+				text: "⏱",
+				cls: "ft-list-timer",
+				attr: { title: "Start/pause timer" },
+			});
+			timerBtn.addEventListener("click", (e) => {
+				e.stopPropagation();
+				const { StatusTimer } = require("./status-timer");
+				const durMinutes = task.durationMinutes || 25;
+				const timer = new StatusTimer({
+					statusBarItem: this.plugin?.statusBarItem,
+					settings: this.plugin?.settings,
+					notify: this.plugin?.notify,
+					onSessionEnd: (rec) => {
+						this.plugin?.sessionStore?.writeSession({
+							...rec,
+							bucket: task.bucket,
+						});
+					},
+					onTimerStop: () => {},
+				});
+				timer.start(task.cleanText || task.rawText || "", durMinutes * 60);
+			});
+		}
+
+		return row;
+	}
+
+	/** Show a popover with full task metadata on hover */
+	_showListPopover(task, anchorEl, event) {
+		// Remove any existing popover
+		document.querySelectorAll(".ft-list-popover").forEach((p) => p.remove());
+
+		const pop = document.createElement("div");
+		pop.className = "ft-list-popover";
+
+		const lines = [];
+		if (task.project) lines.push(["Project", task.project]);
+		if (task.bucket) {
+			const buckets = this.plugin?.settings?.buckets || [];
+			const def = buckets.find((b) => b.id === task.bucket);
+			lines.push(["Bucket", def?.name || task.bucket]);
+		}
+		if (task.sprint) lines.push(["Sprint", this._sprintName(task.sprint)]);
+		if (task.priority) lines.push(["Priority", task.priority]);
+		if (task.taskDate) lines.push(["Date", this._fmtDate(task.taskDate)]);
+		if (task.file?.basename)
+			lines.push(["Source", task.file.basename + ".md"]);
+
+		for (const [label, val] of lines) {
+			const l = pop.createEl("div", { cls: "ft-list-pop-line" });
+			l.createEl("span", { text: label + ": ", cls: "ft-list-pop-label" });
+			l.createEl("span", { text: val, cls: "ft-list-pop-value" });
+		}
+
+		if (lines.length === 0) {
+			pop.createEl("div", {
+				text: "No additional metadata",
+				cls: "ft-list-pop-empty",
+			});
+		}
+
+		document.body.appendChild(pop);
+
+		// Position near cursor
+		const rect = anchorEl.getBoundingClientRect();
+		pop.style.left = Math.min(event.clientX + 12, window.innerWidth - 260) + "px";
+		pop.style.top = rect.bottom + 6 + "px";
+
+		// Remove on click outside
+		const close = (e2) => {
+			if (!pop.contains(e2.target)) {
+				pop.remove();
+				document.removeEventListener("click", close, true);
+			}
+		};
+		setTimeout(() => document.addEventListener("click", close, true), 0);
+	}
+
+	/** Drag-and-drop between list rows and onto page headings */
+	_setupListDragDrop(listWrap) {
+		let dragData = null;
+
+		// ── Drag source ──
+		listWrap.addEventListener("dragstart", (e) => {
+			const row = e.target.closest(".ft-list-row");
+			if (!row) return;
+			// Only start drag from the drag handle
+			if (!e.target.closest(".ft-list-drag")) {
+				e.preventDefault();
+				return;
+			}
+			dragData = {
+				path: row.dataset.sourcePath,
+				line: parseInt(row.dataset.line, 10),
+				taskId: row.dataset.taskId,
+			};
+			row.classList.add("ft-list-dragging");
+			e.dataTransfer.effectAllowed = "move";
+			e.dataTransfer.setData("text/plain", dragData.taskId);
+		});
+
+		listWrap.addEventListener("dragend", () => {
+			document
+				.querySelectorAll(".ft-list-dragging,.ft-list-drop-target")
+				.forEach((el) => {
+					el.classList.remove("ft-list-dragging", "ft-list-drop-target");
+				});
+			dragData = null;
+		});
+
+		// ── Drop between rows (time reordering) ──
+		listWrap.addEventListener("dragover", (e) => {
+			const targetRow = e.target.closest(".ft-list-row");
+			if (!targetRow || !dragData) return;
+			e.preventDefault();
+			// Clear previous indicators
+			listWrap
+				.querySelectorAll(".ft-list-drop-target")
+				.forEach((el) => el.classList.remove("ft-list-drop-target"));
+			targetRow.classList.add("ft-list-drop-target");
+		});
+
+		listWrap.addEventListener("drop", (e) => {
+			const targetRow = e.target.closest(".ft-list-row");
+			targetRow?.classList.remove("ft-list-drop-target");
+			if (!targetRow || !dragData) return;
+
+			e.preventDefault();
+
+			// Find source and target task objects
+			const srcIdx = this.tasks.findIndex(
+				(t) => t.file?.path === dragData.path && t.line === dragData.line,
+			);
+			const targetIdx = this.tasks.findIndex(
+				(t) => t.file?.path === targetRow.dataset.sourcePath && t.line === parseInt(targetRow.dataset.line, 10),
+			);
+			if (srcIdx < 0 || targetIdx < 0 || srcIdx === targetIdx) return;
+
+			const srcTask = this.tasks[srcIdx];
+			const targetTask = this.tasks[targetIdx];
+
+			// Determine drop position: before or after target
+			const rect = targetRow.getBoundingClientRect();
+			const midY = rect.top + rect.height / 2;
+			const dropBefore = e.clientY < midY;
+
+			if (dropBefore) {
+				// Before target: if target has time, assign midpoint of previous and target
+				const prevTask =
+					targetIdx > 0 ? this.tasks[targetIdx - 1] : null;
+				if (targetTask.time) {
+					if (prevTask?.time) {
+						// Assign midpoint time
+						const newTime = this._midpointTime(
+							prevTask.time,
+							targetTask.time,
+						);
+						this._setTaskTime(srcTask, newTime);
+					} else {
+						// Before first timed task with no predecessor — use target's time minus a slot
+						this._setTaskTime(srcTask, targetTask.time);
+					}
+				} else {
+					// Target has no time — clear source's time
+					this._setTaskTime(srcTask, "");
+				}
+			} else {
+				// After target
+				const nextTask =
+					targetIdx < this.tasks.length - 1
+						? this.tasks[targetIdx + 1]
+						: null;
+				if (targetTask.time && nextTask?.time) {
+					const newTime = this._midpointTime(
+						targetTask.time,
+						nextTask.time,
+					);
+					this._setTaskTime(srcTask, newTime);
+				} else if (targetTask.time && !nextTask) {
+					// After the last timed task — clear time
+					this._setTaskTime(srcTask, "");
+				} else if (targetTask.time && !nextTask?.time) {
+					// After a timed task followed by untimed — clear time
+					this._setTaskTime(srcTask, "");
+				} else {
+					// Between untimed — no change
+					this._setTaskTime(srcTask, "");
+				}
+			}
+
+			// Re-sort and re-render
+			this._sort();
+			this.renderTable();
+			this.plugin?.notify?.("🔄 Time updated");
+		});
+
+		// ── Drop onto page headings (date/status changes) ──
+		this._registerHeadingDropZones();
+
+		// Global dragover for heading zones
+		document.addEventListener("dragover", (e) => {
+			const heading = e.target.closest(
+				".ft-list-heading-zone, h1, h2, h3, h4, h5, h6",
+			);
+			if (heading && dragData) {
+				e.preventDefault();
+				heading.classList.add("ft-list-heading-active");
+			}
+		});
+		document.addEventListener("dragleave", (e) => {
+			const heading = e.target.closest(
+				".ft-list-heading-zone, h1, h2, h3, h4, h5, h6",
+			);
+			if (heading) heading.classList.remove("ft-list-heading-active");
+		});
+		document.addEventListener("drop", async (e) => {
+			const heading = e.target.closest(
+				".ft-list-heading-zone, h1, h2, h3, h4, h5, h6",
+			);
+			heading?.classList.remove("ft-list-heading-active");
+			if (!heading || !dragData) return;
+
+			e.preventDefault();
+
+			// Find the source task
+			const srcTask = this.tasks.find(
+				(t) =>
+					t.file?.path === dragData.path && t.line === dragData.line,
+			);
+			if (!srcTask) return;
+
+			const text = heading.textContent.trim().toLowerCase();
+
+			// Match heading text to action
+			if (text === "today") {
+				await this.updateDate(srcTask, this._refDate());
+				this.plugin?.notify?.("📅 Moved to today");
+			} else if (text === "tomorrow") {
+				const tomorrow = new Date(Date.now() + 864e5)
+					.toISOString()
+					.split("T")[0];
+				await this.updateDate(srcTask, tomorrow);
+				this.plugin?.notify?.("📅 Moved to tomorrow");
+			} else if (text === "overdue" || text === "carry over") {
+				const yesterday = new Date(Date.now() - 864e5)
+					.toISOString()
+					.split("T")[0];
+				await this.updateDate(srcTask, yesterday);
+				this.plugin?.notify?.("📅 Moved to overdue");
+			} else if (text === "soon" || text === "up next") {
+				// Remove date and add @soon by clearing the date
+				await this.updateDate(srcTask, "");
+				this.plugin?.notify?.("◌ Back to @soon");
+			} else if (text === "next week") {
+				const nw = new Date(Date.now() + 7 * 864e5)
+					.toISOString()
+					.split("T")[0];
+				await this.updateDate(srcTask, nw);
+				this.plugin?.notify?.("📅 Moved to next week");
+			} else {
+				// Try YYYY-MM-DD date
+				const dateMatch = text.match(
+					/(\d{4})-(\d{1,2})-(\d{1,2})/,
+				);
+				if (dateMatch) {
+					await this.updateDate(srcTask, text);
+					this.plugin?.notify?.("📅 Date set to " + text);
+				}
+				// Unknown heading — no action
+			}
+		});
+	}
+
+	/** Find h3 headings in the note text and add visual drop hints */
+	_registerHeadingDropZones() {
+		// Headings are native markdown — the dragover/drop handlers above
+		// catch events on h1-h6 elements directly. Visual feedback is handled
+		// via .ft-list-heading-active. No extra DOM manipulation needed.
+	}
+
+	/** Compute a midpoint time between two HH:MM strings */
+	_midpointTime(t1, t2) {
+		const toMin = (s) => {
+			const p = s.split(":").map(Number);
+			return p[0] * 60 + (p[1] || 0);
+		};
+		const fromMin = (m) => {
+			const h = Math.floor(m / 60);
+			const min = m % 60;
+			return (
+				String(h).padStart(2, "0") +
+				":" +
+				String(min).padStart(2, "0")
+			);
+		};
+		const m1 = toMin(t1);
+		const m2 = toMin(t2);
+		if (m2 <= m1) return fromMin(m1 + 15); // fallback to +15m if times are equal
+		return fromMin(Math.round((m1 + m2) / 2 / 5) * 5); // round to 5 min
+	}
+
+	/** Update a task's time and persist to source file */
+	async _setTaskTime(task, newTime) {
+		if (!task.file?.path) return;
+		const vault = this.app.vault;
+		try {
+			const file = vault.getAbstractFileByPath(task.file.path);
+			if (!file) return;
+			const content = await vault.read(file);
+			const lines = content.split("\n");
+			const line = lines[task.line];
+			if (!line) return;
+
+			// Replace time in task line
+			let newLine = line;
+			// Remove existing @time or @HH:MM patterns
+			newLine = newLine.replace(/@\d{1,2}:\d{2}\b/g, "").trim();
+			// Remove existing @1h30m etc (duration) — keep duration
+			if (newTime) {
+				// Insert @HH:MM before the first @tag or at end
+				const atIdx = newLine.search(/@\w/);
+				if (atIdx >= 0) {
+					newLine =
+						newLine.slice(0, atIdx) +
+						"@" +
+						newTime +
+						" " +
+						newLine.slice(atIdx);
+				} else {
+					newLine += " @" + newTime;
+				}
+			}
+			lines[task.line] = newLine;
+			await vault.modify(file, lines.join("\n"));
+			task.time = newTime;
+		} catch (e) {
+			console.warn("Flowtime: Could not update task time:", e);
 		}
 	}
 

@@ -40,6 +40,7 @@ const DEFAULT_SETTINGS = {
 	dailyCap: 12,
 
 	// Display
+	defaultView: "table", // 'table' or 'list'
 	dateFormat: "YYYY-MM-DD",
 	statusBarTimer: true,
 	contentWidthPreset: "s",
@@ -720,6 +721,20 @@ class FlowtimeSettingsTab extends PluginSettingTab {
 		// ═══════════════════════════════════════
 		_g = containerEl.createEl("div", { cls: "ft-settings-group" });
 		_g.createEl("h2", { text: "Display & Layout" });
+
+		new Setting(_g)
+			.setName("Default view")
+			.setDesc("Which view to show for today/soon code blocks")
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("table", "Table")
+					.addOption("list", "List")
+					.setValue(this.plugin.settings.defaultView)
+					.onChange(async (value) => {
+						this.plugin.settings.defaultView = value;
+						await this.plugin.saveData(this.plugin.settings);
+					}),
+			);
 
 		new Setting(_g)
 			.setName("Date format")

@@ -1235,6 +1235,21 @@ export default class FlowtimePlugin extends Plugin {
 		this.app.workspace.onLayoutReady(() => {
 			this.listEnhancer.check();
 		});
+
+		// v1.5.0: Mobile markdown view — auto-aggregate tasks on file open
+		this.registerEvent(
+			this.app.workspace.on("file-open", async (file) => {
+				if (!file || !this._isMobileAggregateFile(file)) return;
+				const { refreshAll } = await import("./task-aggregator");
+				await refreshAll(this.app, file, this, file.path);
+			}),
+		);
+	}
+
+	_isMobileAggregateFile(file: TFile): boolean {
+		const cache = this.app.metadataCache.getCache(file.path);
+		const fm = cache?.frontmatter as Record<string, unknown> | undefined;
+		return fm?.type === "flowtime-list" || fm?.type === "flowtime-mobile";
 	}
 
 	/**

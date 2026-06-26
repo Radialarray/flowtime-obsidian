@@ -194,7 +194,7 @@ export function isFileInScope(filePath: string, projectsRoot: string): boolean {
 /* ─── Vault I/O ─── */
 
 /** Cache interface that has get/set methods */
-interface TaskCacheLike {
+export interface TaskCacheLike {
   get(path: string): { parsedTasks: Omit<ParsedTask, "file">[] } | null;
   set(path: string, tasks: Omit<ParsedTask, "file">[]): void;
 }

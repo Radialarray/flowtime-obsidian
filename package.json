@@ -3,7 +3,7 @@
   "version": "1.3.0",
   "private": true,
   "scripts": {
-    "build": "node esbuild.config.mjs production && cp manifest.json src/styles.css dist/",
+    "build": "tsc --noEmit && eslint src/ && node esbuild.config.mjs production && cp manifest.json src/styles.css dist/",
     "dev": "node esbuild.config.mjs",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",

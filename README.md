@@ -240,12 +240,36 @@ Complete example:
 - [ ] 09:00—11:30 Code review @2026-06-24 🔼 @1.5h @b:deep-work
 ```
 
-## Upcoming
+## Floating Editor
 
-Features in development:
+Click any task text (in table or list view) to open the floating editor — a unified editing dialog for all task fields:
 
-- **Heading drop zones** — drag a task onto `### Today`, `### Tomorrow`, or `### Soon` headings in your note to change its date/status. The note's own headings become live scheduling targets.
-- **Enhanced markdown notes** — add `type: flowtime-list` to a note's frontmatter to turn it into a fully interactive task list (drag handles, checkboxes, timers) without any code blocks.
+- **Task text** — edit inline, preserves `@`-directives automatically
+- **Date** — date picker
+- **Duration** — dropdown (10m–4h)
+- **Bucket** — dropdown from configured buckets
+- **Project** — read-only display with link to project note
+- **Source link** — 🔗 button in the top-right corner opens the source markdown file at the task's line
+
+Save with Enter or the Save button. Click outside to dismiss. The old read-only hover popover is gone — click now opens the editor in both table and list views.
+
+## Enhanced Markdown Notes
+
+Add `type: flowtime-list` to a note's frontmatter to activate live task enhancement. No code blocks needed — the note itself becomes interactive:
+
+- **Drag handles** — ⠿ on every task line for drag-and-drop reorder
+- **Checkbox toggle** — click to check off, writes back to the source file
+- **Inline timer** — ⏱ button starts a countdown per task
+- **Heading drop zones** — drag a task onto `### Today`, `### Tomorrow`, `### Soon`, `### Next Week`, or `### YYYY-MM-DD` to change its date/status
+- **Recurrence handling** — completing a recurring task auto-generates the next instance
+
+## Tab History
+
+When you close a tab (Cmd+W) that you navigated to from a Flowtime link, the plugin automatically returns you to the previous tab instead of the next one in the tab bar. Enabled by default in Settings → Notifications → Tab history. Useful after clicking the 🔗 source link in the floating editor.
+
+## Performance
+
+The `TaskIndex` cache eliminates repeated full vault scans on every render — tasks are indexed once at startup and updated incrementally. Drag-drop in list view uses batched DOM reads and O(1) row lookups to avoid layout thrashing. See `docs/perf-improvements.md` for details.
 
 ## Setup
 
@@ -314,6 +338,7 @@ In Settings → Flowtime.
 | Timer sound | on | Beep when a countdown timer reaches zero |
 | Notice duration | 4000ms | Notification display time |
 | Quiet mode | off | Suppress non-error notices |
+| Tab history | on | Navigate back to previous tab on close instead of next tab |
 | **Display** | | |
 | Default view | Table | Default view for code blocks: Table or List |
 | Date format | YYYY-MM-DD | Moment.js format for dates |

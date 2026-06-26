@@ -121,7 +121,7 @@ const COLUMNS: ColumnDef[] = [
   { id: "bucket",   label: "Bucket",  sortField: "bucket",  width: "auto",  compactOnly: false, compactSkip: false, defaultHide: false },
   { id: "sprint",   label: "Sprint",  sortField: "sprint",  width: "auto",  compactOnly: false, compactSkip: false, defaultHide: true },
   { id: "source",   label: "Source",  sortField: "source",  width: "auto",  compactOnly: false, compactSkip: false, defaultHide: false },
-  { id: "date",     label: "Date",    sortField: "date",    width: "90px", compactOnly: false, compactSkip: false, defaultHide: false },
+  { id: "date",     label: "Date",    sortField: "date",    width: "auto",  compactOnly: false, compactSkip: false, defaultHide: false },
   { id: "actions",  label: " ",       sortField: null,      width: "auto",  compactOnly: true,  compactSkip: false, defaultHide: false },
   { id: "timer",    label: " ",       sortField: null,      width: "22%",   compactOnly: false, compactSkip: true,  defaultHide: false },
 ];
@@ -935,6 +935,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     } else {
       timeEl.setText("\u2014");
     }
+    timeEl.addEventListener("click", (e: MouseEvent) => { e.stopPropagation(); this._showFloatingEditor(task, timeEl); });
 
 
     const timerCell = row.createEl("span", { cls: "ft-list-timer-cell" });

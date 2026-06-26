@@ -27,6 +27,7 @@ import { ExtractNoteHandler } from "./extract-note";
 import { ListEnhancer } from "./list-enhancer";
 import { WeekplanRenderer } from "./weekplan-renderer";
 import { AddTaskSuggest, AtCompletionsSuggest } from "./suggests/at-completions";
+import { TaskIndex } from "./task-index";
 import type { FlowtimeSettings, BucketDef } from "./types";
 
 /* ─── Inline types ─── */
@@ -49,6 +50,7 @@ export default class FlowtimePlugin extends Plugin {
 	templateEngine!: TemplateEngine;
 	sessionStore!: SessionStore;
 	taskCache!: TaskCache;
+	taskIndex!: TaskIndex;
 	routineEngine!: RoutineEngine;
 	statusTimer!: StatusTimer;
 	listEnhancer!: ListEnhancer;
@@ -123,6 +125,7 @@ export default class FlowtimePlugin extends Plugin {
 		this.templateEngine = new TemplateEngine(this.app, this);
 		this.sessionStore = new SessionStore(this.app.vault);
 		this.taskCache = new TaskCache();
+		this.taskIndex = new TaskIndex();
 		this.routineEngine = new RoutineEngine(this.app, this);
 
 		// ── v0.4.0: Cache persistence in separate file ──
@@ -201,6 +204,21 @@ export default class FlowtimePlugin extends Plugin {
 			this.notify("\u26A0\uFE0F " + w, true);
 		}
 
+		// v1.4.0: TaskIndex — cached task index with incremental updates
+		const indexLoaded = await this.taskIndex.load(this.app.vault.adapter);
+		if (!indexLoaded) {
+			console.log("Flowtime: Building task index...");
+			await this.taskIndex.scanAll(
+				this.app.vault.getMarkdownFiles(),
+				this.app.vault,
+				this.settings.projectsRoot,
+			);
+			await this.taskIndex.save(this.app.vault.adapter);
+			console.log("Flowtime: Task index built —", this.taskIndex.totalTasks, "tasks");
+		} else {
+			console.log("Flowtime: Task index loaded from disk —", this.taskIndex.totalTasks, "tasks");
+		}
+
 		// v0.7.0: Ensure session directory exists in plugin folder
 		await this._ensureSessionDir();
 
@@ -234,14 +252,23 @@ export default class FlowtimePlugin extends Plugin {
 		// Track old projectsRoot to detect changes
 		this._previousProjectsRoot = this.settings.projectsRoot;
 
-		const onFileChanged = (file: TAbstractFile): void => {
+		const onFileModified = (file: TAbstractFile): void => {
 			this.projectEngine.invalidate(file.path);
 			this.taskCache.invalid(file.path);
+			if (file instanceof TFile && file.path.endsWith(".md")) {
+				void this.taskIndex.indexFile(file, this.app.vault, this.settings.projectsRoot);
+			}
 			this._scheduleCacheSave();
 		};
-		this.registerEvent(this.app.vault.on("modify", onFileChanged));
-		this.registerEvent(this.app.vault.on("delete", onFileChanged));
-		// Also invalidate on rename (create+delete fires separately)
+		const onFileDeleted = (file: TAbstractFile): void => {
+			this.projectEngine.invalidate(file.path);
+			this.taskCache.invalid(file.path);
+			this.taskIndex.removeFile(file.path);
+			this._scheduleCacheSave();
+		};
+		this.registerEvent(this.app.vault.on("modify", onFileModified));
+		this.registerEvent(this.app.vault.on("delete", onFileDeleted));
+		this.registerEvent(this.app.vault.on("create", onFileModified));
 
 		// v0.5.0: Watch routines folder for changes → re-generate (debounced)
 		const routinesFolder = this.settings.routinesFolder || "Routines/";

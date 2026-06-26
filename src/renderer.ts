@@ -105,6 +105,12 @@ interface FlowtimePluginRef {
     getWeeklyTotals(): Promise<Record<string, unknown>[]>;
   };
   renderers: FlowtimeRenderer[];
+  taskIndex?: {
+    initialized: boolean;
+    totalTasks: number;
+    getTasks(query: { date?: string; dateFrom?: string; dateTo?: string; project?: string; bucket?: string; includeCompleted?: boolean }): ParsedTask[];
+    getDailyDurationTotal(dateStr: string): number;
+  };
 }
 
 /* ─── Column definitions ─── */
@@ -231,6 +237,11 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
   async _computeDailyTotal(): Promise<number> {
     const today = this._refDate();
+    // Use taskIndex if available (fast path)
+    if (this.plugin?.taskIndex?.initialized) {
+      return this.plugin.taskIndex.getDailyDurationTotal(today) / 60;
+    }
+    // Fallback: full scan
     let total = 0;
     for (const file of this.app.vault.getMarkdownFiles()) {
       if (!this._isFileInScope(file.path)) continue;
@@ -482,6 +493,42 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     }
 
     this.tasks = [];
+
+    // v1.4.0: TaskIndex fast path — avoid full vault scan for date-filtered modes
+    const idx = this.plugin?.taskIndex;
+    if (idx?.initialized && (this.mode === "today" || this.mode === "overdue" || this.mode === "dueweek" || this.mode === "weekly")) {
+      const query: { dateFrom?: string; dateTo?: string } = {};
+      if (this.mode === "today") { query.dateFrom = today; query.dateTo = today; }
+      else if (this.mode === "overdue") { query.dateTo = new Date(new Date(today).getTime() - 86400000).toISOString().split("T")[0]; }
+      else if (this.mode === "dueweek") { query.dateFrom = today; query.dateTo = eowStr; }
+      else if (this.mode === "weekly") { query.dateFrom = mon; query.dateTo = sun; }
+
+      const idxTasks = idx.getTasks({ ...query, includeCompleted: false });
+      for (const parsed of idxTasks) {
+        if (!parsed.file) continue;
+        const project = this.projectEngine ? await this.projectEngine.resolve(parsed.file.path) : null;
+        let projName: string | null = project?.name || null;
+        const projPath = project?.path || null;
+        let projSource: string | null = project?.source || null;
+        if (!projName && this.projectEngine && parsed.projectTag) {
+          projName = parsed.projectTag; projSource = "tag";
+        }
+        this.tasks.push({
+          file: parsed.file, line: parsed.line, rawLine: parsed.rawLine,
+          time: parsed.time, taskDate: parsed.taskDate, rawText: parsed.rawText,
+          cleanText: parsed.cleanText, status: parsed.status, priority: parsed.priority,
+          bucket: parsed.bucket, durationMinutes: parsed.durationMinutes,
+          project: projName, projectPath: projPath, projectSource: projSource,
+          sprint: parsed.sprint, indent: parsed.indent, sortIndex: parsed.sortIndex,
+        });
+      }
+      // Apply filter + sort
+      if (this._activeFilter) this.tasks = this.tasks.filter((t) => evaluateFilter(this._activeFilter, t));
+      if (this._sortConfig?.length > 0) this._applySort(); else this._sort();
+      return;
+    }
+
+    // Fallback: full vault scan
     for (const file of this.app.vault.getMarkdownFiles()) {
       if (!this._isFileInScope(file.path)) continue;
       const fileTasks = await this._getFileTasks(file);

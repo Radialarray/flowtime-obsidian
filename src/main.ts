@@ -1236,13 +1236,16 @@ export default class FlowtimePlugin extends Plugin {
 			this.listEnhancer.check();
 		});
 
-		// v1.5.0: Mobile markdown view — auto-aggregate tasks on file open
+		// v1.5.0: Mobile markdown view — auto-aggregate on first open (empty file)
 		this.registerEvent(
 			this.app.workspace.on("file-open", async (file) => {
 				if (!file || !this._isMobileAggregateFile(file)) return;
+				// Only aggregate if file is empty/just headings (first open)
+				const content = await this.app.vault.read(file);
+				const hasTasks = /^\s*[-*+]\s+\[[ xX\-]\]/m.test(content);
+				if (hasTasks) return; // Already populated, don't overwrite user changes
 				const { refreshAll } = await import("./task-aggregator");
 				await refreshAll(this.app, file, this, file.path);
-				// Re-enhance after aggregation writes to file
 				setTimeout(() => this.listEnhancer.check(), 300);
 			}),
 		);

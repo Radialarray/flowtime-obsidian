@@ -22,6 +22,8 @@ interface FlowtimePluginRef {
     stop(): void;
     pause(): void;
   };
+  /** Called after a heading drop to re-aggregate the mobile file */
+  onHeadingDrop?: () => void;
 }
 
 interface NoteSection {
@@ -371,7 +373,7 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
     });
   }
 
-  /* ─── Drag & Drop with Heading Zones ─── */
+  /* ─── Drag & Drop with Heading Zones (pointer events for mouse + touch) ─── */
 
   function _setupDragDrop(container: HTMLElement): void {
     let dragState: {
@@ -381,22 +383,22 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
     } | null = null;
     let moveFrame: number | null = null;
 
-    // ── mousedown on drag handle starts drag ──
-    container.addEventListener("mousedown", (e: MouseEvent) => {
+    // ── pointerdown on drag handle starts drag ──
+    const onDown = (e: PointerEvent) => {
       const handle = (e.target as HTMLElement).closest(".ft-enhance-drag");
       if (!handle) return;
       const row = handle.closest(".ft-list-enhanced") as HTMLElement | null;
       if (!row) return;
 
       e.preventDefault();
+      (handle as HTMLElement).setPointerCapture(e.pointerId);
       _clearDragIndicators(container);
       row.classList.add("ft-list-dragging");
-
       dragState = { el: row, startX: e.clientX, startY: e.clientY };
-    });
+    };
 
-    // ── mousemove: highlight drop target ──
-    document.addEventListener("mousemove", (e: MouseEvent) => {
+    // ── pointermove: highlight drop target ──
+    const onMove = (e: PointerEvent) => {
       if (!dragState) return;
       if (moveFrame) return;
       moveFrame = requestAnimationFrame(() => {
@@ -427,10 +429,10 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
           heading.classList.add("ft-list-heading-active");
         }
       });
-    });
+    };
 
-    // ── mouseup: execute drop ──
-    document.addEventListener("mouseup", async (e: MouseEvent) => {
+    // ── pointerup: execute drop ──
+    const onUp = async (e: PointerEvent) => {
       if (!dragState) return;
 
       const target = document.elementFromPoint(e.clientX, e.clientY);
@@ -440,10 +442,21 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
       dragState = null;
 
       if (action === "heading") {
-        // Heading drop was handled — schedule re-enhance after file changes propagate
-        setTimeout(() => _enhance(), 800);
+        // Trigger re-aggregation via plugin callback, then re-enhance
+        if (plugin.onHeadingDrop) {
+          setTimeout(async () => {
+            await plugin.onHeadingDrop?.();
+            setTimeout(() => _enhance(), 400);
+          }, 300);
+        } else {
+          setTimeout(() => _enhance(), 800);
+        }
       }
-    });
+    };
+
+    container.addEventListener("pointerdown", onDown);
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp);
   }
 
   /** Clear all drag visual indicators */

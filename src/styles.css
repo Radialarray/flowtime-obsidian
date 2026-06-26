@@ -1366,7 +1366,12 @@
 	padding: 2px 6px;
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-s);
-	background: var(--background-primary);
+	background: none;
+	color: var(--text-muted);
+	cursor: pointer;
+}
+.ft-group-select:hover {
+	background: var(--background-modifier-hover);
 	color: var(--text-normal);
 }
 .flowtime-table .ft-subgroup-header td {
@@ -2467,6 +2472,7 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-v
 .ft-filter-btn, .ft-fe-save, .ft-fe-cancel,
 .ft-wp-btn, .ft-wp-timer-btn, .ft-wp-del-btn,
 .flowtime-btn-submit, .flowtime-btn-cancel,
+.ft-group-select,
 .ft-floating-editor, .ft-date-popup, .ft-filter-panel,
 .ft-col-dd, .ft-tg-popup, .ft-detail-popup {
 	-webkit-tap-highlight-color: transparent;
@@ -2483,6 +2489,7 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-v
 .ft-view-btn:focus-visible,
 .ft-col-btn:focus-visible,
 .ft-filter-btn:focus-visible,
+.ft-group-select:focus-visible,
 .ft-fe-save:focus-visible,
 .ft-fe-cancel:focus-visible,
 .ft-wp-btn:focus-visible,

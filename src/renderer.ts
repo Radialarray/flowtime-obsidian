@@ -605,9 +605,9 @@ class FlowtimeRenderer extends MarkdownRenderChild {
         overdue: "\ud83c\udf89 No overdue tasks!",
         dueweek: "\ud83c\udf89 No tasks due this week!",
         weekly: "\ud83c\udf89 No tasks scheduled this week!",
-        soon: "\ud83d\dced No tasks tagged with @soon. Add @soon to backlog items.",
-        project: "\ud83d\dced No tasks for this project.",
-        today: "\ud83d\dced No tasks scheduled for today.",
+        soon: "\ud83d\udcc5 No tasks tagged with @soon. Add @soon to backlog items.",
+        project: "\ud83d\udcc5 No tasks for this project.",
+        today: "\ud83d\udcc5 No tasks scheduled for today.",
       };
       const emptyEl = this.containerEl.createEl("div", { cls: "ft-empty-state" });
       emptyEl.createEl("p", { text: msgs[this.mode] || msgs.today, cls: "flowtime-empty ft-empty-text" });

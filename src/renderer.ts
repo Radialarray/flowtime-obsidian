@@ -900,9 +900,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       this.plugin?.notify?.(cb.checked ? "\u2705 Task completed" : "\u21a9\ufe0f Task reopened");
     });
     const textSpan = row.createEl("span", { text: task.cleanText || task.rawText || "", cls: "ft-list-text" });
-    textSpan.addEventListener("click", () => { if (task.file?.path) this.app.workspace.openLinkText(task.file.path, "", false, { line: task.line + 1 } as any); });
-    textSpan.addEventListener("mouseenter", (e: MouseEvent) => { this._showListPopover(task, textSpan, e); });
-    textSpan.addEventListener("mouseleave", () => { document.querySelectorAll(".ft-list-popover").forEach((p) => p.remove()); });
+    textSpan.addEventListener("click", (e: MouseEvent) => { e.stopPropagation(); this._showFloatingEditor(task, textSpan); });
     const timeCell = row.createEl("span", { cls: "ft-list-time-cell" });
     if (start) {
       const timeEl = timeCell.createEl("span", { cls: "ft-list-time" });
@@ -964,28 +962,168 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     return row;
   }
 
-  _showListPopover(task: TaskRow, anchorEl: HTMLElement, event: MouseEvent): void {
-    document.querySelectorAll(".ft-list-popover").forEach((p) => p.remove());
-    const pop = document.createElement("div"); pop.className = "ft-list-popover";
-    const lines: Array<[string, string]> = [];
-    if (task.project) lines.push(["Project", task.project]);
-    if (task.bucket) { const buckets = this.plugin?.settings?.buckets || []; const def = buckets.find((b) => b.id === task.bucket); lines.push(["Bucket", def?.name || task.bucket]); }
-    if (task.sprint) lines.push(["Sprint", this._sprintName(task.sprint)]);
-    if (task.priority) lines.push(["Priority", task.priority]);
-    if (task.taskDate) lines.push(["Date", this._fmtDate(task.taskDate)]);
-    if (task.file?.basename) lines.push(["Source", task.file.basename + ".md"]);
-    for (const [label, val] of lines) {
-      const l = pop.createEl("div", { cls: "ft-list-pop-line" });
-      l.createEl("span", { text: label + ": ", cls: "ft-list-pop-label" });
-      l.createEl("span", { text: val, cls: "ft-list-pop-value" });
+  /**
+   * Unified floating editor for both table and list views.
+   * Click opens editor (NOT source file). Source link button top-right.
+   */
+  _showFloatingEditor(task: TaskRow, anchorEl: HTMLElement): void {
+    document.querySelectorAll(".ft-floating-editor,.ft-list-popover,.ft-detail-popup").forEach((e) => e.remove());
+
+    const popup = document.createElement("div");
+    popup.className = "ft-floating-editor";
+
+    // ── Header: heading + source link button ──
+    const header = popup.createEl("div", { cls: "ft-fe-header" });
+    header.createEl("span", { text: "Edit Task", cls: "ft-fe-heading" });
+    if (task.file) {
+      const srcBtn = header.createEl("button", {
+        text: "\u{1F517}",
+        cls: "ft-fe-source-btn",
+        attr: { title: "Open source: " + (task.file.basename || "") + " line " + (task.line + 1) },
+      });
+      srcBtn.addEventListener("click", () => {
+        this.app.workspace.openLinkText(task.file!.path, "", false, { line: task.line + 1 } as any);
+      });
     }
-    if (lines.length === 0) { pop.createEl("div", { text: "No additional metadata", cls: "ft-list-pop-empty" }); }
-    document.body.appendChild(pop);
+
+    // ── Task text (editable) ──
+    const textRow = popup.createEl("div", { cls: "ft-fe-row" });
+    textRow.createEl("label", { text: "Task", cls: "ft-fe-label" });
+    const textInput = textRow.createEl("input", {
+      type: "text", value: task.cleanText, cls: "ft-fe-input ft-fe-text",
+    });
+    textInput.style.width = "100%";
+
+    // ── Date ──
+    const dateRow = popup.createEl("div", { cls: "ft-fe-row" });
+    dateRow.createEl("label", { text: "Date", cls: "ft-fe-label" });
+    const dateInput = dateRow.createEl("input", {
+      type: "date", value: task.taskDate || "", cls: "ft-fe-input",
+    });
+
+    // ── Duration ──
+    const durRow = popup.createEl("div", { cls: "ft-fe-row" });
+    durRow.createEl("label", { text: "Duration", cls: "ft-fe-label" });
+    const durSelect = durRow.createEl("select", { cls: "ft-fe-select" });
+    for (const d of [0, 10, 15, 20, 25, 30, 45, 60, 90, 120, 150, 180, 210, 240]) {
+      const opt = durSelect.createEl("option", {
+        text: d === 0 ? "None" : d < 60 ? d + "m" : d / 60 + "h", value: String(d),
+      });
+      if (task.durationMinutes === d) opt.selected = true;
+    }
+
+    // ── Bucket ──
+    const bucketRow = popup.createEl("div", { cls: "ft-fe-row" });
+    bucketRow.createEl("label", { text: "Bucket", cls: "ft-fe-label" });
+    const bucketSel = bucketRow.createEl("select", { cls: "ft-fe-select" });
+    bucketSel.createEl("option", { text: "None", value: "" });
+    for (const b of (this.plugin?.settings?.buckets || [])) {
+      const opt = bucketSel.createEl("option", { text: b.name, value: b.id });
+      if (b.id === task.bucket) opt.selected = true;
+    }
+
+    // ── Project (read-only) ──
+    const projRow = popup.createEl("div", { cls: "ft-fe-row" });
+    projRow.createEl("label", { text: "Project", cls: "ft-fe-label" });
+    if (task.project) {
+      const pl = projRow.createEl("a", { text: task.project, cls: "ft-fe-link" });
+      pl.addEventListener("click", () => this.app.workspace.openLinkText(task.projectPath || task.project || "", "", false));
+    } else { projRow.createEl("span", { text: "\u2014", cls: "ft-fe-value" }); }
+
+    // ── Buttons ──
+    const btnRow = popup.createEl("div", { cls: "ft-fe-btn-row" });
+    btnRow.createEl("button", { text: "Cancel", cls: "ft-fe-cancel" }).addEventListener("click", () => popup.remove());
+    const saveBtn = btnRow.createEl("button", { text: "Save", cls: "ft-fe-save" });
+
+    const doSave = async (): Promise<void> => {
+      if (!task.file) { popup.remove(); return; }
+      let changed = false;
+
+      // Text
+      const newText = textInput.value.trim();
+      if (newText && newText !== task.cleanText) {
+        try {
+          const content = await this.app.vault.read(task.file);
+          const lines = content.split("\n");
+          const ln = lines[task.line];
+          if (ln) {
+            const m = ln.match(/^(\s*[-*+]\s*\[[^\]]*\]\s*)(.*)$/);
+            if (m) {
+              const dirs = m[2].match(/@\S+/g)?.join(" ") || "";
+              const tp = m[2].match(/^\d{1,2}:\d{2}(\s*[\u2014\-\u2013]\s*\d{1,2}:\d{2})?/)?.[0] || "";
+              lines[task.line] = m[1] + (tp ? tp + " " : "") + newText + (dirs ? " " + dirs : "");
+              await this.app.vault.modify(task.file, lines.join("\n"));
+              task.cleanText = newText; changed = true;
+            }
+          }
+        } catch (e) { this.plugin?.notify?.("\u274C Text: " + (e as Error).message, true); }
+      }
+
+      // Date
+      const nd = dateInput.value;
+      if (nd && nd !== task.taskDate) {
+        await updateDate(this.app.vault, task, nd); task.taskDate = nd; changed = true;
+      }
+
+      // Duration
+      const dur = parseInt(durSelect.value, 10);
+      if (dur !== task.durationMinutes) {
+        try {
+          const content = await this.app.vault.read(task.file);
+          const lines = content.split("\n");
+          const ln = lines[task.line];
+          if (ln) {
+            let nl = ln.replace(/@\d+(?:\.\d+)?[hm]/g, "");
+            if (dur > 0) nl = nl.trimEnd() + " @" + (dur < 60 ? dur + "m" : dur / 60 + "h");
+            lines[task.line] = nl;
+            await this.app.vault.modify(task.file, lines.join("\n"));
+            task.durationMinutes = dur; changed = true;
+          }
+        } catch (e) { this.plugin?.notify?.("\u274C Duration: " + (e as Error).message, true); }
+      }
+
+      // Bucket
+      const bk = bucketSel.value;
+      if (bk !== (task.bucket || "")) {
+        try {
+          const content = await this.app.vault.read(task.file);
+          const lines = content.split("\n");
+          const ln = lines[task.line];
+          if (ln) {
+            lines[task.line] = bk
+              ? (ln.match(/@(?:bucket|b):[^\s]+/) ? ln.replace(/@(?:bucket|b):[^\s]+/g, `@b:${bk}`) : ln.trimEnd() + ` @b:${bk}`)
+              : ln.replace(/@(?:bucket|b):[^\s]+\s*/g, "");
+            await this.app.vault.modify(task.file, lines.join("\n"));
+            task.bucket = bk || null; changed = true;
+          }
+        } catch (e) { this.plugin?.notify?.("\u274C Bucket: " + (e as Error).message, true); }
+      }
+
+      if (changed && this.plugin?.taskCache && task.file) {
+        this.plugin.taskCache.invalid(task.file.path);
+        this.plugin?.notify?.("\u2705 Updated");
+        await this.loadTasks(); this.renderTable();
+      }
+      popup.remove();
+    };
+
+    saveBtn.addEventListener("click", doSave);
+    textInput.addEventListener("keydown", (e: KeyboardEvent) => {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); doSave(); }
+    });
+
     const rect = anchorEl.getBoundingClientRect();
-    pop.style.left = Math.min(event.clientX + 12, window.innerWidth - 260) + "px";
-    pop.style.top = rect.bottom + 6 + "px";
-    const close = (e2: MouseEvent): void => { if (!pop.contains(e2.target as Node)) { pop.remove(); document.removeEventListener("click", close, true); } };
-    setTimeout(() => document.addEventListener("click", close, true), 0);
+    popup.style.left = Math.min(rect.left, window.innerWidth - 360) + "px";
+    popup.style.top = rect.bottom + 4 + "px";
+
+    const closeOutside = (e: MouseEvent): void => {
+      if (popup.contains(e.target as Node)) return;
+      document.removeEventListener("click", closeOutside, true);
+      popup.remove();
+    };
+    setTimeout(() => document.addEventListener("click", closeOutside, true), 200);
+    document.body.appendChild(popup);
+    textInput.focus(); textInput.select();
   }
 
   _setupListDragDrop(listWrap: HTMLDivElement): void {
@@ -1312,7 +1450,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       const done = childrenTasks.filter((c) => c.status === "x" || c.status === "X").length; const total = childrenTasks.length;
       const bar = tc.createEl("span", { cls: "ft-sub-progress", text: ` [${done}/${total}]` }); bar.title = `${done} of ${total} subtasks done (${Math.round((done / total) * 100)}%)`;
     }
-    textEl.addEventListener("click", (e: MouseEvent) => { e.stopPropagation(); this._showTaskDetail(task, textEl, new Date().toISOString().split("T")[0]); });
+    textEl.addEventListener("click", (e: MouseEvent) => { e.stopPropagation(); this._showFloatingEditor(task, textEl); });
   }
 
   _buildCheckCell(row: HTMLTableRowElement, task: TaskRow): void {
@@ -1327,54 +1465,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     try { await this.saveTime(task, nt); task.time = nt; } catch (_) { /* silent */ }
   }
 
-  _showTaskDetail(task: TaskRow, anchorBtn: HTMLElement, tdy: string): void {
-    document.querySelectorAll(".ft-detail-popup").forEach((e) => e.remove());
-    const popup = document.createElement("div"); popup.className = "ft-detail-popup";
-    const r = anchorBtn.getBoundingClientRect(); popup.style.left = Math.min(r.left, window.innerWidth - 320) + "px"; popup.style.top = r.bottom + 4 + "px";
-    const taskRow = popup.createEl("div", { cls: "ft-detail-row" }); taskRow.createEl("span", { text: task.cleanText, cls: "ft-detail-task-text" });
-    let pendingDate: string | null = null; let pendingBucket: string | null = null;
-    const saveAndClose = async (): Promise<void> => {
-      let changed = false;
-      if (pendingDate !== null && pendingDate !== task.taskDate) { await updateDate(this.app.vault, task, pendingDate); task.taskDate = pendingDate; changed = true; }
-      if (pendingBucket !== null && pendingBucket !== task.bucket) {
-        if (task.file) {
-          const content = await this.app.vault.read(task.file); const lines = content.split("\n"); const line = lines[task.line];
-          if (line) {
-            const hasBucketDir = /@(?:bucket|b):[^\s]+/.test(line);
-            if (hasBucketDir) { lines[task.line] = line.replace(/@(?:bucket|b):[^\s]+/g, pendingBucket ? `@b:${pendingBucket}` : ""); }
-            else if (pendingBucket) { lines[task.line] = line + ` @b:${pendingBucket}`; }
-            await this.app.vault.modify(task.file, lines.join("\n"));
-          }
-        }
-        task.bucket = pendingBucket || null; changed = true;
-      }
-      if (changed && this.plugin?.taskCache && task.file) { this.plugin.taskCache.invalid(task.file.path); await this.loadTasks(); this.renderTable(); }
-      popup.remove(); document.removeEventListener("click", closeOnOutside, true);
-    };
-    const dateRow = popup.createEl("div", { cls: "ft-detail-row" }); dateRow.createEl("label", { text: "Date: ", cls: "ft-detail-label" });
-    const dateInput = dateRow.createEl("input", { type: "date", value: task.taskDate || "", cls: "ft-detail-input" });
-    dateInput.addEventListener("change", () => { pendingDate = dateInput.value || ""; });
-    const bucketRow = popup.createEl("div", { cls: "ft-detail-row" }); bucketRow.createEl("label", { text: "Bucket: ", cls: "ft-detail-label" });
-
-
-    const bucketSel = bucketRow.createEl("select", { cls: "ft-detail-select" });
-    const buckets = this.plugin?.settings?.buckets || []; bucketSel.createEl("option", { text: "None", value: "" });
-    for (const b of buckets) { const opt = bucketSel.createEl("option", { text: b.name, value: b.id }); if (b.id === task.bucket) opt.selected = true; }
-    bucketSel.addEventListener("change", () => { pendingBucket = bucketSel.value || ""; });
-    const projRow = popup.createEl("div", { cls: "ft-detail-row" }); projRow.createEl("label", { text: "Project: ", cls: "ft-detail-label" });
-    if (task.project) { const projLink = projRow.createEl("a", { text: task.project, cls: "ft-detail-link" }); const targetPath = task.projectPath || task.project; projLink.addEventListener("click", () => this.app.workspace.openLinkText(targetPath, "", false)); }
-    else { projRow.createEl("span", { text: "\u2014", cls: "ft-detail-value" }); }
-    const srcRow = popup.createEl("div", { cls: "ft-detail-row" }); srcRow.createEl("label", { text: "Source: ", cls: "ft-detail-label" });
-    const srcLink = srcRow.createEl("a", { text: task.file?.basename || "\u2014", cls: "ft-detail-link" });
-    if (task.file) { srcLink.addEventListener("click", () => this.app.workspace.openLinkText(task.file!.path, "", false, { line: task.line + 1 } as any)); }
-    const closeBtn = popup.createEl("button", { text: "\u2715", cls: "ft-detail-close" });
-    closeBtn.addEventListener("click", async () => await saveAndClose());
-    const closeOnOutside = (e: MouseEvent): void => {
-      if (popup.contains(e.target as Node)) return; if ((e.target as HTMLElement).tagName === "INPUT" && (e.target as HTMLInputElement).type === "date") return;
-      document.removeEventListener("click", closeOnOutside, true); saveAndClose();
-    };
-    setTimeout(() => document.addEventListener("click", closeOnOutside, true), 200);
-    document.body.appendChild(popup);
+  _showTaskDetail(_task: TaskRow, _anchorBtn: HTMLElement, _tdy: string): void {
+    /* → _showFloatingEditor */
   }
 
   async saveTime(task: TaskRow, time: string): Promise<void> {

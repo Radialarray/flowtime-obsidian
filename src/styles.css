@@ -8,6 +8,15 @@
 	overflow-x: auto;
 	max-width: 100%;
 	-webkit-overflow-scrolling: touch;
+	/* Scroll shadows indicate horizontal overflow */
+	background:
+		linear-gradient(to right, var(--background-primary) 30%, transparent),
+		linear-gradient(to left, var(--background-primary) 30%, transparent) 100% 0,
+		linear-gradient(to right, rgba(0,0,0,0.06), transparent),
+		linear-gradient(to left, rgba(0,0,0,0.06), transparent) 100% 0;
+	background-repeat: no-repeat;
+	background-size: 40px 100%, 40px 100%, 14px 100%, 14px 100%;
+	background-attachment: local, local, scroll, scroll;
 }
 
 .ft-table {
@@ -72,6 +81,7 @@
 	padding: 0;
 	text-align: center;
 	vertical-align: middle;
+	cursor: pointer;
 }
 
 .ft-checkbox {
@@ -1791,6 +1801,15 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-v
 	max-width: 100%;
 	-webkit-overflow-scrolling: touch;
 	padding-bottom: 20px;
+	/* Scroll shadows same as table wrap */
+	background:
+		linear-gradient(to right, var(--background-primary) 30%, transparent),
+		linear-gradient(to left, var(--background-primary) 30%, transparent) 100% 0,
+		linear-gradient(to right, rgba(0,0,0,0.06), transparent),
+		linear-gradient(to left, rgba(0,0,0,0.06), transparent) 100% 0;
+	background-repeat: no-repeat;
+	background-size: 40px 100%, 40px 100%, 14px 100%, 14px 100%;
+	background-attachment: local, local, scroll, scroll;
 }
 
 .ft-tg-grid {
@@ -1800,7 +1819,7 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-v
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-m);
 	overflow: hidden;
-	min-width: 760px;
+	min-width: 600px;
 	position: relative;
 }
 
@@ -2483,6 +2502,25 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-v
    Mobile & Touch Responsive (v1.5.0)
    ═══════════════════════════════════════ */
 
+/* ── Safe areas for notched iPhones ── */
+/* Bottom-fixed popups: clear the home indicator */
+.ft-floating-editor,
+.ft-detail-popup,
+.ft-date-popup,
+.ft-filter-panel,
+.ft-col-dd,
+.ft-tg-popup,
+.ft-list-popover {
+	max-height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 16px);
+}
+
+/* Bottom-anchored interactive elements: ensure not hidden behind home bar */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+	.ft-floating-editor .ft-fe-btn-row {
+		padding-bottom: max(12px, env(safe-area-inset-bottom));
+	}
+}
+
 /* ── Tap highlight + touch-action (kill 300ms delay) ── */
 .ft-table-wrap, .ft-tg-wrap, .ft-list-wrap,
 .ft-checkbox, .ft-timer-play, .ft-timer-reset,
@@ -2560,45 +2598,85 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-v
 
 /* ── Touch: larger hit targets ── */
 @media (pointer: coarse) {
-	.ft-checkbox {
-		width: 20px;
-		height: 20px;
-	}
-	.ft-checkbox.ft-checked::after {
-		width: 20px;
-		height: 20px;
-	}
-	.ft-timer-play, .ft-timer-reset {
-		width: 36px;
-		height: 36px;
-		font-size: var(--font-ui-medium);
-	}
-	.ft-list-timer-play, .ft-list-timer-reset {
-		font-size: 18px;
+	/* Checkbox: 44px tap target via padded cell + 28px visual */
+	.ft-check-cell {
 		padding: 4px 6px;
 	}
-	.ft-detail-close {
-		font-size: 16px;
-		padding: 6px 10px;
+	.ft-checkbox {
+		width: 28px;
+		height: 28px;
 	}
+	.ft-checkbox.ft-checked::after {
+		width: 28px;
+		height: 28px;
+	}
+	/* Timer buttons: 44px minimum tap target */
+	.ft-timer-play, .ft-timer-reset {
+		width: 44px;
+		height: 44px;
+		font-size: var(--font-ui-large);
+	}
+	.ft-list-timer-play, .ft-list-timer-reset {
+		min-width: 44px;
+		min-height: 44px;
+		font-size: 22px;
+		padding: 6px 8px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+	}
+	/* Close button: larger target */
+	.ft-detail-close {
+		font-size: 20px;
+		padding: 8px 12px;
+		min-width: 44px;
+		min-height: 44px;
+	}
+	/* Dropdown items: ≥44px height */
 	.ft-col-dd-item {
-		padding: 8px 14px;
+		padding: 10px 14px;
+		min-height: 44px;
+		display: flex;
+		align-items: center;
 	}
 	.ft-dp-btn {
-		padding: 8px 10px;
+		padding: 10px 10px;
+		min-height: 44px;
 	}
+	/* Toolbar buttons: ensure tap-friendly */
+	.ft-col-btn, .ft-filter-btn, .ft-view-btn {
+		padding: 6px 12px;
+		min-height: 36px;
+	}
+	/* Table cells: breathing room for tap */
 	.ft-table td {
-		padding: 8px 6px;
+		padding: 10px 6px;
 	}
+	/* List row: generous padding for swipe + tap */
 	.ft-list-row {
-		padding: 10px 8px;
+		padding: 12px 8px;
+		min-height: 48px;
 	}
+	/* List drag handle: wider tap target */
+	.ft-list-drag {
+		padding: 6px 8px;
+		font-size: 24px;
+		min-width: 44px;
+	}
+	/* Floating editor buttons: ≥44px */
 	.ft-fe-cancel, .ft-fe-save {
-		font-size: var(--font-ui-small);
-		padding: 6px 14px;
+		font-size: var(--font-ui-medium);
+		padding: 8px 18px;
+		min-height: 44px;
 	}
+	/* Timeline resize handle: larger grab area */
 	.ft-tg-resize-handle {
-		height: 10px;
+		height: 12px;
+	}
+	/* List view popover close */
+	.ft-list-popover .ft-detail-close {
+		min-width: 44px;
+		min-height: 44px;
 	}
 }
 
@@ -2658,18 +2736,6 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-v
 	/* Session history: collapse extra columns */
 	.ft-sesh-task { max-width: 120px; }
 
-	/* Scroll shadows on table wrap */
-	.ft-table-wrap {
-		background:
-			linear-gradient(to right, var(--background-primary) 30%, transparent),
-			linear-gradient(to left, var(--background-primary) 30%, transparent) 100% 0,
-			linear-gradient(to right, rgba(0,0,0,0.06), transparent),
-			linear-gradient(to left, rgba(0,0,0,0.06), transparent) 100% 0;
-		background-repeat: no-repeat;
-		background-size: 40px 100%, 40px 100%, 14px 100%, 14px 100%;
-		background-attachment: local, local, scroll, scroll;
-	}
-
 	/* Table row: more breathing room */
 	.ft-table td { padding: 8px 4px; }
 }
@@ -2685,6 +2751,15 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-v
 	.ft-progress-bar { min-width: 100px; }
 	.ft-wp-start-input, .ft-wp-dur-input { width: 50px; }
 	.ft-tg-grid { min-width: 0; } /* allow grid to shrink on tablets */
+
+	/* Table column width compression for tablet portrait */
+	.flowtime-table th.col-time { width: 18% !important; }
+	.flowtime-table th.col-timer { width: 18% !important; }
+	.ft-table td { padding: 6px 4px; }
+	.ft-start-input, .ft-dur-input {
+		font-size: var(--font-ui-smaller);
+		padding: 2px 4px;
+	}
 }
 
 /* ── Tablet: 769px–1024px ── */

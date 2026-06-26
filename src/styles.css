@@ -565,10 +565,12 @@
 	display: inline-flex;
 	gap: 4px;
 	white-space: nowrap;
+	flex-wrap: wrap;
+	justify-content: center;
 }
 
 .ft-act-btn {
-	padding: 3px 8px;
+	padding: 2px 6px;
 	border: 1px solid var(--interactive-accent);
 	border-radius: var(--radius-s);
 	background: var(--interactive-accent);

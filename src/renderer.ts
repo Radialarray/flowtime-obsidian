@@ -122,7 +122,7 @@ const COLUMNS: ColumnDef[] = [
   { id: "sprint",   label: "Sprint",  sortField: "sprint",  width: "auto",  compactOnly: false, compactSkip: false, defaultHide: true },
   { id: "source",   label: "Source",  sortField: "source",  width: "auto",  compactOnly: false, compactSkip: false, defaultHide: false },
   { id: "date",     label: "Date",    sortField: "date",    width: "85px",  compactOnly: false, compactSkip: false, defaultHide: false },
-  { id: "actions",  label: " ",       sortField: null,      width: "auto",  compactOnly: true,  compactSkip: false, defaultHide: false },
+  { id: "actions",  label: " ",       sortField: null,      width: "90px",  compactOnly: true,  compactSkip: false, defaultHide: false },
   { id: "timer",    label: " ",       sortField: null,      width: "22%",   compactOnly: false, compactSkip: true,  defaultHide: false },
 ];
 

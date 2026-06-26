@@ -34,7 +34,7 @@ import { ListEnhancer } from "./list-enhancer";
 import { WeekplanRenderer } from "./weekplan-renderer";
 import { AddTaskSuggest, AtCompletionsSuggest } from "./suggests/at-completions";
 import { TaskIndex } from "./task-index";
-import type { FlowtimeSettings } from "./types";
+import type { FlowtimeSettings, TaskRow } from "./types";
 
 /* ─── Inline types ─── */
 
@@ -1254,6 +1254,26 @@ export default class FlowtimePlugin extends Plugin {
 		// Fallback: check raw content for frontmatter (cache may not be ready yet)
 		if (!cache) return file.path.endsWith("mobile.md") || file.basename.includes("mobile");
 		return false;
+	}
+
+	/**
+	 * Aggregate tasks using the exact same loadTasks() logic as FlowtimeRenderer.
+	 * Creates a hidden renderer instance, runs its loadTasks, returns tasks.
+	 * Guarantees identical results to the table/list views.
+	 */
+	async aggregateTasksForMode(modeStr: string, sourcePath?: string): Promise<TaskRow[]> {
+		const { FlowtimeRenderer } = await import("./renderer");
+		const hidden = createDiv();
+		const r = new (FlowtimeRenderer as any)(
+			this.app,
+			hidden,
+			modeStr,
+			this.projectEngine,
+			sourcePath || "",
+		) as FlowtimeRenderer;
+		r.plugin = this as any;
+		await (r as any).loadTasks();
+		return (r as any).tasks || [];
 	}
 
 	/**

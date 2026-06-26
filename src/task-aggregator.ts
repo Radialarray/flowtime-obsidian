@@ -8,8 +8,7 @@
  */
 
 import type { App, TFile } from "obsidian";
-import type { ParsedTask, TaskRow } from "./types";
-import { getFileTasks, getMonday, getSunday } from "./task-utils";
+import type { TaskRow } from "./types";
 
 /* ─── Plugin reference ─── */
 // We use `any` here to avoid complex type-matching with the plugin class
@@ -34,114 +33,6 @@ export const HEADING_MODES: Record<string, string> = {
 export function resolveHeadingMode(heading: string): string | null {
   const key = heading.toLowerCase().trim();
   return HEADING_MODES[key] || null;
-}
-
-/* ─── Aggregation ─── */
-
-export async function collectTasks(
-  mode: string,
-  app: App,
-  plugin: AggregatorPluginRef,
-  sourcePath?: string | null,
-): Promise<TaskRow[]> {
-  const tasks: TaskRow[] = [];
-  const today = refDate(sourcePath);
-  const refDt = new Date(today + "T00:00:00");
-  const eow = new Date(refDt);
-  eow.setDate(eow.getDate() + ((7 - eow.getDay()) % 7));
-  const eowStr = eow.toISOString().split("T")[0];
-  const mon = getMonday(today);
-  const sun = getSunday(today);
-
-  // ── TaskIndex fast path for date-filtered modes ──
-  const idx = plugin.taskIndex;
-  if (idx?.initialized && ["today", "overdue", "dueweek", "weekly"].includes(mode)) {
-    const query: { dateFrom?: string; dateTo?: string } = {};
-    if (mode === "today") { query.dateFrom = today; query.dateTo = today; }
-    else if (mode === "overdue") {
-      query.dateTo = new Date(refDt.getTime() - 86400000).toISOString().split("T")[0];
-    }
-    else if (mode === "dueweek") { query.dateFrom = today; query.dateTo = eowStr; }
-    else if (mode === "weekly") { query.dateFrom = mon; query.dateTo = sun; }
-
-    const idxTasks = idx.getTasks({ ...query, includeCompleted: false });
-    for (const parsed of idxTasks) {
-      if (!parsed.file) continue;
-      const project = plugin.projectEngine ? await plugin.projectEngine.resolve(parsed.file.path) : null;
-      tasks.push(buildTaskRow(parsed, parsed.file, project));
-    }
-    return tasks;
-  }
-
-  // ── Full vault scan fallback ──
-  for (const file of app.vault.getMarkdownFiles()) {
-    const fileTasks = await getFileTasks(file, app, plugin.taskCache);
-    for (const parsed of fileTasks) {
-      if (parsed.status === "x" || parsed.status === "-" || parsed.status === "X") continue;
-      if (mode === "today" && parsed.taskDate !== today) continue;
-      if (mode === "overdue" && (!parsed.taskDate || parsed.taskDate >= today)) continue;
-      if (mode === "dueweek" && (!parsed.taskDate || parsed.taskDate < today || parsed.taskDate > eowStr)) continue;
-      if (mode === "weekly" && (!parsed.taskDate || parsed.taskDate < mon || parsed.taskDate > sun)) continue;
-      if (mode === "soon" && !(parsed.isSoon || (parsed.taskDate && parsed.taskDate > today))) continue;
-
-      const project = plugin.projectEngine ? await plugin.projectEngine.resolve(file.path) : null;
-      tasks.push(buildTaskRow(parsed, file, project));
-    }
-  }
-
-  // Default sort: by date then priority
-  tasks.sort((a, b) => {
-    const da = a.taskDate || "9999";
-    const db = b.taskDate || "9999";
-    if (da !== db) return da.localeCompare(db);
-    const pa = priorityWeight(a.priority);
-    const pb = priorityWeight(b.priority);
-    return pa - pb;
-  });
-
-  return tasks;
-}
-
-function refDate(sourcePath?: string | null): string {
-  if (sourcePath) {
-    const dateMatch = sourcePath.match(/(\d{4}-\d{2}-\d{2})\.md$/);
-    if (dateMatch) return dateMatch[1];
-  }
-  return new Date().toISOString().split("T")[0];
-}
-
-function priorityWeight(p: string | null | undefined): number {
-  if (p === "high") return 0;
-  if (p === "medium") return 1;
-  if (p === "low") return 2;
-  return 3;
-}
-
-function buildTaskRow(
-  parsed: ParsedTask,
-  file: TFile,
-  project: { name: string; path?: string; source?: string } | null,
-): TaskRow {
-  return {
-    file,
-    line: parsed.line,
-    rawLine: parsed.rawLine || "",
-    time: parsed.time || "",
-    taskDate: parsed.taskDate || "",
-    rawText: parsed.rawText || "",
-    cleanText: parsed.cleanText || "",
-    status: parsed.status || " ",
-    priority: parsed.priority || null,
-    bucket: parsed.bucket || null,
-    durationMinutes: parsed.durationMinutes || 0,
-    project: project?.name || null,
-    projectPath: project?.path || null,
-    projectSource: null,
-    sprint: parsed.sprint || null,
-    isSoon: !!parsed.isSoon,
-    indent: parsed.indent || 0,
-    sortIndex: parsed.sortIndex || 0,
-  };
 }
 
 /* ─── Markdown formatting ─── */
@@ -287,7 +178,7 @@ export async function refreshAll(
   for (let s = 0; s < found.length; s++) {
     const h = found[s];
     const sectionEnd = s + 1 < found.length ? found[s + 1].index : lines.length;
-    const tasks = await collectTasks(h.mode, app, plugin, sourcePath);
+    const tasks = await (plugin.aggregateTasksForMode(h.mode, sourcePath) as Promise<TaskRow[]>);
     plans.push({
       start: h.index,
       end: sectionEnd,

@@ -121,8 +121,8 @@ const COLUMNS: ColumnDef[] = [
   { id: "bucket",   label: "Bucket",  sortField: "bucket",  width: "auto",  compactOnly: false, compactSkip: false, defaultHide: false },
   { id: "sprint",   label: "Sprint",  sortField: "sprint",  width: "auto",  compactOnly: false, compactSkip: false, defaultHide: true },
   { id: "source",   label: "Source",  sortField: "source",  width: "auto",  compactOnly: false, compactSkip: false, defaultHide: false },
-  { id: "date",     label: "Date",    sortField: "date",    width: "80px",  compactOnly: false, compactSkip: false, defaultHide: false },
-  { id: "actions",  label: " ",       sortField: null,      width: "auto",  compactOnly: true,  compactSkip: false, defaultHide: false },
+  { id: "date",     label: "Date",    sortField: "date",    width: "85px",  compactOnly: false, compactSkip: false, defaultHide: false },
+  { id: "actions",  label: " ",       sortField: null,      width: "72px",  compactOnly: true,  compactSkip: false, defaultHide: false },
   { id: "timer",    label: " ",       sortField: null,      width: "22%",   compactOnly: false, compactSkip: true,  defaultHide: false },
 ];
 
@@ -646,9 +646,9 @@ class FlowtimeRenderer extends MarkdownRenderChild {
         await this._refreshSiblings(); this.tasks = []; this.renderTable(); this.plugin?.notify?.("\u2705 All assigned to today");
       });
       if (od) {
-        mkBtn("\ud83d\uddd1 Backlog All", "ft-bulk-btn ft-bulk-remove", async () => {
+        mkBtn("\u21a9\ufe0f Backlog All", "ft-bulk-btn", async () => {
           for (const t of this.tasks) await this.updateDate(t, "");
-          await this._refreshSiblings(); this.tasks = []; this.renderTable(); this.plugin?.notify?.("\u{1F5D1} All sent to backlog");
+          await this._refreshSiblings(); this.tasks = []; this.renderTable(); this.plugin?.notify?.("\u21a9\ufe0f All sent to backlog");
         });
       }
     }
@@ -1447,7 +1447,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       const dp = document.createElement("div"); dp.className = "ft-date-popup";
       const dpi = dp.createEl("input", { type: "date", value: task.taskDate || "", cls: "ft-dp-input" });
       const mkDpBtn = (txt: string, cls: string): HTMLButtonElement => dp.createEl("button", { text: txt, cls });
-      const bTdy = mkDpBtn("Today", "ft-dp-btn"), bTmw = mkDpBtn("Tomorrow", "ft-dp-btn"), bNw = mkDpBtn("Next Week", "ft-dp-btn"), bBkl = mkDpBtn("\u2715 Backlog", "ft-dp-btn ft-dp-remove");
+      const bTdy = mkDpBtn("Today", "ft-dp-btn"), bTmw = mkDpBtn("Tomorrow", "ft-dp-btn"), bNw = mkDpBtn("Next Week", "ft-dp-btn"), bBkl = mkDpBtn("\u21a9\ufe0f Backlog", "ft-dp-btn");
       const fmt = (d: Date): string => d.toISOString().split("T")[0];
       if (!this._closePopups) {
         this._closePopups = (ev: MouseEvent): void => {
@@ -1478,7 +1478,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       const ac = row.createEl("td", { cls: "ft-actions-cell" }); const aw = ac.createEl("div", { cls: "ft-actions-wrap" });
       const abTdy = aw.createEl("button", { text: "\ud83d\udcc5 Today", cls: "ft-act-btn" });
       abTdy.addEventListener("click", async () => { await this.updateDate(task, tdy); await this._refreshSiblings(); row.remove(); this.tasks = this.tasks.filter((t) => t !== task); if (!this.tasks.length) this.renderTable(); });
-      if (od) { const abBkl = aw.createEl("button", { text: "\ud83d\uddd1 Backlog", cls: "ft-act-btn ft-act-remove" }); abBkl.addEventListener("click", async () => { await this.updateDate(task, ""); await this._refreshSiblings(); row.remove(); this.tasks = this.tasks.filter((t) => t !== task); if (!this.tasks.length) this.renderTable(); }); }
+      if (od) { const abBkl = aw.createEl("button", { text: "\u21a9\ufe0f Backlog", cls: "ft-act-btn" }); abBkl.addEventListener("click", async () => { await this.updateDate(task, ""); await this._refreshSiblings(); row.remove(); this.tasks = this.tasks.filter((t) => t !== task); if (!this.tasks.length) this.renderTable(); }); }
     } else if (!isCompact && this._columnVisibility!.timer !== false) {
       const tmr = row.createEl("td", { cls: "ft-timer-cell" });
       const { update } = this._buildInlineTimer(tmr, task, dur, false);

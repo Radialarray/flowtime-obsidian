@@ -376,17 +376,6 @@
 	background: var(--interactive-accent-hover);
 }
 
-.ft-bulk-remove {
-	border-color: var(--text-error);
-	background: transparent;
-	color: var(--text-error);
-}
-
-.ft-bulk-remove:hover {
-	background: var(--background-modifier-error-rgb);
-	color: var(--text-on-accent);
-}
-
 /* --- ft- Time cell: combobox layout --- */
 .ft-time-row {
 	display: flex;
@@ -567,13 +556,6 @@
 	background: var(--background-modifier-hover);
 }
 
-.ft-dp-remove {
-	border-top: 1px solid var(--background-modifier-border);
-	margin-top: 4px;
-	padding-top: 6px;
-	color: var(--text-error);
-}
-
 /* --- ft- Actions cell (overdue mode) --- */
 .ft-actions-cell {
 	text-align: center;
@@ -599,17 +581,6 @@
 
 .ft-act-btn:hover {
 	background: var(--interactive-accent-hover);
-}
-
-.ft-act-remove {
-	border-color: var(--text-error);
-	background: transparent;
-	color: var(--text-error);
-}
-
-.ft-act-remove:hover {
-	background: rgba(var(--background-modifier-error-rgb), 0.2);
-	color: var(--text-error);
 }
 
 /* --- ft- Timer cell --- */

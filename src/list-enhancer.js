@@ -120,41 +120,85 @@ class ListEnhancer {
 	/** Main enhancement pass — called after note renders */
 	_enhance() {
 		this._cleanupDOM();
-		const preview = this.app.workspace.activeEditor?.previewEl;
-		if (!preview) return;
+		const view = this.app.workspace.activeEditor;
 
-		// Find all task lines in the rendered markdown
-		const taskEls = preview.querySelectorAll(
-			".task-list-item:not(.ft-list-enhanced)",
-		);
-		if (taskEls.length === 0) return;
+		// In Live Preview / Source mode, task lines use HyperMD-task-line
+		// In Reading view, they use .task-list-item
+		const container =
+			view?.previewEl || // Reading view
+			document.querySelector(".markdown-source-view"); // Live Preview / Source
+
+		if (!container) {
+			// Retry after a short delay (rendering may not be done yet)
+			setTimeout(() => this._enhance(), 300);
+			return;
+		}
+
+		// Try both selectors
+		const selector =
+			".task-list-item:not(.ft-list-enhanced), .HyperMD-task-line:not(.ft-list-enhanced)";
+		const taskEls = container.querySelectorAll(selector);
+		if (taskEls.length === 0) {
+			// Retry — CM lines may render async
+			setTimeout(() => this._enhance(), 500);
+			return;
+		}
 
 		for (const el of taskEls) {
 			this._enhanceTaskLine(el);
 		}
 
-		// Add drag/drop handlers to the preview container
-		this._setupDragDrop(preview);
+		// Set up drag/drop on the container
+		this._setupDragDrop(container);
+
+		// Watch for DOM changes (new tasks rendered, view mode switch)
+		if (!this._observer) {
+			this._observer = new MutationObserver(() => {
+				// Debounce — don't re-enhance on every keystroke
+				clearTimeout(this._observeTimer);
+				this._observeTimer = setTimeout(() => this._enhance(), 500);
+			});
+			this._observer.observe(container, {
+				childList: true,
+				subtree: true,
+			});
+		}
 	}
 
 	/** Enhance a single task line with drag handle + interactive elements */
 	_enhanceTaskLine(el) {
+		if (el.classList.contains("ft-list-enhanced")) return;
 		el.classList.add("ft-list-enhanced");
 
-		// Add drag handle before the checkbox
+		// In Live Preview, the drag handle goes at the start of the line content
+		// In Reading view, before the checkbox
+		const isPreview = el.classList.contains("task-list-item");
+		const insertPoint = isPreview ? el.firstChild : (el.querySelector(".cm-formatting-task")?.nextSibling || el.firstChild);
+
 		const handle = el.createEl("span", {
 			text: "⠿",
 			cls: "ft-list-drag ft-enhance-drag",
 			attr: { title: "Drag to reorder" },
 		});
-		el.insertBefore(handle, el.firstChild);
+		el.insertBefore(handle, insertPoint);
 
-		// The existing checkbox already works (Obsidian toggles it)
-		// We just add the drag handle for now
+		// For HyperMD lines, ensure the handle doesn't interfere with editing
+		if (!isPreview) {
+			handle.style.position = "absolute";
+			handle.style.left = "0";
+			handle.style.top = "0";
+			handle.style.zIndex = "1";
+			el.style.position = "relative";
+			el.style.paddingLeft = "22px";
+		}
 	}
 
 	/** Remove all DOM enhancements */
 	_cleanupDOM() {
+		if (this._observer) {
+			this._observer.disconnect();
+			this._observer = null;
+		}
 		document
 			.querySelectorAll(".ft-list-enhanced")
 			.forEach((el) => el.classList.remove("ft-list-enhanced"));

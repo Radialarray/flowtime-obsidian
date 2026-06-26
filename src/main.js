@@ -1485,12 +1485,10 @@ module.exports = class FlowtimePlugin extends Plugin {
 
 		// v1.3.0: ListEnhancer — interactive markdown task notes
 		this.listEnhancer = new ListEnhancer(this.app, this);
-		this.registerDomEvent(
-			this.app.workspace,
-			"active-leaf-change",
-			() => {
+		this.registerEvent(
+			this.app.workspace.on("active-leaf-change", () => {
 				this.listEnhancer.check();
-			},
+			}),
 		);
 		this.app.workspace.onLayoutReady(() => {
 			this.listEnhancer.check();

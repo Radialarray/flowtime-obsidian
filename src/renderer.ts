@@ -1099,10 +1099,11 @@ class FlowtimeRenderer extends MarkdownRenderChild {
         } catch (e) { this.plugin?.notify?.("\u274C Bucket: " + (e as Error).message, true); }
       }
 
-      if (changed && this.plugin?.taskCache && task.file) {
-        this.plugin.taskCache.invalid(task.file.path);
+      if (changed) {
         this.plugin?.notify?.("\u2705 Updated");
-        await this.loadTasks(); this.renderTable();
+        // Update in-place to avoid full reload — cache invalidates the file
+        if (this.plugin?.taskCache && task.file) this.plugin.taskCache.invalid(task.file.path);
+        this.renderTable();
       }
       popup.remove();
     };

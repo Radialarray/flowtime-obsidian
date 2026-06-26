@@ -1565,13 +1565,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
   _buildCheckCell(row: HTMLTableRowElement, task: TaskRow): void {
     const cc = row.createEl("td", { cls: "ft-check-cell" }); const done = task.status === "x" || task.status === "X";
     const chk = cc.createEl("span", { cls: "ft-checkbox" + (done ? " ft-checked" : "") });
-    const toggle = async (e: MouseEvent): Promise<void> => { e.stopPropagation(); chk.classList.toggle("ft-checked"); await this.toggleTaskComplete(task); };
-    chk.addEventListener("click", toggle);
-    // Make entire cell tappable on touch devices
-    cc.addEventListener("click", (e: MouseEvent) => {
-      if ((e.target as HTMLElement).closest(".ft-checkbox")) return; // already handled
-      toggle(e);
-    });
+    chk.addEventListener("click", async (e: MouseEvent) => { e.stopPropagation(); chk.classList.toggle("ft-checked"); await this.toggleTaskComplete(task); });
   }
 
   async _autoSaveTime(task: TaskRow, si: HTMLInputElement, ds: HTMLInputElement): Promise<void> {

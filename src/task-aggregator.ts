@@ -153,11 +153,9 @@ export function formatTaskLine(task: TaskRow): string {
   const checked = task.status === "x" || task.status === "X";
   parts.push(checked ? "- [x]" : "- [ ]");
 
-  // Priority
-  if (task.priority) parts.push(task.priority);
-
-  // Task text
-  parts.push(task.cleanText || task.rawText || "");
+  // Task text (clean — no time prefix, no directives)
+  const text = task.cleanText || task.rawText || "";
+  parts.push(text);
 
   // Time
   if (task.time) parts.push(task.time);
@@ -171,16 +169,11 @@ export function formatTaskLine(task: TaskRow): string {
     );
   }
 
-  // Date (omit for today/overdue — implicit from heading)
-  // Date is included so source files stay accurate
-
   // Bucket
   if (task.bucket) parts.push("@b:" + task.bucket);
 
-  // Project
-  if (task.project) {
-    parts.push("@p:" + task.project);
-  }
+  // Date (for non-today/overdue modes, include the date)
+  if (task.taskDate) parts.push("@" + task.taskDate);
 
   return parts.join(" ");
 }
@@ -265,6 +258,8 @@ export async function injectSection(
 
 /**
  * Refresh all recognized heading sections in the file.
+ * Processes headings bottom-up so section injection doesn't shift
+ * the indices of headings yet to be processed.
  */
 export async function refreshAll(
   app: App,
@@ -273,19 +268,24 @@ export async function refreshAll(
   sourcePath?: string | null,
 ): Promise<void> {
   const content = await app.vault.read(file);
-  const lines = content.split("\n");
   const headingRegex = /^(#{1,6})\s+(.+)$/;
+  const allLines = content.split("\n");
 
-  for (let i = 0; i < lines.length; i++) {
-    const m = lines[i].match(headingRegex);
+  // Collect headings with their positions
+  const headings: { index: number; text: string; mode: string }[] = [];
+  for (let i = 0; i < allLines.length; i++) {
+    const m = allLines[i].match(headingRegex);
     if (!m) continue;
     const mode = resolveHeadingMode(m[2]);
-    if (!mode) continue;
+    if (mode) {
+      headings.push({ index: i, text: m[2].trim(), mode });
+    }
+  }
+
+  // Process bottom-up so section replacements don't shift later headings
+  for (let h = headings.length - 1; h >= 0; h--) {
+    const { text, mode } = headings[h];
     const tasks = await collectTasks(mode, app, plugin, sourcePath);
-    await injectSection(app, file, m[2].trim(), tasks);
-    // Re-read file after each injection (content changes)
-    const updated = await app.vault.read(file);
-    lines.length = 0;
-    lines.push(...updated.split("\n"));
+    await injectSection(app, file, text, tasks);
   }
 }

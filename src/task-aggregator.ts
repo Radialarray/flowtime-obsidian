@@ -172,8 +172,8 @@ export function formatTaskLine(task: TaskRow): string {
   // Bucket
   if (task.bucket) parts.push("@b:" + task.bucket);
 
-  // Date (for non-today/overdue modes, include the date)
-  if (task.taskDate) parts.push("@" + task.taskDate);
+  // Project
+  if (task.project) parts.push("@p:" + task.project);
 
   return parts.join(" ");
 }
@@ -258,8 +258,7 @@ export async function injectSection(
 
 /**
  * Refresh all recognized heading sections in the file.
- * Processes headings bottom-up so section injection doesn't shift
- * the indices of headings yet to be processed.
+ * Builds the entire file content in memory and writes once.
  */
 export async function refreshAll(
   app: App,
@@ -268,24 +267,62 @@ export async function refreshAll(
   sourcePath?: string | null,
 ): Promise<void> {
   const content = await app.vault.read(file);
+  const lines = content.split("\n");
   const headingRegex = /^(#{1,6})\s+(.+)$/;
-  const allLines = content.split("\n");
 
-  // Collect headings with their positions
-  const headings: { index: number; text: string; mode: string }[] = [];
-  for (let i = 0; i < allLines.length; i++) {
-    const m = allLines[i].match(headingRegex);
+  // Collect headings with position and mode
+  const found: { index: number; level: number; text: string; mode: string }[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(headingRegex);
     if (!m) continue;
     const mode = resolveHeadingMode(m[2]);
     if (mode) {
-      headings.push({ index: i, text: m[2].trim(), mode });
+      found.push({ index: i, level: m[1].length, text: m[2].trim(), mode });
     }
   }
 
-  // Process bottom-up so section replacements don't shift later headings
-  for (let h = headings.length - 1; h >= 0; h--) {
-    const { text, mode } = headings[h];
-    const tasks = await collectTasks(mode, app, plugin, sourcePath);
-    await injectSection(app, file, text, tasks);
+  // For each heading, determine section bounds and aggregate tasks
+  type SectionPlan = { start: number; end: number; headingLine: string; tasks: TaskRow[] };
+  const plans: SectionPlan[] = [];
+  for (let s = 0; s < found.length; s++) {
+    const h = found[s];
+    const sectionEnd = s + 1 < found.length ? found[s + 1].index : lines.length;
+    const tasks = await collectTasks(h.mode, app, plugin, sourcePath);
+    plans.push({
+      start: h.index,
+      end: sectionEnd,
+      headingLine: lines[h.index],
+      tasks,
+    });
+  }
+
+  // Build new file content (process top-down, adjusting for size changes)
+  const result: string[] = [];
+  let cursor = 0;
+  for (const plan of plans) {
+    // Copy lines before this section
+    result.push(...lines.slice(cursor, plan.start));
+    // Heading line
+    result.push(plan.headingLine);
+    // Blank line after heading
+    result.push("");
+    // Task lines
+    if (plan.tasks.length > 0) {
+      for (const task of plan.tasks) {
+        result.push(formatTaskLine(task));
+      }
+      result.push("");
+    } else {
+      result.push("*No tasks*");
+      result.push("");
+    }
+    cursor = plan.end;
+  }
+  // Copy remaining lines after last section
+  result.push(...lines.slice(cursor));
+
+  const newContent = result.join("\n");
+  if (newContent !== content) {
+    await app.vault.modify(file, newContent);
   }
 }

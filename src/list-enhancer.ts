@@ -550,7 +550,7 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
 
     const cache = app.metadataCache.getCache(file.path);
     const fm = cache?.frontmatter as Record<string, unknown> | undefined;
-    const isListNote = fm?.type === "flowtime-list";
+    const isListNote = fm?.type === "flowtime-list" || fm?.type === "flowtime-mobile";
 
     if (isListNote) {
       await activate(file);

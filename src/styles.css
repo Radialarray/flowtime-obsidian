@@ -426,12 +426,12 @@
 }
 
 .ft-preview {
-	display: block;
+	display: flex;
+	align-items: center;
 	color: var(--text-accent);
-	text-align: center;
 	font-family: var(--font-monospace);
 	font-size: var(--font-ui-smaller);
-	margin-top: 2px;
+	white-space: nowrap;
 }
 
 /* --- ft- Task text --- */
@@ -2331,21 +2331,6 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-v
 	border-radius: 3px;
 }
 
-.ft-list-text:hover {
-	background: var(--background-modifier-border-hover);
-}
-
-.ft-list-time {
-	flex-shrink: 0;
-	font-size: var(--font-ui-smaller);
-	color: var(--text-muted);
-	font-family: var(--font-monospace);
-	padding: 2px 6px;
-	background: var(--background-secondary);
-	border-radius: 4px;
-	white-space: nowrap;
-}
-
 /* Time cell — display or inputs */
 .ft-list-time-cell {
 	display: flex;
@@ -2364,40 +2349,6 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-v
 	background: var(--background-secondary);
 	border-radius: 4px;
 	white-space: nowrap;
-	text-align: center;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.ft-list-time-input,
-.ft-list-dur-input {
-	width: 48px;
-	font-size: var(--font-ui-small);
-	font-family: var(--font-monospace);
-	padding: 2px 4px;
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-s);
-	background: var(--background-primary);
-	text-align: center;
-}
-
-.ft-list-dur-input {
-	width: 44px;
-}
-
-.ft-list-time-input:focus,
-.ft-list-dur-input:focus {
-	border-color: var(--interactive-accent);
-	box-shadow: 0 0 0 2px var(--interactive-accent-hover);
-	outline: none;
-}
-
-.ft-list-preview {
-	font-size: var(--font-ui-smaller);
-	color: var(--text-faint);
-	font-family: var(--font-monospace);
-	white-space: nowrap;
-	width: 50px;
 	text-align: center;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -2574,9 +2525,6 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-v
 	.ft-list-row:hover {
 		background: var(--background-primary);
 	}
-	.ft-list-text:hover {
-		background: transparent;
-	}
 	.ft-tg-card:hover {
 		box-shadow: none;
 	}
@@ -2674,9 +2622,6 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-v
 	/* List view: hide timer on very small screens, hide drag handle */
 	.ft-list-timer-cell { display: none; }
 	.ft-list-time-cell { gap: 2px; }
-	.ft-list-time-input { width: 40px; }
-	.ft-list-dur-input { width: 36px; }
-	.ft-list-preview { display: none; }
 	.ft-list-drag { display: none; }
 	.ft-list-row { gap: 4px; }
 

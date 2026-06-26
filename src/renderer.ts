@@ -121,7 +121,7 @@ const COLUMNS: ColumnDef[] = [
   { id: "bucket",   label: "Bucket",  sortField: "bucket",  width: "auto",  compactOnly: false, compactSkip: false, defaultHide: false },
   { id: "sprint",   label: "Sprint",  sortField: "sprint",  width: "auto",  compactOnly: false, compactSkip: false, defaultHide: true },
   { id: "source",   label: "Source",  sortField: "source",  width: "auto",  compactOnly: false, compactSkip: false, defaultHide: false },
-  { id: "date",     label: "Date",    sortField: "date",    width: "auto",  compactOnly: false, compactSkip: false, defaultHide: false },
+  { id: "date",     label: "Date",    sortField: "date",    width: "90px", compactOnly: false, compactSkip: false, defaultHide: false },
   { id: "actions",  label: " ",       sortField: null,      width: "auto",  compactOnly: true,  compactSkip: false, defaultHide: false },
   { id: "timer",    label: " ",       sortField: null,      width: "22%",   compactOnly: false, compactSkip: true,  defaultHide: false },
 ];
@@ -929,38 +929,16 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     const textSpan = row.createEl("span", { text: task.cleanText || task.rawText || "", cls: "ft-list-text" });
     textSpan.addEventListener("click", (e: MouseEvent) => { e.stopPropagation(); this._showFloatingEditor(task, textSpan); });
     const timeCell = row.createEl("span", { cls: "ft-list-time-cell" });
-    let si: HTMLInputElement | null = null;
-    let ds: HTMLInputElement | null = null;
+    const timeEl = timeCell.createEl("span", { cls: "ft-list-time" });
     if (start) {
-      const timeEl = timeCell.createEl("span", { cls: "ft-list-time" });
       timeEl.setText(dur && dur > 0 ? start + " \u2192 " + this._calcEnd(start, dur) : start);
     } else {
-      const startId = "ft-list-start-" + Math.random().toString(36).slice(2, 6);
-      si = timeCell.createEl("input", { type: "text", placeholder: "09:00", cls: "ft-list-time-input", attr: { list: startId } });
-      const startList = timeCell.createEl("datalist", { attr: { id: startId } });
-      for (const t of this.startOpts) { startList.createEl("option", { attr: { value: t } }); }
-      const durId = "ft-list-dur-" + Math.random().toString(36).slice(2, 6);
-      ds = timeCell.createEl("input", { type: "text", placeholder: "30m", cls: "ft-list-dur-input", attr: { list: durId } });
-      const durList = timeCell.createEl("datalist", { attr: { id: durId } });
-      for (const d of DUR_OPTS) { durList.createEl("option", { attr: { value: formatDuration(d) } }); }
-      const ps = timeCell.createEl("span", { text: "", cls: "ft-list-preview" });
-      const up = (): void => { const s = si!.value; const d = parseDurStr(ds!.value); ps.setText(s && d > 0 ? "\u2192 " + this._calcEnd(s, d) : ""); };
-      const debounceSave = (() => { let timer: ReturnType<typeof setTimeout>; return (): void => { if (timer) clearTimeout(timer); timer = setTimeout(() => this._autoSaveTime(task, si!, ds!), 300); }; })();
-      si!.addEventListener("input", () => { up(); debounceSave(); }); ds!.addEventListener("input", () => { up(); debounceSave(); });
+      timeEl.setText("\u2014");
     }
 
 
     const timerCell = row.createEl("span", { cls: "ft-list-timer-cell" });
-    const { update: timerUpdate } = this._buildInlineTimer(timerCell, task, dur, true);
-    // Bind duration input changes to timer
-    if (si || ds) {
-      const rebind = (): void => {
-        const d = ds ? parseDurStr(ds.value) : dur;
-        timerUpdate(d && d > 0 ? d : 0);
-      };
-      if (si) si.addEventListener("change", rebind);
-      if (ds) ds.addEventListener("change", rebind);
-    }
+    this._buildInlineTimer(timerCell, task, dur, true);
 
     // ── Swipe actions (touch only) ──
     let swipeStartX = 0;
@@ -1059,6 +1037,15 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       type: "date", value: task.taskDate || "", cls: "ft-fe-input",
     });
 
+    // ── Start Time ──
+    const startTimeRow = popup.createEl("div", { cls: "ft-fe-row" });
+    startTimeRow.createEl("label", { text: "Start", cls: "ft-fe-label" });
+    const { start: curStart } = this._parseStored(task.time);
+    const startInput = startTimeRow.createEl("input", {
+      type: "text", value: curStart || "", placeholder: "09:00",
+      cls: "ft-fe-input",
+    });
+
     // ── Duration ──
     const durRow = popup.createEl("div", { cls: "ft-fe-row" });
     durRow.createEl("label", { text: "Duration", cls: "ft-fe-label" });
@@ -1138,6 +1125,25 @@ class FlowtimeRenderer extends MarkdownRenderChild {
             task.durationMinutes = dur; changed = true;
           }
         } catch (e) { this.plugin?.notify?.("\u274C Duration: " + (e as Error).message, true); }
+      }
+
+      // Start Time
+      const ns = startInput.value.trim();
+      if (ns && ns !== curStart) {
+        try {
+          const content = await this.app.vault.read(task.file);
+          const lines = content.split("\n");
+          const ln = lines[task.line];
+          if (ln) {
+            const m2 = ln.match(/^(\s*[-*+]\s*\[[^\]]*\]\s*)(.*)$/);
+            if (m2) {
+              const rest = m2[2].replace(/^\d{1,2}:\d{2}(\s*[\u2014\-\u2013]\s*\d{1,2}:\d{2})?\s*/, "");
+              lines[task.line] = m2[1] + ns + " " + rest;
+              await this.app.vault.modify(task.file, lines.join("\n"));
+              changed = true;
+            }
+          }
+        } catch (e) { this.plugin?.notify?.("\u274C Start: " + (e as Error).message, true); }
       }
 
       // Bucket
@@ -1378,7 +1384,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       ds = durGroup.createEl("input", { type: "text", value: dur ? formatDuration(dur) : "", placeholder: "30m", cls: "ft-dur-input", attr: { list: durId } });
       const durList = durGroup.createEl("datalist", { attr: { id: durId } });
       for (const d of DUR_OPTS) { durList.createEl("option", { attr: { value: formatDuration(d) } }); }
-      const ps = tc.createEl("div", { text: "", cls: "ft-preview" });
+      const ps = timeRow.createEl("span", { text: "", cls: "ft-preview" });
       const up = (): void => { const s = si!.value; const d = parseDurStr(ds!.value); ps.setText(s && d > 0 ? "\u2192 " + this._calcEnd(s, d) : ""); };
       const debounceSave = (() => { let timer: ReturnType<typeof setTimeout>; return (): void => { if (timer) clearTimeout(timer); timer = setTimeout(() => this._autoSaveTime(task, si!, ds!), 300); }; })();
       si.addEventListener("input", () => { up(); debounceSave(); }); ds.addEventListener("input", () => { up(); debounceSave(); }); up();

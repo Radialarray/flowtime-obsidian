@@ -181,19 +181,26 @@ export async function refreshAll(
     }
   }
 
-  // For each heading, determine section bounds and aggregate tasks
+  // Aggregate tasks: group headings by mode so each mode is queried only once
+  const modeCache: Record<string, TaskRow[]> = {};
+  for (const h of found) {
+    if (!modeCache[h.mode]) {
+      modeCache[h.mode] = await (plugin.aggregateTasksForMode(h.mode, sourcePath) as Promise<TaskRow[]>);
+    }
+  }
+
+  // For each heading, determine section bounds and cached tasks
   type SectionPlan = { start: number; end: number; headingLine: string; mode: string; tasks: TaskRow[] };
   const plans: SectionPlan[] = [];
   for (let s = 0; s < found.length; s++) {
     const h = found[s];
     const sectionEnd = s + 1 < found.length ? found[s + 1].index : lines.length;
-    const tasks = await (plugin.aggregateTasksForMode(h.mode, sourcePath) as Promise<TaskRow[]>);
     plans.push({
       start: h.index,
       end: sectionEnd,
       headingLine: lines[h.index],
       mode: h.mode,
-      tasks,
+      tasks: modeCache[h.mode],
     });
   }
 

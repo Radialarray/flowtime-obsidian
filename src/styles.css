@@ -2701,12 +2701,15 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-v
 .ft-enhance-drag {
 	cursor: grab;
 	color: var(--text-muted);
-	font-size: 16px;
+	font-size: 14px;
 	line-height: 1;
-	padding: 0 4px;
+	padding: 0 6px;
 	flex-shrink: 0;
 	user-select: none;
-	display: inline-block;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
 	vertical-align: middle;
 }
 .ft-enhance-drag:active {

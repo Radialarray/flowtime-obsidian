@@ -55,6 +55,7 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
   let _observer: MutationObserver | null = null;
   let _observeTimer: ReturnType<typeof setTimeout> | undefined;
   let _taskLineMap: Map<HTMLElement, number> = new Map();
+  let _dragListeners: { remove: () => void } | null = null;
 
   /* ─── Document Parser ─── */
 
@@ -198,24 +199,18 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
     el.classList.add("ft-list-enhanced");
 
     const isPreview = el.classList.contains("task-list-item");
-    const insertPoint = isPreview
-      ? el.firstChild
-      : (el.querySelector(".cm-formatting-task")?.nextSibling || el.firstChild);
 
-    // ── Drag handle ──
+    // ── Drag handle at end of line ──
     const handle = document.createElement("span");
     handle.textContent = "\u283F"; // ⠿ braille drag indicator
     handle.className = "ft-list-drag ft-enhance-drag";
     handle.setAttribute("title", "Drag to reorder or drop on heading");
-    el.insertBefore(handle, insertPoint);
+    el.appendChild(handle);
 
     if (!isPreview) {
-      handle.style.position = "absolute";
-      handle.style.left = "0";
-      handle.style.top = "0";
-      handle.style.zIndex = "1";
-      el.style.position = "relative";
-      el.style.paddingLeft = "22px";
+      // In Live Preview, keep handle inline but at end
+      handle.style.display = "inline-block";
+      handle.style.verticalAlign = "middle";
     }
 
     // ── Checkbox click handler ──
@@ -367,6 +362,11 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
   /* ─── Cleanup ─── */
 
   function _cleanupDOM(): void {
+    // Remove drag listeners
+    if (_dragListeners) {
+      _dragListeners.remove();
+      _dragListeners = null;
+    }
     if (_observer) {
       _observer.disconnect();
       _observer = null;
@@ -465,6 +465,15 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
     container.addEventListener("pointerdown", onDown);
     document.addEventListener("pointermove", onMove);
     document.addEventListener("pointerup", onUp);
+
+    // Store cleanup so we can remove listeners before re-attaching
+    _dragListeners = {
+      remove: () => {
+        container.removeEventListener("pointerdown", onDown);
+        document.removeEventListener("pointermove", onMove);
+        document.removeEventListener("pointerup", onUp);
+      },
+    };
   }
 
   /** Clear all drag visual indicators */

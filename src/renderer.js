@@ -173,21 +173,41 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		return priorityWeight(p);
 	}
 
-	/** v0.4.0: Default sort = priority (desc) → time (asc) → date (asc) */
+	/** v1.3.0: Sort = sortIndex → time → date. Auto-assigns index on first sort. */
 	_sort() {
+		// First run: use time-based sort, then bake order into indices for future runs
+		if (this.tasks.some((t) => t.sortIndex == null)) {
+			// Time-based sort (fallback for freshly loaded tasks without indices)
+			this.tasks.sort((a, b) => {
+				const pa = priorityWeight(a.priority);
+				const pb = priorityWeight(b.priority);
+				if (pa !== pb) return pb - pa;
+				if (!a.time && !b.time) return 0;
+				if (!a.time) return 1;
+				if (!b.time) return -1;
+				const tc = a.time.localeCompare(b.time);
+				if (tc !== 0) return tc;
+				const da = a.taskDate || "";
+				const db = b.taskDate || "";
+				return da.localeCompare(db);
+			});
+			// Assign indices based on sorted order (gaps of 1000 for insertions)
+			let idx = 1000;
+			for (const t of this.tasks) {
+				if (t.sortIndex == null) {
+					t.sortIndex = idx;
+					idx += 1000;
+				}
+			}
+		}
+		// Sort by index (those with @i:number tags keep their persisted value)
 		this.tasks.sort((a, b) => {
 			const pa = priorityWeight(a.priority);
 			const pb = priorityWeight(b.priority);
-			if (pa !== pb) return pb - pa; // higher priority first
-			if (!a.time && !b.time) return 0;
-			if (!a.time) return 1;
-			if (!b.time) return -1;
-			const tc = a.time.localeCompare(b.time);
-			if (tc !== 0) return tc;
-			// Same time: sort by date (earliest first)
-			const da = a.taskDate || "";
-			const db = b.taskDate || "";
-			return da.localeCompare(db);
+			if (pa !== pb) return pb - pa;
+			const ia = a.sortIndex || 0;
+			const ib = b.sortIndex || 0;
+			return ia - ib;
 		});
 	}
 
@@ -364,6 +384,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 						isSoon: parsed.isSoon,
 						sprint: parsed.sprint, // v0.6.0
 						indent: parsed.indent, // v0.6.0
+						sortIndex: parsed.sortIndex,
 					});
 				}
 			}
@@ -502,6 +523,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 						isSoon: true,
 						sprint: parsed.sprint,
 						indent: parsed.indent, // v0.6.0
+						sortIndex: parsed.sortIndex,
 					});
 				}
 			}
@@ -589,6 +611,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 					projectSource: projSource,
 					sprint: parsed.sprint, // v0.6.0: @sprint:id
 					indent: parsed.indent, // v0.6.0
+					sortIndex: parsed.sortIndex,
 				});
 			}
 		}
@@ -1325,11 +1348,9 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			attr: { "data-mode": this.mode },
 		});
 
-		// v0.6.0: Build display tree
-		this._displayItems = this._buildDisplayTree(this.tasks);
-
-		for (const item of this._displayItems) {
-			this._renderListRow(listWrap, item, tdy);
+		// Render tasks in current sort order (no tree grouping — list view is flat)
+		for (const task of this.tasks) {
+			this._renderListRow(listWrap, { task, depth: 0 }, tdy);
 		}
 
 		// Register drag/drop after rows exist
@@ -1652,6 +1673,20 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			e.preventDefault(); // prevent text selection
 			clearIndicators();
 
+			const srcInfo = findTaskByRow(row);
+			console.log(
+				"FT DRAG START",
+				JSON.stringify({
+					path: row.dataset.sourcePath,
+					line: parseInt(row.dataset.line, 10),
+					idx: srcInfo.idx,
+					taskText: srcInfo.task?.cleanText?.slice(0, 40),
+					taskTime: srcInfo.task?.time || "(none)",
+					taskDuration: srcInfo.task?.durationMinutes,
+					totalTasks: this.tasks.length,
+				}),
+			);
+
 			dragState = {
 				path: row.dataset.sourcePath,
 				line: parseInt(row.dataset.line, 10),
@@ -1662,27 +1697,30 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			row.classList.add("ft-list-dragging");
 		});
 
-		// ── mousemove on document: highlight drop target (throttled) ──
+		// ── mousemove on document: highlight drop target (throttled via rAF) ──
 		let moveFrame = null;
 		document.addEventListener("mousemove", (e) => {
 			if (!dragState) return;
 			if (moveFrame) return;
 			moveFrame = requestAnimationFrame(() => {
 				moveFrame = null;
+				const ds = dragState;
+				if (!ds) return; // drag may have ended between mousemove and rAF
+
 				// Remove inline row borders from previous frame
 				dragRoot.querySelectorAll(".ft-list-row").forEach((r) => {
 					r.style.borderTop = "";
 					r.style.borderBottom = "";
 				});
 				clearIndicators();
-				dragState.row.classList.add("ft-list-dragging");
+				ds.row.classList.add("ft-list-dragging");
 
 				const el = document.elementFromPoint(e.clientX, e.clientY);
 				if (!el) return;
 
 				// Check for row
 				const targetRow = el.closest(".ft-list-row");
-				if (targetRow && targetRow !== dragState.row) {
+				if (targetRow && targetRow !== ds.row) {
 					const rect = targetRow.getBoundingClientRect();
 					if (e.clientY < rect.top + rect.height / 2) {
 						targetRow.classList.add("ft-list-drop-before");
@@ -1727,27 +1765,64 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 					const srcTask = srcInfo.task;
 					const targetTask = tgtInfo.task;
 
+					// Determine which tasks surround the drop position
 					const rect = targetRow.getBoundingClientRect();
-					const midY = rect.top + rect.height / 2;
-					const dropBefore = e.clientY < midY;
-
-					if (dropBefore) {
-						const prevTask = tgtInfo.idx > 0 ? this.tasks[tgtInfo.idx - 1] : null;
-						if (targetTask.time && prevTask?.time) {
-							await this._setTaskTime(srcTask, this._midpointTime(prevTask.time, targetTask.time));
-						} else if (targetTask.time) {
-							await this._setTaskTime(srcTask, targetTask.time);
-						} else {
-							await this._setTaskTime(srcTask, "");
-						}
+					let beforeTask, afterTask;
+					let dropPos;
+					if (e.clientY < rect.top + rect.height / 2) {
+						dropPos = "before";
+						beforeTask = tgtInfo.idx > 0 ? this.tasks[tgtInfo.idx - 1] : null;
+						afterTask = targetTask;
 					} else {
-						const nextTask = tgtInfo.idx < this.tasks.length - 1 ? this.tasks[tgtInfo.idx + 1] : null;
-						if (targetTask.time && nextTask?.time) {
-							await this._setTaskTime(srcTask, this._midpointTime(targetTask.time, nextTask.time));
-						} else {
-							await this._setTaskTime(srcTask, "");
-						}
+						dropPos = "after";
+						beforeTask = targetTask;
+						afterTask = tgtInfo.idx < this.tasks.length - 1 ? this.tasks[tgtInfo.idx + 1] : null;
 					}
+
+					// Compute new sortIndex (midpoint of neighbors)
+					const bi = beforeTask?.sortIndex ?? 0;
+					const ai = afterTask?.sortIndex ?? (beforeTask ? bi + 2000 : 1000);
+					const newIdx = Math.round((bi + ai) / 2);
+
+					// Assign time based on surrounding items
+					let newTime = "";
+					if (beforeTask?.time && afterTask?.time) {
+						newTime = this._midpointTime(beforeTask.time, afterTask.time);
+					} else if (afterTask?.time) {
+						newTime = afterTask.time; // share same time — fine, sortIndex distinguishes
+					} else if (beforeTask?.time) {
+						newTime = beforeTask.time; // share same time — fine, sortIndex distinguishes
+					}
+
+					console.log(
+						"FT DROP",
+						JSON.stringify({
+							dropPos,
+							newIndex: newIdx,
+							srcIdx: srcInfo.idx,
+							tgtIdx: tgtInfo.idx,
+							srcText: srcTask.cleanText?.slice(0, 40),
+							srcTime: srcTask.time || "(none)",
+							tgtText: targetTask.cleanText?.slice(0, 40),
+							tgtTime: targetTask.time || "(none)",
+							beforeText: beforeTask?.cleanText?.slice(0, 30) || "(none)",
+							beforeTime: beforeTask?.time || "(none)",
+							afterText: afterTask?.cleanText?.slice(0, 30) || "(none)",
+							afterTime: afterTask?.time || "(none)",
+							computedNewTime: newTime || "(none)",
+							srcDuration: srcTask.durationMinutes,
+						}),
+					);
+
+					// Write index to file
+					await this._setTaskIndex(srcTask, newIdx);
+					srcTask.sortIndex = newIdx;
+
+					// Write time to file and update in-memory
+					const timeStr = await this._setTaskTime(srcTask, newTime, srcTask.durationMinutes);
+					if (timeStr) srcTask.time = timeStr;
+
+					console.log("FT WRITTEN", JSON.stringify({ newIndex: newIdx, timeStr: timeStr || "(empty)" }));
 
 					this._sort();
 					this.renderTable();
@@ -1793,63 +1868,102 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 		});
 	}
 
-	/** Compute a midpoint time between two HH:MM strings */
-	_midpointTime(t1, t2) {
-		const toMin = (s) => {
-			const p = s.split(":").map(Number);
-			return p[0] * 60 + (p[1] || 0);
-		};
-		const fromMin = (m) => {
-			const h = Math.floor(m / 60);
-			const min = m % 60;
-			return (
-				String(h).padStart(2, "0") +
-				":" +
-				String(min).padStart(2, "0")
-			);
-		};
-		const m1 = toMin(t1);
-		const m2 = toMin(t2);
-		if (m2 <= m1) return fromMin(m1 + 15); // fallback to +15m if times are equal
-		return fromMin(Math.round((m1 + m2) / 2 / 5) * 5); // round to 5 min
+	/** Convert HH:MM to total minutes (handles range strings like "10:45—11:00" → 10:45) */
+	_toMin(s) {
+		if (!s) return 0;
+		const start = s.split(/[—\-–]/)[0].trim(); // take only the start time
+		const p = start.split(":").map(Number);
+		return p[0] * 60 + (p[1] || 0);
 	}
 
-	/** Update a task's time and persist to source file */
-	async _setTaskTime(task, newTime) {
-		if (!task.file?.path) return;
-		const vault = this.app.vault;
+	/** Convert total minutes to HH:MM */
+	_fromMin(m) {
+		const h = Math.min(Math.floor(m / 60), 23);
+		const min = Math.max(0, m % 60);
+		return String(h).padStart(2, "0") + ":" + String(min).padStart(2, "0");
+	}
+
+	/** Add/subtract minutes from an HH:MM time string */
+	_offsetTime(time, minutes) {
+		if (!time) return "";
+		const total = this._toMin(time) + minutes;
+		return this._fromMin(total);
+	}
+
+	/** Compute a midpoint time between two HH:MM strings */
+	_midpointTime(t1, t2) {
+		const m1 = this._toMin(t1);
+		const m2 = this._toMin(t2);
+		if (m2 <= m1) return this._fromMin(m1 + 15);
+		return this._fromMin(Math.round((m1 + m2) / 2 / 5) * 5); // round to 5 min
+	}
+
+	/** Update a task's sortIndex (@i:number) and persist to source file */
+	async _setTaskIndex(task, newIdx) {
+		if (!task.file) return;
 		try {
-			const file = vault.getAbstractFileByPath(task.file.path);
-			if (!file) return;
-			const content = await vault.read(file);
-			const lines = content.split("\n");
+			const lines = (await this.app.vault.read(task.file)).split("\n");
 			const line = lines[task.line];
 			if (!line) return;
+			const m = line.match(/^(\s*[-*+]\s*\[[^\]]*\]\s*)(.*)$/);
+			if (!m) return;
+			let rest = m[2];
+			// Remove existing @i:... tag
+			rest = rest.replace(/@i:[\d.]+/g, "").trim();
+			// Add new index tag at a consistent position (after time, before other tags)
+			// Place it right after the time prefix or at the start of rest
+			const timePrefix = rest.match(/^\d{1,2}:\d{2}(?:[—\-–]\d{1,2}:\d{2})?\s*/);
+			if (timePrefix) {
+				const prefix = timePrefix[0];
+				const after = rest.slice(prefix.length);
+				rest = prefix + `@i:${newIdx} ` + after;
+			} else {
+				rest = `@i:${newIdx} ` + rest;
+			}
+			lines[task.line] = m[1] + rest.trim();
+			await this.app.vault.modify(task.file, lines.join("\n"));
+		} catch (e) {
+			console.warn("Flowtime: Could not update task index:", e);
+		}
+	}
 
-			// Replace time in task line
-			let newLine = line;
-			// Remove existing @time or @HH:MM patterns
-			newLine = newLine.replace(/@\d{1,2}:\d{2}\b/g, "").trim();
-			// Remove existing @1h30m etc (duration) — keep duration
+	/** Update a task's time and persist to source file. Returns the written time string. */
+	async _setTaskTime(task, newTime, durationMinutes) {
+		if (!task.file) return "";
+		try {
+			const lines = (await this.app.vault.read(task.file)).split("\n");
+			const line = lines[task.line];
+			if (!line) return "";
+
+			// Extract prefix (checkbox + whitespace) and rest — same regex as saveTime()
+			const m = line.match(/^(\s*[-*+]\s*\[[^\]]*\]\s*)(.*)$/);
+			if (!m) return "";
+			let rest = m[2];
+
+			// Remove any existing time at the start of rest (e.g. "09:00" or "09:00—09:30")
+			rest = rest
+				.replace(/^\d{1,2}:\d{2}(?:\s*[—\-–]\s*\d{1,2}:\d{2})?\s*/, "")
+				.trim();
+
+			// Build the time string: use range format if we have a duration
+			let timeStr = "";
 			if (newTime) {
-				// Insert @HH:MM before the first @tag or at end
-				const atIdx = newLine.search(/@\w/);
-				if (atIdx >= 0) {
-					newLine =
-						newLine.slice(0, atIdx) +
-						"@" +
-						newTime +
-						" " +
-						newLine.slice(atIdx);
+				if (durationMinutes > 0) {
+					const end = this._calcEnd(newTime, durationMinutes);
+					timeStr = newTime + "—" + end;
 				} else {
-					newLine += " @" + newTime;
+					timeStr = newTime;
 				}
 			}
-			lines[task.line] = newLine;
-			await vault.modify(file, lines.join("\n"));
-			task.time = newTime;
+
+			// Insert time at the start (no @ — time is positional)
+			lines[task.line] = m[1] + (timeStr ? timeStr + " " : "") + rest;
+			await this.app.vault.modify(task.file, lines.join("\n"));
+			task.time = timeStr;
+			return timeStr;
 		} catch (e) {
 			console.warn("Flowtime: Could not update task time:", e);
+			return "";
 		}
 	}
 
@@ -1907,15 +2021,21 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 							attr: { colspan: String(this._visibleColCount(isCompact)) },
 						});
 					}
-					const groupItems = this._buildDisplayTree(subGroups[subKey]);
-					for (const item of groupItems) {
-						this._renderTaskRow(tbody, item, tdy, od, _dw, wk, pj, isCompact);
+					for (const t of subGroups[subKey]) {
+						this._renderTaskRow(tbody, { task: t, depth: 0 }, tdy, od, _dw, wk, pj, isCompact);
 					}
 				}
 			}
 		} else {
-			// v0.6.0: Build display tree for all tasks
-			this._displayItems = this._buildDisplayTree(this.tasks);
+			// Render tasks in sort order (same as list view)
+			this._displayItems = this.tasks.map((t) => ({
+				task: t,
+				depth: 0,
+				hasChildren: false,
+				collapsed: false,
+				taskId: "",
+				childrenTasks: [],
+			}));
 			for (const item of this._displayItems) {
 				this._renderTaskRow(tbody, item, tdy, od, _dw, wk, pj, isCompact);
 			}

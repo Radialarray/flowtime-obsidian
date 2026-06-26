@@ -65,6 +65,11 @@ function parseTaskLine(line, file, lineIndex) {
 	// v0.4.0: @soon tag — marks task as upcoming backlog
 	const isSoon = !!rest.match(/@soon\b/);
 
+	// v1.3.0: Extract sort index: @i:<number>
+	let sortIndex = null;
+	const idxMatch = rest.match(/@i:([\d.]+)/);
+	if (idxMatch) sortIndex = parseFloat(idxMatch[1]);
+
 	// v0.6.0: Extract sprint: @sprint:<id>
 	let sprint = null;
 	const sprintMatch = rest.match(/@sprint:([^\s]+)/);
@@ -115,6 +120,7 @@ function parseTaskLine(line, file, lineIndex) {
 		isSoon, // v0.4.0: @soon tag
 		indent, // v0.6.0: leading whitespace length for subtask hierarchy
 		sprint, // v0.6.0: @sprint:id or null
+		sortIndex, // v1.3.0: @i:number for manual sort order
 	};
 }
 
@@ -137,7 +143,9 @@ function cleanTaskText(text) {
 		.replace(/@(?:bucket|b):[^\s]+/g, "") // bucket directive
 		.replace(/@p:[^\s]+/g, "") // v0.4.0: project directive
 		.replace(/@(?:high|med|low|soon)\b/gi, "") // v0.4.0: priority/status tags
+		.replace(/@\d{1,2}:\d{2}(?:[—\-–]\d{1,2}:\d{2})?/g, "") // @HH:MM time tags
 		.replace(/@sprint:[^\s]+/g, "") // v0.6.0: sprint tag
+		.replace(/@i:[\d.]+/g, "") // v1.3.0: sort index
 		.replace(/[🟥🟨🟩]/g, "")
 		.replace(/🔁 every .+$/gm, "") // v0.5.0: all recurrence markers
 		.replace(/#\S+/g, "")

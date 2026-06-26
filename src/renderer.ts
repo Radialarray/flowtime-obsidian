@@ -953,44 +953,17 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     }
 
 
-    const activeTimer = this.plugin?._activeRowTimer;
-    const matchActive = activeTimer && activeTimer.taskName === task.cleanText;
-    const ts: TimerState = { remaining: matchActive ? activeTimer!.remaining : (dur || 0) * 60, total: matchActive ? activeTimer!.total : (dur || 0) * 60, interval: null, running: false };
     const timerCell = row.createEl("span", { cls: "ft-list-timer-cell" });
-    const pb = timerCell.createEl("button", { text: "\u25b6", cls: "ft-list-timer-play" });
-    const disp = timerCell.createEl("span", { text: formatTimer(ts.remaining), cls: "ft-list-timer-display" });
-    const rb = timerCell.createEl("button", { text: "\u21ba", cls: "ft-list-timer-reset" });
-    const ud = (): void => { disp.setText(formatTimer(ts.remaining)); disp.toggleClass("ft-timer-expired", ts.remaining <= 0); };
-    const stp = (): void => {
-      if (this.plugin) { this.plugin._activeRowTimer = null; this.plugin._activeRowTimerStop = null; }
-      if (ts.interval) { clearInterval(ts.interval); ts.interval = null; } ts.running = false; pb.setText("\u25b6");
-      if (this.plugin?.statusTimer?.stop) { this.plugin.statusTimer.stop(); }
-    };
-    pb.addEventListener("click", (e: MouseEvent) => {
-      e.stopPropagation();
-      if (ts.remaining <= 0) { ts.remaining = ts.total; ud(); }
-      if (ts.running) {
-        if (ts.interval) { clearInterval(ts.interval); ts.interval = null; } ts.running = false; pb.setText("\u25b6");
-        if (this.plugin?.statusTimer?.pause) { this.plugin.statusTimer.pause(); }
-      } else {
-        if (this.plugin) { this.plugin._activeRowTimer = ts; this.plugin._activeRowTimerStop = stp; }
-        pb.setText("\u23f8"); ts.running = true;
-        this.plugin?.statusTimer?.start(task.cleanText || task.rawText || "", ts.remaining);
-        if (!ts.interval) {
-          ts.interval = setInterval(() => {
-            ts.remaining--; ud();
-            if (ts.remaining <= 0) {
-              stp(); this.plugin?.notify?.("\u23f1 Time's up! " + (task.cleanText || task.rawText || ""));
-              if (this.plugin?.sessionStore) {
-                const now = new Date();
-                this.plugin.sessionStore.writeSession({ startTime: new Date(now.getTime() - ts.total * 1000).toISOString(), endTime: now.toISOString(), durationMinutes: Math.round(ts.total / 60), bucket: task.bucket || "", taskText: task.cleanText || task.rawText || "", notes: "" });
-              }
-            }
-          }, 1000);
-        }
-      }
-    });
-    rb.addEventListener("click", (e: MouseEvent) => { e.stopPropagation(); stp(); ts.remaining = ts.total; ud(); });
+    const { update: timerUpdate } = this._buildInlineTimer(timerCell, task, dur, true);
+    // Bind duration input changes to timer
+    if (si || ds) {
+      const rebind = (): void => {
+        const d = ds ? parseDurStr(ds.value) : dur;
+        timerUpdate(d && d > 0 ? d : 0);
+      };
+      if (si) si.addEventListener("change", rebind);
+      if (ds) ds.addEventListener("change", rebind);
+    }
 
     // ── Swipe actions (touch only) ──
     let swipeStartX = 0;
@@ -1503,46 +1476,131 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       abTdy.addEventListener("click", async () => { await this.updateDate(task, tdy); await this._refreshSiblings(); row.remove(); this.tasks = this.tasks.filter((t) => t !== task); if (!this.tasks.length) this.renderTable(); });
       if (od) { const abBkl = aw.createEl("button", { text: "\ud83d\uddd1 Backlog", cls: "ft-act-btn ft-act-remove" }); abBkl.addEventListener("click", async () => { await this.updateDate(task, ""); await this._refreshSiblings(); row.remove(); this.tasks = this.tasks.filter((t) => t !== task); if (!this.tasks.length) this.renderTable(); }); }
     } else if (!isCompact && this._columnVisibility!.timer !== false) {
-      const activeTimer = this.plugin?.statusTimer?.getState?.() || null;
-      const matchActive = activeTimer && activeTimer.taskName === task.cleanText;
-      const ts: TimerState = { remaining: matchActive ? activeTimer!.remaining : (dur || 0) * 60, total: matchActive ? activeTimer!.total : (dur || 0) * 60, interval: null, running: false };
-      const tmr = row.createEl("td", { cls: "ft-timer-cell" }); const tr2 = tmr.createEl("div", { cls: "ft-timer-row" });
-      const pb = tr2.createEl("button", { text: "\u25b6", cls: "ft-timer-play" });
-      const tmrBar = tr2.createEl("div", { cls: "ft-timer-progress ft-state-normal" }); const tmrFill = tmrBar.createEl("div", { cls: "ft-timer-progress-fill" });
-      const disp = tr2.createEl("span", { text: formatTimer(ts.remaining), cls: "ft-timer-display" }); const rb = tr2.createEl("button", { text: "\u21ba", cls: "ft-timer-reset" });
-      const ud = (): void => {
-        disp.setText(formatTimer(ts.remaining)); disp.toggleClass("ft-timer-expired", ts.remaining <= 0);
-        const pct = ts.total > 0 ? ((ts.total - ts.remaining) / ts.total) * 100 : 0; tmrFill.style.width = Math.min(pct, 100) + "%";
-        tmrBar.className = "ft-timer-progress ft-state-" + (pct >= 100 ? "over" : pct >= 80 ? "warning" : "normal");
-      };
-      const stp = (): void => {
-        if (this.plugin) this.plugin._activeRowTimerStop = null;
-        if (ts.interval) { clearInterval(ts.interval); ts.interval = null; } ts.running = false; pb.setText("\u25b6");
-        if (this.plugin?.statusTimer?.stop) { this.plugin.statusTimer.stop(); }
-      };
-      const pauseTimer = (): void => { if (ts.interval) { clearInterval(ts.interval); ts.interval = null; } ts.running = false; pb.setText("\u25b6"); if (this.plugin?.statusTimer?.pause) { this.plugin.statusTimer.pause(); } };
-      const resumeTimer = (): void => {
-        if (ts.remaining <= 0) return; ts.running = true; pb.setText("\u23f8");
-        ts.interval = setInterval(() => { ts.remaining--; ud(); if (ts.remaining <= 0) { stp(); ts.remaining = 0; ud(); disp.addClass("ft-timer-expired"); this.plugin?.notify?.("\u23f0 Time's up! " + task.cleanText); if (this.plugin?.settings?.timerSound !== false) this._beep(); if (this.plugin?.statusTimer?.stop) this.plugin.statusTimer.stop(); } }, 1000);
-        if (this.plugin?.statusTimer?.currentTimer?.interval === null) { this.plugin.statusTimer.toggle(); }
-      };
-      const sta = (): void => {
-        if (ts.remaining <= 0) return; ts.running = true; pb.setText("\u23f8");
-        ts.interval = setInterval(() => { ts.remaining--; ud(); if (ts.remaining <= 0) { stp(); ts.remaining = 0; ud(); disp.addClass("ft-timer-expired"); this.plugin?.notify?.("\u23f0 Time's up! " + task.cleanText); if (this.plugin?.settings?.timerSound !== false) this._beep(); if (this.plugin?.statusTimer?.stop) this.plugin.statusTimer.stop(); } }, 1000);
-        if (this.plugin?.statusTimer?.start) { const dm = ds ? parseInt(ds.value, 10) : dur; this.plugin.statusTimer.start(task.cleanText, dm * 60); }
-        if (this.plugin) this.plugin._activeRowTimerStop = stp;
-      };
-      const resynced = this._resyncDone;
-      if (matchActive && activeTimer!.isRunning && !resynced) {
-        this._resyncDone = true; ts.running = true; pb.setText("\u23f8");
-        ts.interval = setInterval(() => { ts.remaining = this.plugin?.statusTimer?.currentTimer?.remaining ?? ts.remaining - 1; if (ts.remaining < 0) ts.remaining = 0; ud(); if (ts.remaining <= 0) { clearInterval(ts.interval!); ts.interval = null; ts.running = false; pb.setText("\u25b6"); } }, 1000);
-        if (this.plugin) this.plugin._activeRowTimerStop = stp;
+      const tmr = row.createEl("td", { cls: "ft-timer-cell" });
+      const { update } = this._buildInlineTimer(tmr, task, dur, false);
+      if (ds) {
+        ds.addEventListener("change", () => {
+          const dm = parseInt(ds.value, 10);
+          update(dm && dm > 0 ? dm : 0);
+        });
       }
-      pb.addEventListener("click", () => { const dm = ds ? parseInt(ds.value, 10) : dur; if (!dm || dm <= 0) return; if (ts.running) { pauseTimer(); } else { if (ts.remaining <= 0) { ts.remaining = dm * 60; ts.total = dm * 60; ud(); } sta(); } });
-      rb.addEventListener("click", () => { const isActiveTimer = ts.running || this.plugin?.statusTimer?.currentTimer?.taskName === task.cleanText; if (isActiveTimer) { stp(); } else { if (ts.interval) { clearInterval(ts.interval); ts.interval = null; } ts.running = false; pb.setText("\u25b6"); } const dm = ds ? parseInt(ds.value, 10) : dur; ts.remaining = dm && dm > 0 ? dm * 60 : 0; ts.total = ts.remaining; ud(); });
-      if (ds) { ds.addEventListener("change", () => { const isActiveTimer = ts.running || this.plugin?.statusTimer?.currentTimer?.taskName === task.cleanText; if (isActiveTimer) { stp(); } const dm = parseInt(ds.value, 10); ts.remaining = dm && dm > 0 ? dm * 60 : 0; ts.total = ts.remaining; ud(); }); }
     }
     if (!isCompact) this.rowData.push({ task, si, ds });
+  }
+
+  /**
+   * Shared inline timer — same DOM + logic for table and list views.
+   * Returns an { update(durMinutes): void } handle so callers can rebind
+   * duration when the input changes.
+   */
+  _buildInlineTimer(
+    container: HTMLElement,
+    task: TaskRow,
+    durMinutes: number,
+    isInline: boolean,
+  ): { update: (durMin: number) => void } {
+    const dur = durMinutes;
+    const taskName = task.cleanText || task.rawText || "";
+    const row = container.createEl("div", {
+      cls: "ft-timer-row" + (isInline ? " ft-timer-inline" : ""),
+    });
+    const pb = row.createEl("button", { text: "\u25b6", cls: "ft-timer-play" });
+    const tmrBar = row.createEl("div", { cls: "ft-timer-progress ft-state-normal" });
+    const tmrFill = tmrBar.createEl("div", { cls: "ft-timer-progress-fill" });
+    const disp = row.createEl("span", { text: formatTimer(dur * 60), cls: "ft-timer-display" });
+    const rb = row.createEl("button", { text: "\u21ba", cls: "ft-timer-reset" });
+
+    const ts: TimerState = { remaining: dur * 60, total: dur * 60, interval: null, running: false };
+
+    const ud = (): void => {
+      disp.setText(formatTimer(ts.remaining));
+      disp.toggleClass("ft-timer-expired", ts.remaining <= 0);
+      const pct = ts.total > 0 ? ((ts.total - ts.remaining) / ts.total) * 100 : 0;
+      tmrFill.style.width = Math.min(pct, 100) + "%";
+      tmrBar.className =
+        "ft-timer-progress ft-state-" +
+        (pct >= 100 ? "over" : pct >= 80 ? "warning" : "normal");
+    };
+
+    const stp = (): void => {
+      if (this.plugin) this.plugin._activeRowTimerStop = null;
+      if (ts.interval) { clearInterval(ts.interval); ts.interval = null; }
+      ts.running = false;
+      pb.setText("\u25b6");
+      if (this.plugin?.statusTimer?.stop) this.plugin.statusTimer.stop();
+    };
+
+    const startTimer = (): void => {
+      if (ts.remaining <= 0) return;
+      ts.running = true;
+      pb.setText("\u23f8");
+      ts.interval = setInterval(() => {
+        ts.remaining--;
+        ud();
+        if (ts.remaining <= 0) {
+          stp();
+          ts.remaining = 0;
+          ud();
+          disp.addClass("ft-timer-expired");
+          this.plugin?.notify?.("\u23f0 Time's up! " + taskName);
+          if (this.plugin?.settings?.timerSound !== false) this._beep?.();
+          if (this.plugin?.statusTimer?.stop) this.plugin.statusTimer.stop();
+          if (this.plugin?.sessionStore) {
+            const now = new Date();
+            this.plugin.sessionStore.writeSession({
+              startTime: new Date(now.getTime() - ts.total * 1000).toISOString(),
+              endTime: now.toISOString(),
+              durationMinutes: Math.round(ts.total / 60),
+              bucket: task.bucket || "",
+              taskText: taskName,
+              notes: "",
+            });
+          }
+        }
+      }, 1000);
+      if (this.plugin?.statusTimer?.start) {
+        this.plugin.statusTimer.start(taskName, ts.remaining);
+      }
+      if (this.plugin) this.plugin._activeRowTimerStop = stp;
+    };
+
+    const pauseTimer = (): void => {
+      if (ts.interval) { clearInterval(ts.interval); ts.interval = null; }
+      ts.running = false;
+      pb.setText("\u25b6");
+      if (this.plugin?.statusTimer?.pause) this.plugin.statusTimer.pause();
+    };
+
+    pb.addEventListener("click", (e: MouseEvent) => {
+      e.stopPropagation();
+      const dm = ts.total / 60;
+      if (!dm || dm <= 0) return;
+      if (ts.running) {
+        pauseTimer();
+      } else {
+        if (ts.remaining <= 0) { ts.remaining = dm * 60; ts.total = dm * 60; ud(); }
+        startTimer();
+      }
+    });
+
+    rb.addEventListener("click", (e: MouseEvent) => {
+      e.stopPropagation();
+      stp();
+      const dm = ts.total / 60;
+      ts.remaining = dm && dm > 0 ? dm * 60 : 0;
+      ts.total = ts.remaining;
+      ud();
+    });
+
+    const update = (newDurMin: number): void => {
+      const isActive = ts.running || this.plugin?.statusTimer?.currentTimer?.taskName === taskName;
+      if (isActive) stp();
+      ts.remaining = newDurMin > 0 ? newDurMin * 60 : 0;
+      ts.total = ts.remaining;
+      ud();
+    };
+
+    return { update };
   }
 
   _buildTaskCell(row: HTMLTableRowElement, task: TaskRow, depth: number, hasChildren: boolean, collapsed: boolean, tid: string, childrenTasks: TaskRow[]): void {

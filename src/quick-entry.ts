@@ -1,7 +1,7 @@
 import { Modal } from "obsidian";
 import type { App, TFile } from "obsidian";
 import { parseDate } from "./date-parser";
-import type { FlowtimeSettings, BucketDef } from "./types";
+import type { FlowtimeSettings } from "./types";
 
 interface FlowtimePluginRef {
   settings: FlowtimeSettings;
@@ -35,9 +35,6 @@ export class QuickEntryModal extends Modal {
       cls: "flowtime-input",
     });
     taskInput.focus();
-
-    // Live preview — declared here, assigned after all inputs exist
-    let updateLivePreview: () => void;
 
     // ── Date ──
     contentEl.createEl("label", { text: "Date", cls: "flowtime-label" });
@@ -194,7 +191,7 @@ export class QuickEntryModal extends Modal {
     })();
 
     // ── Live preview ──
-    updateLivePreview = (): void => {
+    const updateLivePreview = (): void => {
       const date = parseDate(dateInput.value);
       const project = projInput.value.trim();
       const task = taskInput.value.trim();

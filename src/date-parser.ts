@@ -104,7 +104,7 @@ export function parseDate(input: string): string | null {
   // ── Already formatted YYYY-MM-DD ──
   const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (isoMatch) {
-    const [, y, m, d] = isoMatch.map(Number);
+    const [, _y, m, d] = isoMatch.map(Number);
     if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
       return s;
     }
@@ -113,9 +113,9 @@ export function parseDate(input: string): string | null {
   // ── YYYY/MM/DD ──
   const slashMatch = s.match(/^(\d{4})\/(\d{2})\/(\d{2})$/);
   if (slashMatch) {
-    const [, y, m, d] = slashMatch.map(Number);
+    const [, _y, m, d] = slashMatch.map(Number);
     if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
-      return `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      return `${String(_y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
     }
   }
 

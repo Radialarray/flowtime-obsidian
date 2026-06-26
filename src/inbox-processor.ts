@@ -885,7 +885,7 @@ export class ProcessInboxModal extends Modal {
             match.path.lastIndexOf("/"),
           );
           const wikiPath = folder + "/" + match.name + " Wiki.md";
-          let wikiFile = this.app.vault.getAbstractFileByPath(wikiPath);
+          const wikiFile = this.app.vault.getAbstractFileByPath(wikiPath);
 
           if (wikiFile) {
             let content = await this.app.vault.read(wikiFile as TFile);
@@ -908,7 +908,7 @@ export class ProcessInboxModal extends Modal {
           } else {
             // Create wiki file if it doesn't exist
             const wikiContent = `# ${match.name} — Wiki\n\n## \u{1F4E5} ${section}\n${wikiLine}`;
-            wikiFile = await this.app.vault.create(wikiPath, wikiContent);
+            await this.app.vault.create(wikiPath, wikiContent);
           }
           this.plugin.notify(`\u{1F4D6} Added to ${match.name} Wiki`);
         } else {

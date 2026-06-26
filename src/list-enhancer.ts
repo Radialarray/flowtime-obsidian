@@ -9,10 +9,9 @@
  * - Persists all changes back to the source markdown file
  */
 
-import type { App, TFile, Vault } from "obsidian";
+import type { App, TFile } from "obsidian";
 import type { FlowtimeSettings } from "./types";
-import { parseTaskLine, parseRecurrence, isRecurrenceDue } from "./task-parser";
-import { toggleCheck, updateDate } from "./task-utils";
+import { parseRecurrence, isRecurrenceDue } from "./task-parser";
 
 interface FlowtimePluginRef {
   app: App;

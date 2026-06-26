@@ -8,7 +8,7 @@
 import { MarkdownRenderChild, TFile } from "obsidian";
 import type { App } from "obsidian";
 import { parseTaskLine, formatDuration, formatTimer } from "./task-parser";
-import { renderProgressBar, formatHours } from "./budget-state";
+import { renderProgressBar } from "./budget-state";
 import {
   DUR_OPTS,
   START_H,
@@ -25,7 +25,6 @@ import {
   toggleCheck,
   priorityWeight,
   saveTimeWithDuration,
-  fmtDateShort,
   fmtDate,
 } from "./task-utils";
 import type { TaskRow, ParsedTask, FlowtimeSettings } from "./types";

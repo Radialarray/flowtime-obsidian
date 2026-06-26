@@ -4,17 +4,14 @@
  * and all rendering modes (today, overdue, dueweek, weekly, soon, project, budget, sessions, sprints).
  */
 
-import { MarkdownRenderChild, Notice } from "obsidian";
-import type { App, TFile, Vault } from "obsidian";
+import { MarkdownRenderChild } from "obsidian";
+import type { App, TFile } from "obsidian";
 import {
-  parseTaskLine,
-  cleanTaskText,
   parseRecurrence,
   formatDuration,
   formatTimer,
   buildTaskTree,
   flattenTree,
-  taskId,
 } from "./task-parser";
 import { renderProgressBar, formatHours } from "./budget-state";
 import { evaluateFilter } from "./filter-engine";
@@ -45,8 +42,6 @@ import type {
   FilterConfig,
   FilterOp,
   FlowtimeSettings,
-  BucketDef,
-  SprintDef,
   RenderMode,
   ViewMode,
   ParsedTask,
@@ -324,7 +319,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       for (const sc of this._sortConfig) {
         const va = this._getSortValue(a, sc.field);
         const vb = this._getSortValue(b, sc.field);
-        let cmp = 0;
+        let cmp;
         if (typeof va === "string" && typeof vb === "string") { cmp = va.localeCompare(vb); }
         else if (typeof va === "number" && typeof vb === "number") { cmp = va - vb; }
         else { cmp = String(va || "").localeCompare(String(vb || "")); }
@@ -625,7 +620,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       return;
     }
     this.startOpts = this._timeOpts(START_H, START_END);
-    const od = this.mode === "overdue", dw = this.mode === "dueweek", wk = this.mode === "weekly", pj = this.mode === "project";
+    const od = this.mode === "overdue", dw = this.mode === "dueweek", wk = this.mode === "weekly", _pj = this.mode === "project";
     const isCompact = od || dw || wk;
     const headings: Record<string, string> = {
       today: "\ud83d\udca1 Times and durations auto-save to source files",
@@ -915,11 +910,11 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     this._setupListDragDrop(listWrap);
   }
 
-  _renderListRow(container: HTMLElement, item: DisplayItem | TaskRow, tdy: string): HTMLDivElement {
+  _renderListRow(container: HTMLElement, item: DisplayItem | TaskRow, _tdy: string): HTMLDivElement {
     const task = (item as DisplayItem).task || (item as TaskRow);
-    const depth = (item as DisplayItem).depth !== undefined ? (item as DisplayItem).depth : 0;
-    const hasChildren = !!(item as DisplayItem).hasChildren;
-    const collapsed = !!(item as DisplayItem).collapsed;
+    const _depth = (item as DisplayItem).depth !== undefined ? (item as DisplayItem).depth : 0;
+    const _hasChildren = !!(item as DisplayItem).hasChildren;
+    const _collapsed = !!(item as DisplayItem).collapsed;
     const tid = (item as DisplayItem).taskId || "";
     const { start, dur } = this._parseStored(task.time);
     const row = container.createEl("div", { cls: "ft-list-row", attr: { "data-task-id": tid || "", "data-source-path": task.file?.path || "", "data-line": String(task.line || 0) } });
@@ -1314,7 +1309,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     try {
       const lines = (await this.app.vault.read(task.file)).split("\n"); const line = lines[task.line]; if (!line) return "";
       const m = line.match(/^(\s*[-*+]\s*\[[^\]]*\]\s*)(.*)$/); if (!m) return "";
-      let rest = m[2].replace(/^\d{1,2}:\d{2}(?:\s*[\u2014\-\u2013]\s*\d{1,2}:\d{2})?\s*/, "").trim();
+      const rest = m[2].replace(/^\d{1,2}:\d{2}(?:\s*[\u2014\-\u2013]\s*\d{1,2}:\d{2})?\s*/, "").trim();
       let timeStr = "";
       if (newTime) { timeStr = durationMinutes > 0 ? newTime + "\u2014" + this._calcEnd(newTime, durationMinutes) : newTime; }
       lines[task.line] = m[1] + (timeStr ? timeStr + " " : "") + rest;

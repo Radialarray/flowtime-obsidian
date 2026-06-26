@@ -12,7 +12,7 @@
  */
 
 import type { TFile, Vault } from "obsidian";
-import type { ParsedTask, FlowtimeSettings } from "./types";
+import type { ParsedTask } from "./types";
 import { parseTaskLine } from "./task-parser";
 
 interface TaskQuery {

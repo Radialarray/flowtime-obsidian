@@ -3,12 +3,10 @@ import {
 	Plugin,
 	Notice,
 	Modal,
-	EditorSuggest,
 	MarkdownView,
 	MarkdownPostProcessorContext,
 	App,
 	Editor,
-	EditorPosition,
 	MarkdownFileInfo,
 	TAbstractFile,
 	TFile,
@@ -36,7 +34,7 @@ import { ListEnhancer } from "./list-enhancer";
 import { WeekplanRenderer } from "./weekplan-renderer";
 import { AddTaskSuggest, AtCompletionsSuggest } from "./suggests/at-completions";
 import { TaskIndex } from "./task-index";
-import type { FlowtimeSettings, BucketDef } from "./types";
+import type { FlowtimeSettings } from "./types";
 
 /* ─── Inline types ─── */
 

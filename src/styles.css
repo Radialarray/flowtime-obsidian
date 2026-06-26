@@ -653,8 +653,9 @@
 	font-size: var(--font-ui-small);
 	font-weight: var(--font-semibold);
 	color: var(--text-normal);
-	min-width: 60px;
+	width: 58px;
 	text-align: center;
+	white-space: nowrap;
 	padding: 2px 4px;
 	user-select: none;
 }
@@ -2423,7 +2424,8 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-v
 }
 .ft-timer-inline .ft-timer-display {
 	font-size: var(--font-ui-smaller);
-	min-width: 40px;
+	width: 48px;
+	text-align: center;
 }
 .ft-timer-inline .ft-timer-progress {
 	height: 4px;
@@ -2688,7 +2690,7 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-v
 	.ft-wp-end-preview { min-width: 36px; font-size: var(--font-ui-smaller); }
 
 	/* Timer display: smaller */
-	.ft-timer-display { min-width: 45px; font-size: var(--font-ui-smaller); }
+	.ft-timer-display { width: 46px; font-size: var(--font-ui-smaller); }
 
 	/* Session history: collapse extra columns */
 	.ft-sesh-task { max-width: 120px; }

@@ -1031,6 +1031,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
         attr: { title: "Open source: " + (task.file.basename || "") + " line " + (task.line + 1) },
       });
       srcBtn.addEventListener("click", () => {
+        popup.remove();
         this.app.workspace.openLinkText(task.file!.path, "", true, { line: task.line + 1 } as any);
       });
     }
@@ -1085,7 +1086,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     projRow.createEl("label", { text: "Project", cls: "ft-fe-label" });
     if (task.project) {
       const pl = projRow.createEl("a", { text: task.project, cls: "ft-fe-link" });
-      pl.addEventListener("click", () => this.app.workspace.openLinkText(task.projectPath || task.project || "", "", true));
+      pl.addEventListener("click", () => { popup.remove(); this.app.workspace.openLinkText(task.projectPath || task.project || "", "", true); });
     } else { projRow.createEl("span", { text: "\u2014", cls: "ft-fe-value" }); }
 
     // ── Buttons ──

@@ -635,7 +635,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       if (od) {
         mkBtn("\ud83d\uddd1 Backlog All", "ft-bulk-btn ft-bulk-remove", async () => {
           for (const t of this.tasks) await this.updateDate(t, "");
-          await this._refreshSiblings(); this.tasks = []; this.renderTable(); this.plugin?.notify?.("\ud83d\uddd1 All sent to backlog");
+          await this._refreshSiblings(); this.tasks = []; this.renderTable(); this.plugin?.notify?.("\u{1F5D1} All sent to backlog");
         });
       }
     }
@@ -1129,31 +1129,40 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
   _setupListDragDrop(listWrap: HTMLDivElement): void {
     let dragState: { path: string; line: number; row: HTMLDivElement; startX: number; startY: number } | null = null;
+    let rowToIndex: Map<HTMLDivElement, number> | null = null;
     const dragRoot = this.containerEl;
-    const clearIndicators = (): void => {
-      dragRoot.querySelectorAll(".ft-list-drop-target,.ft-list-dragging,.ft-list-drop-before,.ft-list-drop-after").forEach((el) => el.classList.remove("ft-list-drop-target", "ft-list-dragging", "ft-list-drop-before", "ft-list-drop-after"));
-      dragRoot.querySelectorAll(".ft-list-heading-active").forEach((el) => el.classList.remove("ft-list-heading-active"));
+    const buildRowMap = (): void => {
+      const map = new Map<HTMLDivElement, number>();
+      dragRoot.querySelectorAll<HTMLDivElement>(".ft-list-row").forEach((row) => {
+        const path = row.dataset.sourcePath;
+        const line = parseInt(row.dataset.line || "0", 10);
+        const idx = this.tasks.findIndex((t) => t.file?.path === path && t.line === line);
+        if (idx >= 0) map.set(row, idx);
+      });
+      rowToIndex = map;
     };
-    const findTaskByRow = (row: HTMLDivElement): { idx: number; task: TaskRow | undefined } => {
-      const path = row.dataset.sourcePath; const line = parseInt(row.dataset.line || "0", 10);
-      return { idx: this.tasks.findIndex((t) => t.file?.path === path && t.line === line), task: this.tasks.find((t) => t.file?.path === path && t.line === line) };
+    const clearIndicators = (): void => {
+      dragRoot.querySelectorAll<HTMLElement>(".ft-list-drop-target,.ft-list-dragging,.ft-list-drop-before,.ft-list-drop-after,.ft-list-heading-active").forEach((el) => {
+        el.classList.remove("ft-list-drop-target", "ft-list-dragging", "ft-list-drop-before", "ft-list-drop-after", "ft-list-heading-active");
+      });
     };
     listWrap.addEventListener("mousedown", (e: MouseEvent) => {
       const handle = (e.target as HTMLElement).closest(".ft-list-drag"); if (!handle) return;
       const row = (handle as HTMLElement).closest(".ft-list-row") as HTMLDivElement | null; if (!row) return;
-      e.preventDefault(); clearIndicators();
-      const srcInfo = findTaskByRow(row);
+      e.preventDefault(); buildRowMap(); clearIndicators();
       dragState = { path: row.dataset.sourcePath || "", line: parseInt(row.dataset.line || "0", 10), row, startX: e.clientX, startY: e.clientY };
-      row.classList.add("ft-list-dragging"); console.log("FT DRAG START", JSON.stringify({ path: row.dataset.sourcePath, line: parseInt(row.dataset.line || "0", 10), idx: srcInfo.idx }));
+      row.classList.add("ft-list-dragging");
     });
     let moveFrame: number | null = null;
     document.addEventListener("mousemove", (e: MouseEvent) => {
       if (!dragState || moveFrame) return;
       moveFrame = requestAnimationFrame(() => {
         moveFrame = null; const ds = dragState; if (!ds) return;
-        dragRoot.querySelectorAll(".ft-list-row").forEach((r) => { (r as HTMLElement).style.borderTop = ""; (r as HTMLElement).style.borderBottom = ""; });
+        // Batch all DOM reads first
+        const el = document.elementFromPoint(e.clientX, e.clientY);
+        // Then batch all DOM writes together
         clearIndicators(); ds.row.classList.add("ft-list-dragging");
-        const el = document.elementFromPoint(e.clientX, e.clientY); if (!el) return;
+        if (!el) return;
         const targetRow = (el as HTMLElement).closest(".ft-list-row") as HTMLDivElement | null;
         if (targetRow && targetRow !== ds.row) {
           const rect = targetRow.getBoundingClientRect();
@@ -1166,18 +1175,17 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     document.addEventListener("mouseup", async (e: MouseEvent) => {
       if (!dragState) return;
       const el = document.elementFromPoint(e.clientX, e.clientY); clearIndicators();
-      const srcInfo = findTaskByRow(dragState.row);
-      if (srcInfo.idx < 0) { dragState = null; return; }
+      const srcIdx = rowToIndex?.get(dragState.row) ?? -1;
+      if (srcIdx < 0) { dragState = null; return; }
       const targetRow = (el as HTMLElement | null)?.closest(".ft-list-row") as HTMLDivElement | null;
       if (targetRow && targetRow !== dragState.row) {
-        dragRoot.querySelectorAll(".ft-list-row").forEach((r) => { (r as HTMLElement).style.borderTop = ""; (r as HTMLElement).style.borderBottom = ""; });
-        const tgtInfo = findTaskByRow(targetRow);
-        if (tgtInfo.idx >= 0 && tgtInfo.idx !== srcInfo.idx) {
-          const srcTask = srcInfo.task!; const targetTask = tgtInfo.task!;
+        const tgtIdx = rowToIndex?.get(targetRow) ?? -1;
+        if (tgtIdx >= 0 && tgtIdx !== srcIdx) {
+          const srcTask = this.tasks[srcIdx]; const targetTask = this.tasks[tgtIdx];
           const rect = targetRow.getBoundingClientRect();
           let beforeTask: TaskRow | null, afterTask: TaskRow | null;
-          if (e.clientY < rect.top + rect.height / 2) { beforeTask = tgtInfo.idx > 0 ? this.tasks[tgtInfo.idx - 1] : null; afterTask = targetTask; }
-          else { beforeTask = targetTask; afterTask = tgtInfo.idx < this.tasks.length - 1 ? this.tasks[tgtInfo.idx + 1] : null; }
+          if (e.clientY < rect.top + rect.height / 2) { beforeTask = tgtIdx > 0 ? this.tasks[tgtIdx - 1] : null; afterTask = targetTask; }
+          else { beforeTask = targetTask; afterTask = tgtIdx < this.tasks.length - 1 ? this.tasks[tgtIdx + 1] : null; }
           const bi = beforeTask?.sortIndex ?? 0; const ai = afterTask?.sortIndex ?? (beforeTask ? bi + 2000 : 1000);
           const newIdx = Math.round((bi + ai) / 2);
           let newTime = "";
@@ -1187,20 +1195,21 @@ class FlowtimeRenderer extends MarkdownRenderChild {
           const timeStr = await this._setTaskTime(srcTask, newTime, srcTask.durationMinutes);
           if (timeStr) srcTask.time = timeStr;
           this._sortConfig = []; this._sortMode = null; this._sort(); this.renderTable();
-          this.plugin?.notify?.("\ud83d\udd04 Time updated"); dragState = null; return;
+          buildRowMap();
+          this.plugin?.notify?.("\u{1F504} Time updated"); dragState = null; return;
         }
       }
       const heading = (el as HTMLElement | null)?.closest("h1, h2, h3, h4, h5, h6");
       if (heading) {
-        heading.classList.remove("ft-list-heading-active"); const srcTask = srcInfo.task;
+        heading.classList.remove("ft-list-heading-active"); const srcTask = this.tasks[srcIdx];
         if (srcTask) {
           const text = heading.textContent?.trim().toLowerCase() || "";
-          if (text === "today") { await this.updateDate(srcTask, this._refDate()); this.plugin?.notify?.("\ud83d\udcc5 Moved to today"); }
-          else if (text === "tomorrow") { await this.updateDate(srcTask, new Date(Date.now() + 864e5).toISOString().split("T")[0]); this.plugin?.notify?.("\ud83d\udcc5 Moved to tomorrow"); }
-          else if (text === "overdue" || text === "carry over") { await this.updateDate(srcTask, new Date(Date.now() - 864e5).toISOString().split("T")[0]); this.plugin?.notify?.("\ud83d\udcc5 Moved to overdue"); }
+          if (text === "today") { await this.updateDate(srcTask, this._refDate()); this.plugin?.notify?.("\u{1F4C5} Moved to today"); }
+          else if (text === "tomorrow") { await this.updateDate(srcTask, new Date(Date.now() + 864e5).toISOString().split("T")[0]); this.plugin?.notify?.("\u{1F4C5} Moved to tomorrow"); }
+          else if (text === "overdue" || text === "carry over") { await this.updateDate(srcTask, new Date(Date.now() - 864e5).toISOString().split("T")[0]); this.plugin?.notify?.("\u{1F4C5} Moved to overdue"); }
           else if (text === "soon" || text === "up next") { await this.updateDate(srcTask, ""); this.plugin?.notify?.("\u25cc Back to @soon"); }
-          else if (text === "next week") { await this.updateDate(srcTask, new Date(Date.now() + 7 * 864e5).toISOString().split("T")[0]); this.plugin?.notify?.("\ud83d\udcc5 Moved to next week"); }
-          else { const dateMatch = text.match(/(\d{4})-(\d{1,2})-(\d{1,2})/); if (dateMatch) { await this.updateDate(srcTask, text); this.plugin?.notify?.("\ud83d\udcc5 Date set to " + text); } }
+          else if (text === "next week") { await this.updateDate(srcTask, new Date(Date.now() + 7 * 864e5).toISOString().split("T")[0]); this.plugin?.notify?.("\u{1F4C5} Moved to next week"); }
+          else { const dateMatch = text.match(/(\d{4})-(\d{1,2})-(\d{1,2})/); if (dateMatch) { await this.updateDate(srcTask, text); this.plugin?.notify?.("\u{1F4C5} Date set to " + text); } }
         }
       }
       dragState = null;

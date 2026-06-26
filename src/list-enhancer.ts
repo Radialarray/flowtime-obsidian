@@ -46,60 +46,18 @@ interface HeadingAction {
   date?: string;
 }
 
-export class ListEnhancer {
-  private app: App;
-  private plugin: FlowtimePluginRef;
-  private _active: boolean = false;
-  private _currentPath: string | null = null;
-  private _currentFile: TFile | null = null;
-  private _dispose: (() => void) | null = null;
-  private _observer: MutationObserver | null = null;
-  private _observeTimer: ReturnType<typeof setTimeout> | undefined;
-
-  constructor(app: App, plugin: FlowtimePluginRef) {
-    this.app = app;
-    this.plugin = plugin;
-  }
-
-  async check(): Promise<void> {
-    const file = this.app.workspace.getActiveFile();
-    if (!file) return this.deactivate();
-
-    if (this._currentPath === file.path && this._active) return;
-
-    const cache = this.app.metadataCache.getCache(file.path);
-    const fm = cache?.frontmatter as Record<string, unknown> | undefined;
-    const isListNote = fm?.type === "flowtime-list";
-
-    if (isListNote) {
-      await this.activate(file);
-    } else if (this._active) {
-      this.deactivate();
-    }
-  }
-
-  async activate(file: TFile): Promise<void> {
-    this.deactivate();
-    this._active = true;
-    this._currentPath = file.path;
-    this._currentFile = file;
-    setTimeout(() => this._enhance(), 500);
-  }
-
-  deactivate(): void {
-    if (this._dispose) {
-      this._dispose();
-      this._dispose = null;
-    }
-    this._cleanupDOM();
-    this._active = false;
-    this._currentPath = null;
-    this._currentFile = null;
-  }
+export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
+  let _active: boolean = false;
+  let _currentPath: string | null = null;
+  let _currentFile: TFile | null = null;
+  let _dispose: (() => void) | null = null;
+  let _observer: MutationObserver | null = null;
+  let _observeTimer: ReturnType<typeof setTimeout> | undefined;
+  let _taskLineMap: Map<HTMLElement, number> = new Map();
 
   /* ─── Document Parser ─── */
 
-  _parseNote(content: string): NoteSection[] {
+  function _parseNote(content: string): NoteSection[] {
     const lines = content.split("\n");
     const sections: NoteSection[] = [];
     let currentSection: NoteSection = { heading: null, level: 0, tasks: [] };
@@ -139,11 +97,7 @@ export class ListEnhancer {
 
   /* ─── Heading Drop Zone Logic ─── */
 
-  /**
-   * Parse a heading text to determine the drop action.
-   * Returns { type: "date"|"soon"|"none", date?: YYYY-MM-DD }
-   */
-  _parseHeadingAction(headingText: string): HeadingAction {
+  function _parseHeadingAction(headingText: string): HeadingAction {
     const h = headingText.toLowerCase().trim();
 
     if (h === "today") return { type: "date", date: new Date().toISOString().split("T")[0] };
@@ -177,30 +131,30 @@ export class ListEnhancer {
 
   /* ─── DOM Enhancement ─── */
 
-  _enhance(): void {
-    this._cleanupDOM();
-    const view = this.app.workspace.activeEditor as { previewEl?: HTMLElement } | null;
+  function _enhance(): void {
+    _cleanupDOM();
+    const view = app.workspace.activeEditor as { previewEl?: HTMLElement } | null;
 
     const container =
       view?.previewEl || document.querySelector(".markdown-source-view") as HTMLElement | null;
 
     if (!container) {
-      setTimeout(() => this._enhance(), 300);
+      setTimeout(() => _enhance(), 300);
       return;
     }
 
     const selector = ".task-list-item:not(.ft-list-enhanced), .HyperMD-task-line:not(.ft-list-enhanced)";
     const taskEls = container.querySelectorAll(selector);
     if (taskEls.length === 0) {
-      setTimeout(() => this._enhance(), 500);
+      setTimeout(() => _enhance(), 500);
       return;
     }
 
     // Parse the note to map line numbers to DOM elements
-    this._taskLineMap = new Map<HTMLElement, number>();
-    if (this._currentFile) {
+    _taskLineMap = new Map<HTMLElement, number>();
+    if (_currentFile) {
       // Read the file content and match task lines to DOM order
-      this.app.vault.read(this._currentFile).then((content) => {
+      app.vault.read(_currentFile).then((content) => {
         const lines = content.split("\n");
         const taskLineNumbers: number[] = [];
         for (let i = 0; i < lines.length; i++) {
@@ -212,7 +166,7 @@ export class ListEnhancer {
         let idx = 0;
         for (const el of taskEls) {
           if (idx < taskLineNumbers.length) {
-            this._taskLineMap.set(el as HTMLElement, taskLineNumbers[idx]);
+            _taskLineMap.set(el as HTMLElement, taskLineNumbers[idx]);
             idx++;
           }
         }
@@ -220,27 +174,25 @@ export class ListEnhancer {
     }
 
     for (const el of taskEls) {
-      this._enhanceTaskLine(el as HTMLElement);
+      _enhanceTaskLine(el as HTMLElement);
     }
 
     // Enhance headings as drop zones
-    this._enhanceHeadingDropZones(container);
+    _enhanceHeadingDropZones(container);
 
-    this._setupDragDrop(container);
+    _setupDragDrop(container);
 
-    if (!this._observer) {
-      this._observer = new MutationObserver(() => {
-        clearTimeout(this._observeTimer);
-        this._observeTimer = setTimeout(() => this._enhance(), 500);
+    if (!_observer) {
+      _observer = new MutationObserver(() => {
+        clearTimeout(_observeTimer);
+        _observeTimer = setTimeout(() => _enhance(), 500);
       });
-      this._observer.observe(container, { childList: true, subtree: true });
+      _observer.observe(container, { childList: true, subtree: true });
     }
   }
 
-  private _taskLineMap: Map<HTMLElement, number> = new Map();
-
   /** Add drag handle, checkbox click, and inline timer to a task line element */
-  _enhanceTaskLine(el: HTMLElement): void {
+  function _enhanceTaskLine(el: HTMLElement): void {
     if (el.classList.contains("ft-list-enhanced")) return;
     el.classList.add("ft-list-enhanced");
 
@@ -270,7 +222,7 @@ export class ListEnhancer {
       ? 'input[type="checkbox"]'
       : '.cm-formatting-task') as HTMLElement | null;
 
-    if (checkboxEl && this._currentFile) {
+    if (checkboxEl && _currentFile) {
       el.addEventListener("click", async (e: MouseEvent) => {
         // Only handle clicks on the checkbox area
         const target = e.target as HTMLElement;
@@ -280,11 +232,11 @@ export class ListEnhancer {
 
         if (!isCheckClick) return;
 
-        const lineNum = this._taskLineMap.get(el);
+        const lineNum = _taskLineMap.get(el);
         if (lineNum == null) return;
 
         try {
-          const content = await this.app.vault.read(this._currentFile!);
+          const content = await app.vault.read(_currentFile!);
           const lines = content.split("\n");
           const line = lines[lineNum];
           if (!line) return;
@@ -295,11 +247,11 @@ export class ListEnhancer {
             : line.replace(/\[ \]/, "[x]");
 
           lines[lineNum] = newLine;
-          await this.app.vault.modify(this._currentFile!, lines.join("\n"));
+          await app.vault.modify(_currentFile!, lines.join("\n"));
 
           // Handle recurrence: if completed, generate next instance
           if (!isChecked) {
-            await this._handleRecurrence(lineNum, line);
+            await _handleRecurrence(lineNum, line);
           }
         } catch (e) {
           console.warn("Flowtime ListEnhancer: toggle error:", (e as Error).message);
@@ -322,10 +274,10 @@ export class ListEnhancer {
 
     timerBtn.addEventListener("click", (e: MouseEvent) => {
       e.stopPropagation();
-      if (!this.plugin.statusTimer) return;
+      if (!plugin.statusTimer) return;
 
       if (timerActive) {
-        this.plugin.statusTimer.stop();
+        plugin.statusTimer.stop();
         timerActive = false;
         timerBtn.textContent = "\u23F1";
         timerBtn.style.opacity = "0.5";
@@ -335,7 +287,7 @@ export class ListEnhancer {
         const seconds = durMatch
           ? (durMatch[2] === "h" ? parseFloat(durMatch[1]) * 3600 : parseFloat(durMatch[1]) * 60)
           : 1500; // default 25 min
-        this.plugin.statusTimer.start(taskText, Math.round(seconds));
+        plugin.statusTimer.start(taskText, Math.round(seconds));
         timerActive = true;
         timerBtn.textContent = "\u23F8";
         timerBtn.style.opacity = "1";
@@ -349,13 +301,13 @@ export class ListEnhancer {
    * Handle recurrence: when a recurring task is completed,
    * generate the next instance by updating the date directive.
    */
-  private async _handleRecurrence(lineNum: number, line: string): Promise<void> {
-    if (!this._currentFile) return;
+  async function _handleRecurrence(lineNum: number, line: string): Promise<void> {
+    if (!_currentFile) return;
     const recurrence = parseRecurrence(line);
     if (!recurrence) return;
 
     const today = new Date().toISOString().split("T")[0];
-    if (!isRecurrenceDue(recurrence, today, { workdays: this.plugin.settings.workdays })) return;
+    if (!isRecurrenceDue(recurrence, today, { workdays: plugin.settings.workdays })) return;
 
     // Generate next instance: update the date to the next due date
     const tomorrow = new Date();
@@ -365,14 +317,14 @@ export class ListEnhancer {
       const d = new Date();
       d.setDate(d.getDate() + i);
       const ds = d.toISOString().split("T")[0];
-      if (isRecurrenceDue(recurrence, ds, { workdays: this.plugin.settings.workdays })) {
+      if (isRecurrenceDue(recurrence, ds, { workdays: plugin.settings.workdays })) {
         nextDate = ds;
         break;
       }
     }
 
     if (nextDate) {
-      const content = await this.app.vault.read(this._currentFile);
+      const content = await app.vault.read(_currentFile);
       const lines = content.split("\n");
       let nl = lines[lineNum];
       if (nl) {
@@ -382,20 +334,20 @@ export class ListEnhancer {
           nl = nl.replace(/(\]\s*)/, "$1@" + nextDate + " ");
         }
         lines[lineNum] = nl;
-        await this.app.vault.modify(this._currentFile, lines.join("\n"));
+        await app.vault.modify(_currentFile, lines.join("\n"));
       }
     }
   }
 
   /** Add drop zone highlighting to h1-h6 headings in the document */
-  _enhanceHeadingDropZones(container: HTMLElement): void {
+  function _enhanceHeadingDropZones(container: HTMLElement): void {
     const headings = container.querySelectorAll("h1, h2, h3, h4, h5, h6");
     for (const h of headings) {
       if ((h as HTMLElement).dataset.ftDropZone) continue;
       const hel = h as HTMLElement;
       hel.dataset.ftDropZone = "true";
 
-      const action = this._parseHeadingAction(hel.textContent || "");
+      const action = _parseHeadingAction(hel.textContent || "");
       if (action.type === "none") continue;
 
       // Add subtle indicator that this heading is a drop zone
@@ -405,10 +357,10 @@ export class ListEnhancer {
 
   /* ─── Cleanup ─── */
 
-  _cleanupDOM(): void {
-    if (this._observer) {
-      this._observer.disconnect();
-      this._observer = null;
+  function _cleanupDOM(): void {
+    if (_observer) {
+      _observer.disconnect();
+      _observer = null;
     }
     document.querySelectorAll(".ft-list-enhanced").forEach((el) => {
       el.classList.remove("ft-list-enhanced");
@@ -422,7 +374,7 @@ export class ListEnhancer {
 
   /* ─── Drag & Drop with Heading Zones ─── */
 
-  _setupDragDrop(container: HTMLElement): void {
+  function _setupDragDrop(container: HTMLElement): void {
     let dragState: {
       el: HTMLElement;
       startX: number;
@@ -438,7 +390,7 @@ export class ListEnhancer {
       if (!row) return;
 
       e.preventDefault();
-      this._clearDragIndicators(container);
+      _clearDragIndicators(container);
       row.classList.add("ft-list-dragging");
 
       dragState = { el: row, startX: e.clientX, startY: e.clientY };
@@ -452,7 +404,7 @@ export class ListEnhancer {
         moveFrame = null;
         if (!dragState) return;
 
-        this._clearDragIndicators(container);
+        _clearDragIndicators(container);
         dragState.el.classList.add("ft-list-dragging");
 
         const target = document.elementFromPoint(e.clientX, e.clientY);
@@ -483,20 +435,20 @@ export class ListEnhancer {
       if (!dragState) return;
 
       const target = document.elementFromPoint(e.clientX, e.clientY);
-      const action = this._executeDrop(container, dragState.el, target as HTMLElement | null);
+      const action = _executeDrop(container, dragState.el, target as HTMLElement | null);
 
-      this._clearDragIndicators(container);
+      _clearDragIndicators(container);
       dragState = null;
 
       if (action === "heading") {
         // Heading drop was handled — schedule re-enhance after file changes propagate
-        setTimeout(() => this._enhance(), 800);
+        setTimeout(() => _enhance(), 800);
       }
     });
   }
 
   /** Clear all drag visual indicators */
-  _clearDragIndicators(container: HTMLElement): void {
+  function _clearDragIndicators(container: HTMLElement): void {
     container.querySelectorAll(
       ".ft-list-dragging, .ft-list-drop-before, .ft-list-drop-after, .ft-list-heading-active",
     ).forEach((el) => {
@@ -507,29 +459,29 @@ export class ListEnhancer {
   }
 
   /** Execute a drop action. Returns "reorder" | "heading" | "none" */
-  _executeDrop(container: HTMLElement, sourceEl: HTMLElement, targetEl: HTMLElement | null): string {
-    if (!targetEl || !this._currentFile) return "none";
+  function _executeDrop(container: HTMLElement, sourceEl: HTMLElement, targetEl: HTMLElement | null): string {
+    if (!targetEl || !_currentFile) return "none";
 
     // ── Drop on heading → change date/status ──
     const heading = targetEl.closest("h1, h2, h3, h4, h5, h6") as HTMLElement | null;
     if (heading && heading.dataset.ftDropZone) {
-      const action = this._parseHeadingAction(heading.textContent || "");
+      const action = _parseHeadingAction(heading.textContent || "");
       if (action.type === "none") return "none";
 
-      const lineNum = this._taskLineMap.get(sourceEl);
+      const lineNum = _taskLineMap.get(sourceEl);
       if (lineNum == null) return "none";
 
-      void this._applyHeadingDrop(lineNum, action);
+      void _applyHeadingDrop(lineNum, action);
       return "heading";
     }
 
     // ── Drop on another task row → reorder ──
     const targetRow = targetEl.closest(".ft-list-enhanced") as HTMLElement | null;
     if (targetRow && targetRow !== sourceEl) {
-      const srcLine = this._taskLineMap.get(sourceEl);
-      const tgtLine = this._taskLineMap.get(targetRow);
+      const srcLine = _taskLineMap.get(sourceEl);
+      const tgtLine = _taskLineMap.get(targetRow);
       if (srcLine != null && tgtLine != null) {
-        void this._reorderTasks(srcLine, tgtLine, targetRow.classList.contains("ft-list-drop-after"));
+        void _reorderTasks(srcLine, tgtLine, targetRow.classList.contains("ft-list-drop-after"));
       }
       return "reorder";
     }
@@ -538,10 +490,10 @@ export class ListEnhancer {
   }
 
   /** Apply a heading drop: change the task's date or add @soon */
-  private async _applyHeadingDrop(lineNum: number, action: HeadingAction): Promise<void> {
-    if (!this._currentFile) return;
+  async function _applyHeadingDrop(lineNum: number, action: HeadingAction): Promise<void> {
+    if (!_currentFile) return;
     try {
-      const content = await this.app.vault.read(this._currentFile);
+      const content = await app.vault.read(_currentFile);
       const lines = content.split("\n");
       let line = lines[lineNum];
       if (!line) return;
@@ -553,8 +505,8 @@ export class ListEnhancer {
           line += " @soon";
         }
         lines[lineNum] = line;
-        await this.app.vault.modify(this._currentFile, lines.join("\n"));
-        this.plugin.notify?.("\u25CC Task sent to Soon");
+        await app.vault.modify(_currentFile, lines.join("\n"));
+        plugin.notify?.("\u25CC Task sent to Soon");
       } else if (action.type === "date" && action.date) {
         // Set or update date
         const re = /[@⏳📅]\s*\d{4}-\d{2}-\d{2}/u;
@@ -564,8 +516,8 @@ export class ListEnhancer {
         // Remove @soon if present
         line = line.replace(/@soon\b\s*/gi, "");
         lines[lineNum] = line;
-        await this.app.vault.modify(this._currentFile, lines.join("\n"));
-        this.plugin.notify?.("\u{1F4C5} Task date: " + action.date);
+        await app.vault.modify(_currentFile, lines.join("\n"));
+        plugin.notify?.("\u{1F4C5} Task date: " + action.date);
       }
     } catch (e) {
       console.warn("Flowtime ListEnhancer: drop error:", (e as Error).message);
@@ -573,19 +525,104 @@ export class ListEnhancer {
   }
 
   /** Reorder two tasks by swapping their lines */
-  private async _reorderTasks(srcLine: number, tgtLine: number, after: boolean): Promise<void> {
-    if (!this._currentFile) return;
+  async function _reorderTasks(srcLine: number, tgtLine: number, after: boolean): Promise<void> {
+    if (!_currentFile) return;
     try {
-      const content = await this.app.vault.read(this._currentFile);
+      const content = await app.vault.read(_currentFile);
       const lines = content.split("\n");
       const src = lines[srcLine];
       const destIdx = after ? tgtLine + 1 : tgtLine;
       lines.splice(srcLine, 1);
       lines.splice(destIdx, 0, src);
-      await this.app.vault.modify(this._currentFile, lines.join("\n"));
-      this.plugin.notify?.("\u283F Task reordered");
+      await app.vault.modify(_currentFile, lines.join("\n"));
+      plugin.notify?.("\u283F Task reordered");
     } catch (e) {
       console.warn("Flowtime ListEnhancer: reorder error:", (e as Error).message);
     }
+  }
+
+  /* ─── Public API ─── */
+
+  async function check(): Promise<void> {
+    const file = app.workspace.getActiveFile();
+    if (!file) return deactivate();
+
+    if (_currentPath === file.path && _active) return;
+
+    const cache = app.metadataCache.getCache(file.path);
+    const fm = cache?.frontmatter as Record<string, unknown> | undefined;
+    const isListNote = fm?.type === "flowtime-list";
+
+    if (isListNote) {
+      await activate(file);
+    } else if (_active) {
+      deactivate();
+    }
+  }
+
+  async function activate(file: TFile): Promise<void> {
+    deactivate();
+    _active = true;
+    _currentPath = file.path;
+    _currentFile = file;
+    setTimeout(() => _enhance(), 500);
+  }
+
+  function deactivate(): void {
+    if (_dispose) {
+      _dispose();
+      _dispose = null;
+    }
+    _cleanupDOM();
+    _active = false;
+    _currentPath = null;
+    _currentFile = null;
+  }
+
+  return {
+    check,
+    activate,
+    deactivate,
+    _parseNote,
+    _parseHeadingAction,
+    _enhance,
+    _enhanceTaskLine,
+    _enhanceHeadingDropZones,
+    _cleanupDOM,
+    _setupDragDrop,
+    _clearDragIndicators,
+    _executeDrop,
+  };
+}
+
+// Backward-compatible class wrapper
+export class ListEnhancer {
+  declare check: ReturnType<typeof createListEnhancer>['check'];
+  declare activate: ReturnType<typeof createListEnhancer>['activate'];
+  declare deactivate: ReturnType<typeof createListEnhancer>['deactivate'];
+  declare _parseNote: ReturnType<typeof createListEnhancer>['_parseNote'];
+  declare _parseHeadingAction: ReturnType<typeof createListEnhancer>['_parseHeadingAction'];
+  declare _enhance: ReturnType<typeof createListEnhancer>['_enhance'];
+  declare _enhanceTaskLine: ReturnType<typeof createListEnhancer>['_enhanceTaskLine'];
+  declare _enhanceHeadingDropZones: ReturnType<typeof createListEnhancer>['_enhanceHeadingDropZones'];
+  declare _cleanupDOM: ReturnType<typeof createListEnhancer>['_cleanupDOM'];
+  declare _setupDragDrop: ReturnType<typeof createListEnhancer>['_setupDragDrop'];
+  declare _clearDragIndicators: ReturnType<typeof createListEnhancer>['_clearDragIndicators'];
+  declare _executeDrop: ReturnType<typeof createListEnhancer>['_executeDrop'];
+
+  constructor(app: App, plugin: FlowtimePluginRef) {
+    const impl = createListEnhancer(app, plugin);
+    this.check = impl.check;
+    this.activate = impl.activate;
+    this.deactivate = impl.deactivate;
+    this._parseNote = impl._parseNote;
+    this._parseHeadingAction = impl._parseHeadingAction;
+    this._enhance = impl._enhance;
+    this._enhanceTaskLine = impl._enhanceTaskLine;
+    this._enhanceHeadingDropZones = impl._enhanceHeadingDropZones;
+    this._cleanupDOM = impl._cleanupDOM;
+    this._setupDragDrop = impl._setupDragDrop;
+    this._clearDragIndicators = impl._clearDragIndicators;
+    this._executeDrop = impl._executeDrop;
   }
 }

@@ -16,14 +16,21 @@ import { FlowtimeRenderer } from "./renderer";
 import { FlowtimeSettingsTab, DEFAULT_SETTINGS } from "./settings";
 import { ProcessInboxModal } from "./inbox-processor";
 import { ProjectEngine } from "./project-engine";
-import { TemplateEngine } from "./template-engine";
+import {
+  insertDaily,
+  insertWeekly,
+  insertWeekplan,
+  createDashboard,
+  createProject,
+  createToday,
+} from "./template-engine";
 import { QuickEntryModal } from "./quick-entry";
 import { runOnboard } from "./onboard";
 import { StatusTimer } from "./status-timer";
 import { SessionStore } from "./session-store";
 import { TaskCache } from "./cache";
 import { RoutineEngine } from "./routine-engine";
-import { ExtractNoteHandler } from "./extract-note";
+import { extractNote } from "./extract-note";
 import { ListEnhancer } from "./list-enhancer";
 import { WeekplanRenderer } from "./weekplan-renderer";
 import { AddTaskSuggest, AtCompletionsSuggest } from "./suggests/at-completions";
@@ -47,7 +54,6 @@ export default class FlowtimePlugin extends Plugin {
 	settings!: FlowtimeSettings;
 	notify!: (message: string, isError?: boolean) => void;
 	projectEngine!: ProjectEngine;
-	templateEngine!: TemplateEngine;
 	sessionStore!: SessionStore;
 	taskCache!: TaskCache;
 	taskIndex!: TaskIndex;
@@ -122,7 +128,6 @@ export default class FlowtimePlugin extends Plugin {
 		}
 
 		this.projectEngine = new ProjectEngine(this.app, this.settings);
-		this.templateEngine = new TemplateEngine(this.app, this);
 		this.sessionStore = new SessionStore(this.app.vault);
 		this.taskCache = new TaskCache();
 		this.taskIndex = new TaskIndex();
@@ -328,7 +333,7 @@ export default class FlowtimePlugin extends Plugin {
 			name: "Extract to new note",
 			hotkeys: [{ modifiers: ["Mod"], key: "G" }],
 			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
-				new ExtractNoteHandler(this.app, editor, view as MarkdownView, this).run();
+				extractNote(this.app, editor, view as MarkdownView, this);
 			},
 		});
 
@@ -555,7 +560,7 @@ export default class FlowtimePlugin extends Plugin {
 			id: "insert-daily-dashboard",
 			name: "Insert daily dashboard",
 			editorCallback: (_editor: Editor) => {
-				this.templateEngine.insertDaily();
+				insertDaily(this.app, this.settings);
 			},
 		});
 
@@ -563,7 +568,7 @@ export default class FlowtimePlugin extends Plugin {
 			id: "insert-weekly-dashboard",
 			name: "Insert weekly dashboard",
 			editorCallback: (_editor: Editor) => {
-				this.templateEngine.insertWeekly();
+				insertWeekly(this.app, this.settings);
 			},
 		});
 
@@ -571,7 +576,7 @@ export default class FlowtimePlugin extends Plugin {
 			id: "insert-weekplan",
 			name: "Insert weekplan",
 			editorCallback: (_editor: Editor) => {
-				this.templateEngine.insertWeekplan();
+				insertWeekplan(this.app);
 			},
 		});
 
@@ -589,7 +594,7 @@ export default class FlowtimePlugin extends Plugin {
 			name: "Create Daily Dashboard",
 			callback: async () => {
 				try {
-					const result = await this.templateEngine.createDashboard("daily");
+					const result = await createDashboard(this.app, "daily");
 					if (result) {
 						const file = this.app.vault.getAbstractFileByPath(result);
 						if (file)
@@ -612,7 +617,7 @@ export default class FlowtimePlugin extends Plugin {
 			name: "Create Weekly Dashboard",
 			callback: async () => {
 				try {
-					const result = await this.templateEngine.createDashboard("weekly");
+					const result = await createDashboard(this.app, "weekly");
 					if (result) {
 						const file = this.app.vault.getAbstractFileByPath(result);
 						if (file)
@@ -747,7 +752,9 @@ export default class FlowtimePlugin extends Plugin {
 						opts: { scaffoldTasks: boolean; scaffoldWiki: boolean },
 					) => {
 						try {
-							const result = await this.templateEngine.createProject(
+							const result = await createProject(
+								this.app,
+								this.settings,
 								name,
 								opts,
 							);
@@ -1348,7 +1355,7 @@ Process them with **Flowtime: Process Inbox**.
 		try {
 			const path = this.settings.todayNotePath || "Today.md";
 			// Ensure it exists
-			await this.templateEngine.createToday(path);
+			await createToday(this.app, path);
 			const file = this.app.vault.getAbstractFileByPath(path);
 			if (file) {
 				await this.app.workspace.getLeaf().openFile(file as TFile);

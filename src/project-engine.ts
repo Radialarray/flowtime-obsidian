@@ -1,122 +1,130 @@
 import type { App, TFile } from "obsidian";
 import type { FlowtimeSettings, ProjectResult, FrontmatterResult } from "./types";
 
-export class ProjectEngine {
-  private app: App;
-  private settings: FlowtimeSettings;
-  private cache: Map<string, ProjectResult> = new Map();
+// ═══════════════════════════════════════════════════════════════════
+// Module-level helpers (pure functions)
+// ═══════════════════════════════════════════════════════════════════
 
-  constructor(app: App, settings: FlowtimeSettings) {
-    this.app = app;
-    this.settings = settings;
+function _parentDir(filePath: string): string {
+  const idx = filePath.lastIndexOf("/");
+  if (idx <= 0) return "";
+  return filePath.substring(0, idx + 1);
+}
+
+function _parseFrontmatter(content: string, settings: FlowtimeSettings): FrontmatterResult {
+  const match = content.match(/^---\n([\s\S]*?)\n---/);
+  if (!match) return { found: false, name: null };
+
+  const yamlLines = match[1].split("\n");
+  const key = settings.projectFrontmatterKey;
+  const value = settings.projectFrontmatterValue;
+  const nameKey = settings.projectNameKey;
+
+  let isProject = false;
+  let name: string | null = null;
+
+  for (const line of yamlLines) {
+    const kv = line.match(/^(\w[\w\s-]*?):\s+(.+)$/);
+    if (!kv) continue;
+    const k = kv[1].trim();
+    const v = kv[2].trim();
+
+    if (k === key && v === value) isProject = true;
+    if (k === nameKey) name = v;
+    if (!name && (k === "title" || k === "alias")) name = v;
   }
 
-  async resolve(filePath: string): Promise<ProjectResult> {
-    if (this.cache.has(filePath)) return this.cache.get(filePath)!;
+  return { found: isProject, name };
+}
 
-    const result = await this._resolveFromFrontmatter(filePath);
+async function _resolveFromFrontmatter(
+  app: App,
+  settings: FlowtimeSettings,
+  filePath: string,
+): Promise<ProjectResult | null> {
+  let dir = _parentDir(filePath);
+  const rootSetting = settings.projectsRoot || "";
+  const rootPath = rootSetting
+    ? rootSetting.endsWith("/") ? rootSetting : rootSetting + "/"
+    : "";
+
+  while (dir) {
+    if (rootPath && !dir.startsWith(rootPath)) break;
+
+    const dirName = dir.replace(/\/$/, "").split("/").pop();
+    if (!dirName) break;
+
+    const candidatePath = dir + dirName + ".md";
+    const afile = app.vault.getAbstractFileByPath(candidatePath);
+
+    if (afile) {
+      const file = afile as TFile;
+      const content = await app.vault.read(file);
+      const { found, name } = _parseFrontmatter(content, settings);
+      if (found) {
+        return {
+          name: name || dirName,
+          path: candidatePath,
+          source: "frontmatter",
+        };
+      }
+    }
+
+    const trimmed = dir.replace(/\/$/, "");
+    const idx = trimmed.lastIndexOf("/");
+    if (idx <= 0) break;
+    dir = trimmed.substring(0, idx + 1);
+  }
+
+  return null;
+}
+
+async function _resolveFromFolder(
+  settings: FlowtimeSettings,
+  filePath: string,
+): Promise<ProjectResult> {
+  if (!settings.fallbackToFolderName) {
+    return { name: null, path: null, source: null };
+  }
+  const dir = _parentDir(filePath);
+  const dirName = dir.replace(/\/$/, "").split("/").pop();
+  return { name: dirName || null, path: null, source: "folder" };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Factory — preferred way to create a project engine
+// ═══════════════════════════════════════════════════════════════════
+
+export function createProjectEngine(app: App, settings: FlowtimeSettings) {
+  const cache = new Map<string, ProjectResult>();
+
+  async function resolve(filePath: string): Promise<ProjectResult> {
+    if (cache.has(filePath)) return cache.get(filePath)!;
+
+    const result = await _resolveFromFrontmatter(app, settings, filePath);
     if (result) {
-      this.cache.set(filePath, result);
+      cache.set(filePath, result);
       return result;
     }
 
-    const fallback = await this._resolveFromFolder(filePath);
-    this.cache.set(filePath, fallback);
+    const fallback = await _resolveFromFolder(settings, filePath);
+    cache.set(filePath, fallback);
     return fallback;
   }
 
-  private _parentDir(filePath: string): string {
-    const idx = filePath.lastIndexOf("/");
-    if (idx <= 0) return "";
-    return filePath.substring(0, idx + 1);
-  }
-
-  private async _resolveFromFrontmatter(filePath: string): Promise<ProjectResult | null> {
-    let dir = this._parentDir(filePath);
-    const rootSetting = this.settings.projectsRoot || "";
-    const rootPath = rootSetting
-      ? rootSetting.endsWith("/") ? rootSetting : rootSetting + "/"
-      : "";
-
-    while (dir) {
-      if (rootPath && !dir.startsWith(rootPath)) break;
-
-      const dirName = dir.replace(/\/$/, "").split("/").pop();
-      if (!dirName) break;
-
-      const candidatePath = dir + dirName + ".md";
-      const afile = this.app.vault.getAbstractFileByPath(candidatePath);
-
-      if (afile) {
-        const file = afile as TFile;
-        const content = await this.app.vault.read(file);
-        const { found, name } = this._parseFrontmatter(content);
-        if (found) {
-          return {
-            name: name || dirName,
-            path: candidatePath,
-            source: "frontmatter",
-          };
-        }
-      }
-
-      const trimmed = dir.replace(/\/$/, "");
-      const idx = trimmed.lastIndexOf("/");
-      if (idx <= 0) break;
-      dir = trimmed.substring(0, idx + 1);
-    }
-
-    return null;
-  }
-
-  private _parseFrontmatter(content: string): FrontmatterResult {
-    const match = content.match(/^---\n([\s\S]*?)\n---/);
-    if (!match) return { found: false, name: null };
-
-    const yamlLines = match[1].split("\n");
-    const key = this.settings.projectFrontmatterKey;
-    const value = this.settings.projectFrontmatterValue;
-    const nameKey = this.settings.projectNameKey;
-
-    let isProject = false;
-    let name: string | null = null;
-
-    for (const line of yamlLines) {
-      const kv = line.match(/^(\w[\w\s-]*?):\s+(.+)$/);
-      if (!kv) continue;
-      const k = kv[1].trim();
-      const v = kv[2].trim();
-
-      if (k === key && v === value) isProject = true;
-      if (k === nameKey) name = v;
-      if (!name && (k === "title" || k === "alias")) name = v;
-    }
-
-    return { found: isProject, name };
-  }
-
-  private async _resolveFromFolder(filePath: string): Promise<ProjectResult> {
-    if (!this.settings.fallbackToFolderName) {
-      return { name: null, path: null, source: null };
-    }
-    const dir = this._parentDir(filePath);
-    const dirName = dir.replace(/\/$/, "").split("/").pop();
-    return { name: dirName || null, path: null, source: "folder" };
-  }
-
-  resolveFromTag(taskText: string, tagPrefix: string): string | null {
+  function resolveFromTag(taskText: string, tagPrefix: string): string | null {
     const escaped = tagPrefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const regex = new RegExp(`#${escaped}(\\S+)`, "i");
     const match = taskText.match(regex);
     return match ? match[1] : null;
   }
 
-  async getAllProjects(): Promise<Array<{ name: string; path: string }>> {
+  async function getAllProjects(): Promise<Array<{ name: string; path: string }>> {
     const projects = new Map<string, string>();
-    const files = this.app.vault.getMarkdownFiles();
-    const key = this.settings.projectFrontmatterKey;
-    const value = this.settings.projectFrontmatterValue;
-    const nameKey = this.settings.projectNameKey;
+    const files = app.vault.getMarkdownFiles();
+    const key = settings.projectFrontmatterKey;
+    const value = settings.projectFrontmatterValue;
+    const nameKey = settings.projectNameKey;
 
     for (const file of files) {
       const parts = file.path.split("/");
@@ -124,7 +132,7 @@ export class ProjectEngine {
       if (!folder || file.basename !== folder) continue;
 
       try {
-        const cache = this.app.metadataCache.getCache(file.path);
+        const cache = app.metadataCache.getCache(file.path);
         const fm = cache?.frontmatter as Record<string, unknown> | undefined;
         if (fm && fm[key] === value) {
           const name = (fm[nameKey] || fm.title || fm.alias || folder) as string;
@@ -140,18 +148,52 @@ export class ProjectEngine {
       .map(([name, path]) => ({ name, path }));
   }
 
-  invalidate(filePath: string): void {
-    this.cache.delete(filePath);
+  function invalidate(filePath: string): void {
+    cache.delete(filePath);
     if (filePath.endsWith("/")) {
-      for (const key of this.cache.keys()) {
+      for (const key of cache.keys()) {
         if (key.startsWith(filePath)) {
-          this.cache.delete(key);
+          cache.delete(key);
         }
       }
     }
   }
 
+  function clear(): void {
+    cache.clear();
+  }
+
+  return { resolve, getAllProjects, invalidate, clear, resolveFromTag };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Backward-compatible class — delegates to factory under the hood
+// ═══════════════════════════════════════════════════════════════════
+
+export class ProjectEngine {
+  private _impl: ReturnType<typeof createProjectEngine>;
+
+  constructor(app: App, settings: FlowtimeSettings) {
+    this._impl = createProjectEngine(app, settings);
+  }
+
+  async resolve(filePath: string): Promise<ProjectResult> {
+    return this._impl.resolve(filePath);
+  }
+
+  resolveFromTag(taskText: string, tagPrefix: string): string | null {
+    return this._impl.resolveFromTag(taskText, tagPrefix);
+  }
+
+  async getAllProjects(): Promise<Array<{ name: string; path: string }>> {
+    return this._impl.getAllProjects();
+  }
+
+  invalidate(filePath: string): void {
+    return this._impl.invalidate(filePath);
+  }
+
   clear(): void {
-    this.cache.clear();
+    return this._impl.clear();
   }
 }

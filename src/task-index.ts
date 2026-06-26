@@ -26,82 +26,94 @@ interface TaskQuery {
   includeCompleted?: boolean;
 }
 
-export class TaskIndex {
-  /** filePath → parsed tasks */
-  private _byFile: Map<string, ParsedTask[]> = new Map();
-  /** date → file paths */
-  private _byDate: Map<string, Set<string>> = new Map();
-  /** Total indexed tasks count */
-  private _totalTasks: number = 0;
-  /** Whether the initial scan has completed */
-  private _initialized: boolean = false;
+/* ─── Factory function (primary API) ─── */
 
-  get initialized(): boolean {
-    return this._initialized;
+export function createTaskIndex() {
+  const _byFile = new Map<string, ParsedTask[]>();
+  const _byDate = new Map<string, Set<string>>();
+  let _totalTasks = 0;
+  let _initialized = false;
+
+  function _isInScope(filePath: string, projectsRoot: string): boolean {
+    if (filePath.startsWith(".obsidian") || filePath.startsWith(".git")) return false;
+    if (!projectsRoot) return true;
+    const normalized = projectsRoot.endsWith("/") ? projectsRoot : projectsRoot + "/";
+    return filePath.startsWith(normalized);
   }
 
-  get totalTasks(): number {
-    return this._totalTasks;
+  async function _indexFile(file: TFile, vault: Vault): Promise<void> {
+    try {
+      const content = await vault.read(file);
+      const lines = content.split("\n");
+      const tasks: ParsedTask[] = [];
+
+      for (let i = 0; i < lines.length; i++) {
+        const parsed = parseTaskLine(lines[i], file, i);
+        if (parsed) {
+          tasks.push(parsed);
+          if (parsed.taskDate) {
+            if (!_byDate.has(parsed.taskDate)) {
+              _byDate.set(parsed.taskDate, new Set());
+            }
+            _byDate.get(parsed.taskDate)!.add(file.path);
+          }
+          _totalTasks++;
+        }
+      }
+
+      _byFile.set(file.path, tasks);
+    } catch (_) {
+      // File may have been deleted between scan and read
+    }
   }
 
   /* ─── Full Scan ─── */
 
-  /**
-   * Perform the initial full vault scan.
-   * Should be called once on plugin startup.
-   */
-  async scanAll(files: TFile[], vault: Vault, projectsRoot: string): Promise<void> {
-    this.clear();
+  async function scanAll(files: TFile[], vault: Vault, projectsRoot: string): Promise<void> {
+    clear();
     const root = projectsRoot || "";
 
     for (const file of files) {
-      if (!this._isInScope(file.path, root)) continue;
-      await this._indexFile(file, vault);
+      if (!_isInScope(file.path, root)) continue;
+      await _indexFile(file, vault);
     }
 
-    this._initialized = true;
+    _initialized = true;
   }
 
   /* ─── Incremental Updates ─── */
 
-  /** Re-index a single file after modification */
-  async indexFile(file: TFile, vault: Vault, projectsRoot: string): Promise<void> {
-    if (!this._isInScope(file.path, projectsRoot)) return;
-    this.removeFile(file.path);
-    await this._indexFile(file, vault);
+  async function indexFile(file: TFile, vault: Vault, projectsRoot: string): Promise<void> {
+    if (!_isInScope(file.path, projectsRoot)) return;
+    removeFile(file.path);
+    await _indexFile(file, vault);
   }
 
-  /** Remove a file from the index */
-  removeFile(filePath: string): void {
-    const existing = this._byFile.get(filePath);
+  function removeFile(filePath: string): void {
+    const existing = _byFile.get(filePath);
     if (existing) {
       for (const task of existing) {
         if (task.taskDate) {
-          const set = this._byDate.get(task.taskDate);
+          const set = _byDate.get(task.taskDate);
           if (set) set.delete(filePath);
         }
-        this._totalTasks--;
+        _totalTasks--;
       }
-      this._byFile.delete(filePath);
+      _byFile.delete(filePath);
     }
   }
 
-  /** Clear all index data */
-  clear(): void {
-    this._byFile.clear();
-    this._byDate.clear();
-    this._totalTasks = 0;
-    this._initialized = false;
+  function clear(): void {
+    _byFile.clear();
+    _byDate.clear();
+    _totalTasks = 0;
+    _initialized = false;
   }
 
   /* ─── Query ─── */
 
-  /**
-   * Get tasks matching the given criteria.
-   * All criteria are AND-ed together.
-   */
-  getTasks(query: TaskQuery = {}): ParsedTask[] {
-    if (!this._initialized) return [];
+  function getTasks(query: TaskQuery = {}): ParsedTask[] {
+    if (!_initialized) return [];
 
     // Fast path: query by date range
     if (query.date || query.dateFrom || query.dateTo) {
@@ -109,7 +121,7 @@ export class TaskIndex {
       const to = query.date || query.dateTo || "9999-12-31";
 
       const fileSet = new Set<string>();
-      for (const [dateStr, files] of this._byDate) {
+      for (const [dateStr, files] of _byDate) {
         if (dateStr >= from && dateStr <= to) {
           for (const fp of files) fileSet.add(fp);
         }
@@ -117,7 +129,7 @@ export class TaskIndex {
 
       const result: ParsedTask[] = [];
       for (const fp of fileSet) {
-        const tasks = this._byFile.get(fp);
+        const tasks = _byFile.get(fp);
         if (!tasks) continue;
         for (const t of tasks) {
           if (!query.includeCompleted && (t.status === "x" || t.status === "X")) continue;
@@ -133,7 +145,7 @@ export class TaskIndex {
 
     // Full scan fallback: iterate all files
     const result: ParsedTask[] = [];
-    for (const [, tasks] of this._byFile) {
+    for (const [, tasks] of _byFile) {
       for (const t of tasks) {
         if (!query.includeCompleted && (t.status === "x" || t.status === "X")) continue;
         if (query.project && t.projectTag !== query.project) continue;
@@ -145,27 +157,19 @@ export class TaskIndex {
     return result;
   }
 
-  /**
-   * Get the total duration minutes for tasks on a specific date.
-   * Used by _computeDailyTotal() in renderer.
-   */
-  getDailyDurationTotal(dateStr: string): number {
-    const tasks = this.getTasks({ date: dateStr, includeCompleted: false });
+  function getDailyDurationTotal(dateStr: string): number {
+    const tasks = getTasks({ date: dateStr, includeCompleted: false });
     return tasks.reduce((sum, t) => sum + (t.durationMinutes || 0), 0);
   }
 
   /* ─── Persistence ─── */
 
-  /**
-   * Save index to disk for fast reload on next startup.
-   * Stores only essential data: filePath → [{ taskDate, durationMinutes, bucket, sprint, projectTag, indent, status }]
-   */
-  async save(adapter: { write(path: string, data: string): Promise<void> }): Promise<void> {
+  async function save(adapter: { write(path: string, data: string): Promise<void> }): Promise<void> {
     const slim: Record<string, Array<{
       d: string; m: number; b: string | null; s: string | null; p: string | null; i: number; st: string;
     }>> = {};
 
-    for (const [fp, tasks] of this._byFile) {
+    for (const [fp, tasks] of _byFile) {
       slim[fp] = tasks.map((t) => ({
         d: t.taskDate,
         m: t.durationMinutes,
@@ -183,11 +187,7 @@ export class TaskIndex {
     );
   }
 
-  /**
-   * Load index from disk.
-   * Returns true if loaded successfully, false if file missing or corrupted.
-   */
-  async load(adapter: { read(path: string): Promise<string>; exists(path: string): Promise<boolean> }): Promise<boolean> {
+  async function load(adapter: { read(path: string): Promise<string>; exists(path: string): Promise<boolean> }): Promise<boolean> {
     const path = ".obsidian/plugins/flowtime/task-index.json";
     try {
       if (!(await adapter.exists(path))) return false;
@@ -216,58 +216,86 @@ export class TaskIndex {
           sprint: e.s,
           sortIndex: null,
         }));
-        this._byFile.set(fp, tasks);
-        this._totalTasks += tasks.length;
+        _byFile.set(fp, tasks);
+        _totalTasks += tasks.length;
 
         for (const t of tasks) {
           if (t.taskDate) {
-            if (!this._byDate.has(t.taskDate)) {
-              this._byDate.set(t.taskDate, new Set());
+            if (!_byDate.has(t.taskDate)) {
+              _byDate.set(t.taskDate, new Set());
             }
-            this._byDate.get(t.taskDate)!.add(fp);
+            _byDate.get(t.taskDate)!.add(fp);
           }
         }
       }
 
-      this._initialized = true;
+      _initialized = true;
       return true;
     } catch (_) {
       return false;
     }
   }
 
-  /* ─── Helpers ─── */
+  return {
+    get initialized() { return _initialized; },
+    get totalTasks() { return _totalTasks; },
+    scanAll,
+    indexFile,
+    removeFile,
+    clear,
+    getTasks,
+    getDailyDurationTotal,
+    save,
+    load,
+  };
+}
 
-  private _isInScope(filePath: string, projectsRoot: string): boolean {
-    if (filePath.startsWith(".obsidian") || filePath.startsWith(".git")) return false;
-    if (!projectsRoot) return true;
-    const normalized = projectsRoot.endsWith("/") ? projectsRoot : projectsRoot + "/";
-    return filePath.startsWith(normalized);
+/* ─── Backward-compatible class wrapper ─── */
+
+export class TaskIndex {
+  private _impl: ReturnType<typeof createTaskIndex>;
+
+  constructor() {
+    this._impl = createTaskIndex();
   }
 
-  private async _indexFile(file: TFile, vault: Vault): Promise<void> {
-    try {
-      const content = await vault.read(file);
-      const lines = content.split("\n");
-      const tasks: ParsedTask[] = [];
+  get initialized(): boolean {
+    return this._impl.initialized;
+  }
 
-      for (let i = 0; i < lines.length; i++) {
-        const parsed = parseTaskLine(lines[i], file, i);
-        if (parsed) {
-          tasks.push(parsed);
-          if (parsed.taskDate) {
-            if (!this._byDate.has(parsed.taskDate)) {
-              this._byDate.set(parsed.taskDate, new Set());
-            }
-            this._byDate.get(parsed.taskDate)!.add(file.path);
-          }
-          this._totalTasks++;
-        }
-      }
+  get totalTasks(): number {
+    return this._impl.totalTasks;
+  }
 
-      this._byFile.set(file.path, tasks);
-    } catch (_) {
-      // File may have been deleted between scan and read
-    }
+  async scanAll(files: TFile[], vault: Vault, projectsRoot: string): Promise<void> {
+    return this._impl.scanAll(files, vault, projectsRoot);
+  }
+
+  async indexFile(file: TFile, vault: Vault, projectsRoot: string): Promise<void> {
+    return this._impl.indexFile(file, vault, projectsRoot);
+  }
+
+  removeFile(filePath: string): void {
+    return this._impl.removeFile(filePath);
+  }
+
+  clear(): void {
+    return this._impl.clear();
+  }
+
+  getTasks(query?: TaskQuery): ParsedTask[] {
+    return this._impl.getTasks(query);
+  }
+
+  getDailyDurationTotal(dateStr: string): number {
+    return this._impl.getDailyDurationTotal(dateStr);
+  }
+
+  save(adapter: { write(path: string, data: string): Promise<void> }): Promise<void> {
+    return this._impl.save(adapter);
+  }
+
+  load(adapter: { read(path: string): Promise<string>; exists(path: string): Promise<boolean> }): Promise<boolean> {
+    return this._impl.load(adapter);
   }
 }

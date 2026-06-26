@@ -41,44 +41,38 @@ interface WeeklyTotal {
   total_minutes: number;
 }
 
-export class SessionStore {
-  private vault: Vault;
-  private basePath: string;
+export function createSessionStore(vault: Vault) {
+  const basePath = vault.configDir + "/plugins/flowtime/sessions";
 
-  constructor(vault: Vault) {
-    this.vault = vault;
-    this.basePath = vault.configDir + "/plugins/flowtime/sessions";
-  }
-
-  private async _ensureDir(): Promise<void> {
+  async function _ensureDir(): Promise<void> {
     try {
-      const exists = await this.vault.adapter.exists(this.basePath);
+      const exists = await vault.adapter.exists(basePath);
       if (exists) {
-        const stat = await this.vault.adapter.stat(this.basePath);
+        const stat = await vault.adapter.stat(basePath);
         if (stat && stat.type === "file") {
-          await this.vault.adapter.remove(this.basePath);
+          await vault.adapter.remove(basePath);
         }
         return;
       }
     } catch (_) { /* fine */ }
     try {
-      await this.vault.createFolder(this.basePath);
+      await vault.createFolder(basePath);
     } catch (_) { /* fine */ }
   }
 
-  private _filePath(date: string): string {
-    return `${this.basePath}/${date}.ndjson`;
+  function _filePath(date: string): string {
+    return `${basePath}/${date}.ndjson`;
   }
 
-  private async _append(path: string, line: string): Promise<void> {
+  async function _append(path: string, line: string): Promise<void> {
     try {
-      await this.vault.adapter.append(path, line);
+      await vault.adapter.append(path, line);
     } catch (_) {
-      await this.vault.adapter.write(path, line);
+      await vault.adapter.write(path, line);
     }
   }
 
-  private _validateRecord(record: Record<string, unknown>): string | null {
+  function _validateRecord(record: Record<string, unknown>): string | null {
     if (!record || typeof record !== "object") return "Record must be an object";
     if (!record.type || !["session", "completion"].includes(record.type as string))
       return "Record must have type 'session' or 'completion'";
@@ -97,7 +91,7 @@ export class SessionStore {
     return null;
   }
 
-  async writeSession(opts: {
+  async function writeSession(opts: {
     startTime: string;
     endTime: string;
     durationMinutes: number;
@@ -105,7 +99,7 @@ export class SessionStore {
     taskText: string;
     notes: string;
   }): Promise<void> {
-    await this._ensureDir();
+    await _ensureDir();
     const date = opts.startTime
       ? opts.startTime.split("T")[0]
       : new Date().toISOString().split("T")[0];
@@ -119,21 +113,21 @@ export class SessionStore {
       task_text: opts.taskText || "",
       notes: opts.notes || "",
     };
-    const err = this._validateRecord(record as unknown as Record<string, unknown>);
+    const err = _validateRecord(record as unknown as Record<string, unknown>);
     if (err) {
       console.warn("Flowtime: Invalid session record —", err, record);
       return;
     }
-    await this._append(this._filePath(date), JSON.stringify(record) + "\n");
+    await _append(_filePath(date), JSON.stringify(record) + "\n");
   }
 
-  async writeCompletion(opts: {
+  async function writeCompletion(opts: {
     date?: string;
     bucket: string;
     taskText: string;
     completedAt: string;
   }): Promise<void> {
-    await this._ensureDir();
+    await _ensureDir();
     const record: CompletionRecord = {
       type: "completion",
       date: opts.date || new Date().toISOString().split("T")[0],
@@ -141,19 +135,19 @@ export class SessionStore {
       task_text: opts.taskText || "",
       completed_at: opts.completedAt || new Date().toISOString(),
     };
-    const err = this._validateRecord(record as unknown as Record<string, unknown>);
+    const err = _validateRecord(record as unknown as Record<string, unknown>);
     if (err) {
       console.warn("Flowtime: Invalid completion record —", err, record);
       return;
     }
-    await this._append(this._filePath(record.date), JSON.stringify(record) + "\n");
+    await _append(_filePath(record.date), JSON.stringify(record) + "\n");
   }
 
-  async query(opts: QueryOpts = {}): Promise<RecordLike[]> {
-    await this._ensureDir();
+  async function query(opts: QueryOpts = {}): Promise<RecordLike[]> {
+    await _ensureDir();
     const results: RecordLike[] = [];
     try {
-      const listing = await this.vault.adapter.list(this.basePath);
+      const listing = await vault.adapter.list(basePath);
       const files = listing.files.filter((f) => f.endsWith(".ndjson")).sort();
 
       for (const filePath of files) {
@@ -164,7 +158,7 @@ export class SessionStore {
         if (opts.dateFrom && fileDate < opts.dateFrom) continue;
         if (opts.dateTo && fileDate > opts.dateTo) continue;
 
-        const content = await this.vault.adapter.read(filePath);
+        const content = await vault.adapter.read(filePath);
         const lines = content.split("\n").filter((l) => l.trim());
         for (const line of lines) {
           try {
@@ -187,8 +181,8 @@ export class SessionStore {
     return results;
   }
 
-  async getDailyTotals(opts: QueryOpts = {}): Promise<DailyTotal[]> {
-    const sessions = await this.query({ ...opts, types: ["session"] });
+  async function getDailyTotals(opts: QueryOpts = {}): Promise<DailyTotal[]> {
+    const sessions = await query({ ...opts, types: ["session"] });
     const totals: Record<string, number> = {};
     for (const rec of sessions) {
       const s = rec as SessionRecord;
@@ -201,8 +195,8 @@ export class SessionStore {
     });
   }
 
-  async getWeeklyTotals(opts: QueryOpts = {}): Promise<WeeklyTotal[]> {
-    const daily = await this.getDailyTotals(opts);
+  async function getWeeklyTotals(opts: QueryOpts = {}): Promise<WeeklyTotal[]> {
+    const daily = await getDailyTotals(opts);
     const weeks: Record<string, number> = {};
     for (const d of daily) {
       const date = new Date(d.date + "T00:00:00");
@@ -220,5 +214,25 @@ export class SessionStore {
         return { weekStart, bucket, total_minutes };
       })
       .sort((a, b) => b.weekStart.localeCompare(a.weekStart));
+  }
+
+  return { writeSession, writeCompletion, query, getDailyTotals, getWeeklyTotals };
+}
+
+// Backward-compatible class wrapper
+export class SessionStore {
+  declare writeSession: ReturnType<typeof createSessionStore>['writeSession'];
+  declare writeCompletion: ReturnType<typeof createSessionStore>['writeCompletion'];
+  declare query: ReturnType<typeof createSessionStore>['query'];
+  declare getDailyTotals: ReturnType<typeof createSessionStore>['getDailyTotals'];
+  declare getWeeklyTotals: ReturnType<typeof createSessionStore>['getWeeklyTotals'];
+
+  constructor(vault: Vault) {
+    const impl = createSessionStore(vault);
+    this.writeSession = impl.writeSession;
+    this.writeCompletion = impl.writeCompletion;
+    this.query = impl.query;
+    this.getDailyTotals = impl.getDailyTotals;
+    this.getWeeklyTotals = impl.getWeeklyTotals;
   }
 }

@@ -2,6 +2,7 @@ import { Modal } from "obsidian";
 import type { App, TFile } from "obsidian";
 import { parseDate } from "./date-parser";
 import type { FlowtimeSettings } from "./types";
+import { createProject } from "./template-engine";
 
 // ── Plugin reference (avoids circular import) ──
 
@@ -9,12 +10,6 @@ interface FlowtimePluginRef {
   settings: FlowtimeSettings;
   notify: (msg: string, isError?: boolean) => void;
   _ensureInbox: () => Promise<void>;
-  templateEngine: {
-    createProject: (
-      name: string,
-      opts: { scaffoldTasks: boolean; scaffoldWiki: boolean },
-    ) => Promise<{ notePath: string; tasksPath: string; wikiPath: string }>;
-  };
   projectEngine: {
     getAllProjects: () => Promise<Array<{ name: string; path: string }>>;
   };
@@ -829,7 +824,7 @@ export class ProcessInboxModal extends Modal {
         if (!name) name = description;
 
         // Scaffold via template engine
-        const result = await this.plugin.templateEngine.createProject(name, {
+        const result = await createProject(this.app, this.plugin.settings, name, {
           scaffoldTasks: refs.tasksCheck.checked,
           scaffoldWiki: refs.wikiCheck.checked,
         });

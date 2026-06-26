@@ -29,125 +29,127 @@ interface StatusTimerOpts {
   onTimerStop: () => void;
 }
 
-export class StatusTimer {
+export function createStatusTimer(opts: StatusTimerOpts): {
+  start(taskName: string, totalSeconds: number): void;
+  stop(): void;
+  pause(): void;
+  toggle(): void;
+  getState(): TimerState | null;
+  updateDisplay(): void;
   statusBarItem: HTMLElement;
+  currentTimer: TimerData | null;
   settings: FlowtimeSettings;
   notify: (msg: string, isError?: boolean) => void;
   onSessionEnd: (data: SessionData) => Promise<void>;
   onTimerStop: () => void;
-  currentTimer: TimerData | null = null;
-  private _currentTaskName: string = "";
-  private _startTime: Date | null = null;
-  private _sessionRecorded: boolean = false;
+} {
+  const { statusBarItem, settings, notify, onSessionEnd, onTimerStop } = opts;
 
-  constructor(opts: StatusTimerOpts) {
-    this.statusBarItem = opts.statusBarItem;
-    this.settings = opts.settings;
-    this.notify = opts.notify;
-    this.onSessionEnd = opts.onSessionEnd;
-    this.onTimerStop = opts.onTimerStop;
+  let currentTimer: TimerData | null = null;
+  let _currentTaskName: string = "";
+  let _startTime: Date | null = null;
+  let _sessionRecorded: boolean = false;
 
-    this.statusBarItem.addClass("flowtime-status-timer");
-    this.updateDisplay();
-  }
+  statusBarItem.addClass("flowtime-status-timer");
+  updateDisplay();
 
-  start(taskName: string, totalSeconds: number): void {
-    this.stop();
-    this._currentTaskName = taskName;
-    this._startTime = new Date();
-    this._sessionRecorded = false;
+  function start(taskName: string, totalSeconds: number): void {
+    stop();
+    _currentTaskName = taskName;
+    _startTime = new Date();
+    _sessionRecorded = false;
 
-    this.currentTimer = {
+    currentTimer = {
       taskName,
       remaining: totalSeconds,
       total: totalSeconds,
       interval: null,
     };
 
-    this.currentTimer.interval = setInterval(() => {
-      this.currentTimer!.remaining--;
-      this.updateDisplay();
+    currentTimer.interval = setInterval(() => {
+      currentTimer!.remaining--;
+      updateDisplay();
 
-      if (this.currentTimer!.remaining <= 0) {
-        this.stop();
-        this.notify("⏰ Time's up! " + taskName);
+      if (currentTimer!.remaining <= 0) {
+        stop();
+        notify("\u23F0 Time\u2019s up! " + taskName);
       }
     }, 1000);
 
-    this.updateDisplay();
+    updateDisplay();
   }
 
-  stop(): void {
-    if (this.currentTimer?.interval) {
-      clearInterval(this.currentTimer.interval);
+  function stop(): void {
+    if (currentTimer?.interval) {
+      clearInterval(currentTimer.interval);
     }
-    const hadTimer = !!this.currentTimer;
-    if (this.currentTimer && !this._sessionRecorded) {
-      this._sessionRecorded = true;
-      if (this.onSessionEnd && this._startTime) {
+    const hadTimer = !!currentTimer;
+    if (currentTimer && !_sessionRecorded) {
+      _sessionRecorded = true;
+      if (onSessionEnd && _startTime) {
         const now = new Date();
-        this.onSessionEnd({
-          taskText: this._currentTaskName,
-          startTime: this._startTime.toISOString(),
+        onSessionEnd({
+          taskText: _currentTaskName,
+          startTime: _startTime.toISOString(),
           endTime: now.toISOString(),
-          durationMinutes: Math.round((now.getTime() - this._startTime.getTime()) / 60000),
+          durationMinutes: Math.round((now.getTime() - _startTime.getTime()) / 60000),
         });
       }
     }
-    if (hadTimer && this.onTimerStop) {
-      this.onTimerStop();
+    if (hadTimer && onTimerStop) {
+      onTimerStop();
     }
-    this.currentTimer = null;
-    this.updateDisplay();
+    currentTimer = null;
+    updateDisplay();
   }
 
-  pause(): void {
-    if (this.currentTimer?.interval) {
-      clearInterval(this.currentTimer.interval);
-      this.currentTimer.interval = null;
+  function pause(): void {
+    if (currentTimer?.interval) {
+      clearInterval(currentTimer.interval);
+      currentTimer.interval = null;
     }
-    this.updateDisplay();
+    updateDisplay();
   }
 
-  toggle(): void {
-    if (!this.currentTimer) return;
+  function toggle(): void {
+    if (!currentTimer) return;
 
-    if (this.currentTimer.interval) {
-      clearInterval(this.currentTimer.interval);
-      this.currentTimer.interval = null;
-    } else if (this.currentTimer.remaining > 0) {
-      this.currentTimer.interval = setInterval(() => {
-        this.currentTimer!.remaining--;
-        this.updateDisplay();
+    if (currentTimer.interval) {
+      clearInterval(currentTimer.interval);
+      currentTimer.interval = null;
+    } else if (currentTimer.remaining > 0) {
+      currentTimer.interval = setInterval(() => {
+        currentTimer!.remaining--;
+        updateDisplay();
 
-        if (this.currentTimer!.remaining <= 0) {
-          this.stop();
-          this.notify("⏰ Time's up! " + this.currentTimer!.taskName);
+        if (currentTimer!.remaining <= 0) {
+          stop();
+          notify("\u23F0 Time\u2019s up! " + currentTimer!.taskName);
         }
       }, 1000);
     }
 
-    this.updateDisplay();
+    updateDisplay();
   }
 
-  getState(): TimerState | null {
-    if (!this.currentTimer) return null;
+  function getState(): TimerState | null {
+    if (!currentTimer) return null;
     return {
-      taskName: this.currentTimer.taskName,
-      remaining: this.currentTimer.remaining,
-      total: this.currentTimer.total,
-      isRunning: !!this.currentTimer.interval,
+      taskName: currentTimer.taskName,
+      remaining: currentTimer.remaining,
+      total: currentTimer.total,
+      isRunning: !!currentTimer.interval,
     };
   }
 
-  updateDisplay(): void {
-    if (!this.settings.statusBarTimer) {
-      this.statusBarItem.setText("");
+  function updateDisplay(): void {
+    if (!settings.statusBarTimer) {
+      statusBarItem.setText("");
       return;
     }
 
-    if (!this.currentTimer) {
-      this.statusBarItem.setText("⏱ --");
+    if (!currentTimer) {
+      statusBarItem.setText("\u23F1 --");
       return;
     }
 
@@ -161,12 +163,59 @@ export class StatusTimer {
       return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
     };
 
-    const icon = this.currentTimer.interval ? "⏸" : "▶";
+    const icon = currentTimer.interval ? "\u23F8" : "\u25B6";
     const name =
-      this.currentTimer.taskName.length > 30
-        ? this.currentTimer.taskName.slice(0, 27) + "\u2026"
-        : this.currentTimer.taskName;
+      currentTimer.taskName.length > 30
+        ? currentTimer.taskName.slice(0, 27) + "\u2026"
+        : currentTimer.taskName;
 
-    this.statusBarItem.setText(`⏱ ${fmt(this.currentTimer.remaining)} \u2014 ${name}  ${icon}`);
+    statusBarItem.setText(`\u23F1 ${fmt(currentTimer.remaining)} \u2014 ${name}  ${icon}`);
+  }
+
+  return {
+    start,
+    stop,
+    pause,
+    toggle,
+    getState,
+    updateDisplay,
+    statusBarItem,
+    currentTimer,
+    settings,
+    notify,
+    onSessionEnd,
+    onTimerStop,
+  };
+}
+
+// Backward-compatible class wrapper
+export class StatusTimer {
+  declare start: ReturnType<typeof createStatusTimer>['start'];
+  declare stop: ReturnType<typeof createStatusTimer>['stop'];
+  declare pause: ReturnType<typeof createStatusTimer>['pause'];
+  declare toggle: ReturnType<typeof createStatusTimer>['toggle'];
+  declare getState: ReturnType<typeof createStatusTimer>['getState'];
+  declare updateDisplay: ReturnType<typeof createStatusTimer>['updateDisplay'];
+  declare statusBarItem: ReturnType<typeof createStatusTimer>['statusBarItem'];
+  declare currentTimer: ReturnType<typeof createStatusTimer>['currentTimer'];
+  declare settings: ReturnType<typeof createStatusTimer>['settings'];
+  declare notify: ReturnType<typeof createStatusTimer>['notify'];
+  declare onSessionEnd: ReturnType<typeof createStatusTimer>['onSessionEnd'];
+  declare onTimerStop: ReturnType<typeof createStatusTimer>['onTimerStop'];
+
+  constructor(opts: StatusTimerOpts) {
+    const impl = createStatusTimer(opts);
+    this.start = impl.start;
+    this.stop = impl.stop;
+    this.pause = impl.pause;
+    this.toggle = impl.toggle;
+    this.getState = impl.getState;
+    this.updateDisplay = impl.updateDisplay;
+    this.statusBarItem = impl.statusBarItem;
+    this.currentTimer = impl.currentTimer;
+    this.settings = impl.settings;
+    this.notify = impl.notify;
+    this.onSessionEnd = impl.onSessionEnd;
+    this.onTimerStop = impl.onTimerStop;
   }
 }

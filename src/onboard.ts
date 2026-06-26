@@ -1,19 +1,13 @@
 import { Modal, Notice } from "obsidian";
 import type { App } from "obsidian";
 import type { FlowtimeSettings, BucketDef } from "./types";
+import { createDashboard, createProject } from "./template-engine";
 
 interface FlowtimePluginRef {
   settings: FlowtimeSettings;
   notify: (msg: string, isError?: boolean) => void;
   saveData(data: FlowtimeSettings): Promise<void>;
   app: App;
-  templateEngine: {
-    createDashboard(mode: "daily" | "weekly"): Promise<string | null>;
-    createProject(
-      name: string,
-      opts: { scaffoldTasks?: boolean; scaffoldWiki?: boolean },
-    ): Promise<{ notePath: string; tasksPath: string; wikiPath: string }>;
-  };
   taskCache?: { clear(): void };
 }
 
@@ -870,19 +864,19 @@ async function applySettings(
 
   // 4. Create dashboards
   if (state.createDailyDashboard) {
-    const path = await plugin.templateEngine.createDashboard("daily");
+    const path = await createDashboard(plugin.app, "daily");
     if (path) results.push("created " + path);
     else results.push("Dashboard.md already exists");
   }
   if (state.createWeeklyDashboard) {
-    const path = await plugin.templateEngine.createDashboard("weekly");
+    const path = await createDashboard(plugin.app, "weekly");
     if (path) results.push("created " + path);
     else results.push("Dashboard Weekly.md already exists");
   }
 
   // 5. Scaffold first project
   if (state.scaffoldFirstProject && state.firstProjectName) {
-    await plugin.templateEngine.createProject(state.firstProjectName, {
+    await createProject(plugin.app, plugin.settings, state.firstProjectName, {
       scaffoldTasks: state.scaffoldTasks,
       scaffoldWiki: state.scaffoldWiki,
     });

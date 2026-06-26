@@ -74,6 +74,14 @@ export function formatTaskLine(task: TaskRow, checked: boolean = false): string 
   // Project
   if (task.project) parts.push("@p:" + task.project);
 
+  // Source link: hidden directive for parsing + visible link
+  if (task.file) {
+    const srcPath = task.file.path;
+    const srcLine = task.line + 1; // 1-indexed for display
+    const uri = "obsidian://open?file=" + encodeURIComponent(srcPath) + "&line=" + srcLine;
+    parts.push("[📄 " + srcPath + ":" + srcLine + "](" + uri + ")");
+  }
+
   return parts.join(" ");
 }
 

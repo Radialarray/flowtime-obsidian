@@ -30,7 +30,6 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
   let _active: boolean = false;
   let _currentPath: string | null = null;
   let _currentFile: TFile | null = null;
-  let _taskLineMap: Map<HTMLElement, number> = new Map();
 
   /* ─── DOM Enhancement ─── */
 
@@ -49,36 +48,8 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
     const taskEls = container.querySelectorAll(selector);
     if (taskEls.length === 0) return;
 
-    // Build line-number map synchronously so it's ready before click handlers attach
-    _taskLineMap = new Map<HTMLElement, number>();
-    if (_currentFile) {
-      // Read synchronously via cached content — vault.read is async but we need
-      // the map ready before enhancing. We'll build it on first click as fallback.
-      _buildTaskMap(_currentFile, taskEls);
-    }
-
     for (const el of taskEls) {
       _enhanceTaskLine(el as HTMLElement);
-    }
-  }
-
-  /** Build task-line map. Called on enhance and lazily on first click. */
-  async function _buildTaskMap(file: TFile, taskEls?: NodeListOf<Element>): Promise<void> {
-    const content = await app.vault.read(file);
-    const lines = content.split("\n");
-    const taskLineNumbers: number[] = [];
-    for (let i = 0; i < lines.length; i++) {
-      if (lines[i].match(/^\s*[-*+]\s+\[[ xX\-]\]/)) {
-        taskLineNumbers.push(i);
-      }
-    }
-    const els = taskEls || document.querySelectorAll(".ft-list-enhanced");
-    let idx = 0;
-    for (const el of els) {
-      if (idx < taskLineNumbers.length) {
-        _taskLineMap.set(el as HTMLElement, taskLineNumbers[idx]);
-        idx++;
-      }
     }
   }
 
@@ -103,18 +74,22 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
 
         if (!isCheckClick) return;
 
-        // Lazy-build map if not ready yet
-        if (_taskLineMap.size === 0 && _currentFile) {
-          await _buildTaskMap(_currentFile);
-        }
+        // Extract source file + line from the rendered markdown link
+        const linkEl = el.querySelector("a.external-link, a.internal-link");
+        const href = linkEl?.getAttribute("href") || "";
+        const srcMatch = href.match(/file=([^&]+).*?line=(\d+)/);
+        if (!srcMatch) return;
 
-        const lineNum = _taskLineMap.get(el);
-        if (lineNum == null) return;
+        const srcPath = decodeURIComponent(srcMatch[1]);
+        const srcLine = parseInt(srcMatch[2], 10) - 1; // back to 0-indexed
+
+        const srcFile = app.vault.getAbstractFileByPath(srcPath) as TFile | null;
+        if (!srcFile) return;
 
         try {
-          const content = await app.vault.read(_currentFile!);
+          const content = await app.vault.read(srcFile);
           const lines = content.split("\n");
-          const line = lines[lineNum];
+          const line = lines[srcLine];
           if (!line) return;
 
           const isChecked = line.match(/\[x\]/i);
@@ -122,14 +97,14 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
             ? line.replace(/\[x\]/i, "[ ]")
             : line.replace(/\[ \]/, "[x]");
 
-          lines[lineNum] = newLine;
-          await app.vault.modify(_currentFile!, lines.join("\n"));
+          lines[srcLine] = newLine;
+          await app.vault.modify(srcFile, lines.join("\n"));
 
           if (!isChecked) {
-            await _handleRecurrence(lineNum, line);
+            await _handleRecurrence(srcLine, line, srcFile);
           }
 
-          // Trigger re-aggregation
+          // Trigger re-aggregation so mobile view reflects the change
           if (plugin.onHeadingDrop) {
             setTimeout(async () => {
               await plugin.onHeadingDrop?.();
@@ -177,8 +152,9 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
 
   /* ─── Recurrence ─── */
 
-  async function _handleRecurrence(lineNum: number, line: string): Promise<void> {
-    if (!_currentFile) return;
+  async function _handleRecurrence(lineNum: number, line: string, srcFile?: TFile): Promise<void> {
+    const targetFile = srcFile || _currentFile;
+    if (!targetFile) return;
     const recurrence = parseRecurrence(line);
     if (!recurrence) return;
 
@@ -197,7 +173,7 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
     }
 
     if (nextDate) {
-      const content = await app.vault.read(_currentFile);
+      const content = await app.vault.read(targetFile);
       const lines = content.split("\n");
       let nl = lines[lineNum];
       if (nl) {
@@ -207,7 +183,7 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
           nl = nl.replace(/(\]\s*)/, "$1@" + nextDate + " ");
         }
         lines[lineNum] = nl;
-        await app.vault.modify(_currentFile, lines.join("\n"));
+        await app.vault.modify(targetFile, lines.join("\n"));
       }
     }
   }

@@ -61,6 +61,7 @@ export default class FlowtimePlugin extends Plugin {
 	listEnhancer!: ListEnhancer;
 	renderers: (FlowtimeRenderer | WeekplanRenderer)[] = [];
 	isMobile: boolean = false;
+	onHeadingDrop?: () => Promise<void>;
 
 	_activeRowTimer: unknown = null;
 	_activeRowTimerStop: (() => void) | null = null;
@@ -1173,6 +1174,14 @@ export default class FlowtimePlugin extends Plugin {
 		});
 
 		// v1.3.0: ListEnhancer — interactive markdown task notes
+		// Re-aggregation callback: refreshes mobile file after source changes
+		this.onHeadingDrop = async () => {
+			const file = this.app.workspace.getActiveFile();
+			if (file && this._isMobileAggregateFile(file)) {
+				const { refreshAll } = await import("./task-aggregator");
+				await refreshAll(this.app, file, this, file.path);
+			}
+		};
 		this.listEnhancer = new ListEnhancer(this.app, this);
 
 		// v1.4.0: Tab history — navigate back to previous tab on close

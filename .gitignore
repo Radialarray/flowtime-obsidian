@@ -3,12 +3,10 @@ node_modules/
 dist/
 .DS_Store
 
-# Beads / Dolt files (added by bd init)
-.beads/
+# Beads / Dolt files
 .dolt/
 *.db
 .beads-credential-key
-.beads/proxieddb/
 
 # Pi agent runtime
 .pi/

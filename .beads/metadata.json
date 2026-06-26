@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "flowtime",
+  "project_id": "60f529ec-b4d4-479a-8722-efe65b161ac0"
+}

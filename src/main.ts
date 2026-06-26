@@ -1,508 +1,76 @@
-const { Plugin, Notice, Modal, EditorSuggest } = require("obsidian");
-const { FlowtimeRenderer } = require("./renderer");
-const { FlowtimeSettingsTab, DEFAULT_SETTINGS } = require("./settings");
-const { ProcessInboxModal } = require("./inbox-processor");
-const { ProjectEngine } = require("./project-engine");
-const { TemplateEngine } = require("./template-engine");
-const { QuickEntryModal } = require("./quick-entry");
-const { runOnboard } = require("./onboard");
-const { StatusTimer } = require("./status-timer");
-const { SessionStore } = require("./session-store");
-const { TaskCache } = require("./cache");
-const { RoutineEngine } = require("./routine-engine");
-const { ExtractNoteHandler } = require("./extract-note");
-const { ListEnhancer } = require("./list-enhancer");
+import {
+	Plugin,
+	Notice,
+	Modal,
+	EditorSuggest,
+	MarkdownView,
+	MarkdownPostProcessorContext,
+	App,
+	Editor,
+	EditorPosition,
+	MarkdownFileInfo,
+	TAbstractFile,
+	TFile,
+} from "obsidian";
+import { FlowtimeRenderer } from "./renderer";
+import { FlowtimeSettingsTab, DEFAULT_SETTINGS } from "./settings";
+import { ProcessInboxModal } from "./inbox-processor";
+import { ProjectEngine } from "./project-engine";
+import { TemplateEngine } from "./template-engine";
+import { QuickEntryModal } from "./quick-entry";
+import { runOnboard } from "./onboard";
+import { StatusTimer } from "./status-timer";
+import { SessionStore } from "./session-store";
+import { TaskCache } from "./cache";
+import { RoutineEngine } from "./routine-engine";
+import { ExtractNoteHandler } from "./extract-note";
+import { ListEnhancer } from "./list-enhancer";
+import { WeekplanRenderer } from "./weekplan-renderer";
+import { AddTaskSuggest, AtCompletionsSuggest } from "./suggests/at-completions";
+import type { FlowtimeSettings, BucketDef } from "./types";
 
-class AddTaskSuggest extends EditorSuggest {
-	constructor(app, plugin) {
-		super(app);
-		this.plugin = plugin;
-	}
+/* ─── Inline types ─── */
 
-	onTrigger(cursor, editor, _file) {
-		const line = editor.getLine(cursor.line);
-		const before = line.slice(0, cursor.ch);
-		const match = before.match(/\/add-task\s*$/);
-		if (match) {
-			return {
-				start: { line: cursor.line, ch: cursor.ch - match[0].length },
-				end: cursor,
-				query: "",
-			};
-		}
-		return null;
-	}
-
-	getSuggestions(_context) {
-		return [{ label: "Add a task", description: "Open the quick entry modal" }];
-	}
-
-	renderSuggestion(suggestion, el) {
-		el.createEl("div", { text: suggestion.label });
-		el.createEl("small", { text: suggestion.description });
-	}
-
-	selectSuggestion(_suggestion, _event) {
-		if (this.context) {
-			const editor = this.context.editor;
-			const { start, end } = this.context;
-			editor.replaceRange("", start, end);
-		}
-		new QuickEntryModal(this.app, this.plugin).open();
-	}
+interface ExtractState {
+  timestamp: number;
+  newFilePath: string;
+	fileName: string;
 }
 
-/**
- * Unified @-completions.
- *
- * Two modes based on context:
- *
- * COMMAND MODE — @ is first non-whitespace on line → show task macros
- *   @td  → - [ ]  @today
- *   @tm  → - [ ]  @tomorrow
- *   @rec → - [ ]  🔁 every day @today
- *   @weekly → `flowtime-weekly` block
- *
- * DIRECTIVE MODE — @ inside a task line → show dates, durations, buckets, projects
- *   @today, @b:deep-work, @p:Website, @30m, @due:tomorrow
- */
-class AtCompletionsSuggest extends EditorSuggest {
-	limit = 30; // Override default ~10 suggestion limit
 
-	constructor(app, plugin) {
-		super(app);
-		this.plugin = plugin;
-	}
+/* ═══════════════════════════════════════════════════════════════════
+   FlowtimePlugin — main plugin entry point
+   ═══════════════════════════════════════════════════════════════════ */
 
-	onTrigger(cursor, editor, _file) {
-		const line = editor.getLine(cursor.line);
-		const before = line.slice(0, cursor.ch);
-		const atIndex = before.lastIndexOf("@");
-		if (atIndex < 0) return null;
+export default class FlowtimePlugin extends Plugin {
+	settings!: FlowtimeSettings;
+	notify!: (message: string, isError?: boolean) => void;
+	projectEngine!: ProjectEngine;
+	templateEngine!: TemplateEngine;
+	sessionStore!: SessionStore;
+	taskCache!: TaskCache;
+	routineEngine!: RoutineEngine;
+	statusTimer!: StatusTimer;
+	listEnhancer!: ListEnhancer;
+	renderers: (FlowtimeRenderer | WeekplanRenderer)[] = [];
 
-		const textAfterAt = before.slice(atIndex + 1);
-		if (textAfterAt.includes(" ")) return null;
+	_activeRowTimer: unknown = null;
+	_activeRowTimerStop: (() => void) | null = null;
+	_lastExtract: ExtractState | null = null;
 
-		// Detect COMMAND MODE: @ is the first non-whitespace char
-		const lineLead = line.slice(0, atIndex);
-		const isCommandMode =
-			lineLead.trim() === "" && !line.match(/^\s*[-*+]\s*\[[^\]]*\]/);
+	_cacheSaveTimer: ReturnType<typeof setTimeout> | null = null;
+	_cacheFilePath!: () => string;
+	_notifiedCacheClean: boolean = false;
 
-		return {
-			start: isCommandMode
-				? { line: cursor.line, ch: 0 } // Replace whole line
-				: { line: cursor.line, ch: atIndex }, // Replace from @
-			end: cursor,
-			query: textAfterAt,
-			isCommandMode,
-		};
-	}
+	_dailyGenTimer: ReturnType<typeof setTimeout> | null = null;
+	_routineWatchTimer: ReturnType<typeof setTimeout> | null = null;
+	_previousProjectsRoot: string = "";
 
-	async getSuggestions(context) {
-		const q = context.query.toLowerCase();
-		// Derive command mode from start position — context.isCommandMode
-		// is stripped by the base class (not part of EditorSuggestContext API)
-		const isCommandMode = context.start != null && context.start.ch === 0;
+	_scheduleCacheSave!: (force?: boolean) => void;
+	_loadTaskCache!: () => Promise<void>;
+	_saveTaskCache!: () => Promise<void>;
 
-		if (isCommandMode) {
-			// ── COMMAND MODE: task macros & code blocks ──
-			const macros = [
-				{
-					label: "@inbox",
-					insert: "- [ ]  @today ",
-					desc: "Inbox task with today date",
-				},
-				{ label: "@td", insert: "- [ ]  @today ", desc: "Today task skeleton" },
-				{
-					label: "@tm",
-					insert: "- [ ]  @tomorrow ",
-					desc: "Tomorrow task skeleton",
-				},
-				{ label: "@tk", insert: "- [ ]  ", desc: "Task skeleton (no date)" },
-				{
-					label: "@now",
-					insert: "- [ ]  @today @15m ",
-					desc: "Quick 15m task now",
-				},
-				{
-					label: "@1h",
-					insert: "- [ ]  @today @1h ",
-					desc: "Quick 1h task today",
-				},
-				{
-					label: "@rec",
-					insert: "- [ ]  🔁 every day @today ",
-					desc: "Recurring daily task",
-				},
-				{
-					label: "@rep",
-					insert: "- [ ]  🔁 every week @monday ",
-					desc: "Recurring weekly task",
-				},
-				{
-					label: "@today",
-					insert: "```flowtime-today\n```",
-					desc: "Today tasks code block",
-				},
-				{
-					label: "@overdue",
-					insert: "```flowtime-overdue\n```",
-					desc: "Overdue tasks code block",
-				},
-				{
-					label: "@soon",
-					insert: "```flowtime-soon\n```",
-					desc: "Up next tasks code block",
-				},
-				{
-					label: "@today-note",
-					insert:
-						"```flowtime-today\n```\n\n## 🔄 Carry Over\n```flowtime-overdue\n```\n\n## ◌ Up Next\n```flowtime-soon\n```",
-					desc: "Today note (3-section block)",
-				},
-				{
-					label: "@weekly",
-					insert: "```flowtime-weekly\n```",
-					desc: "Weekly view code block",
-				},
-				{
-					label: "@budget",
-					insert: "```flowtime-buckets\n```",
-					desc: "Budget overview code block",
-				},
-				{
-					label: "@sessions",
-					insert: "```flowtime-sessions\n```",
-					desc: "Session history code block",
-				},
-				{
-					label: "@proj",
-					insert: "```flowtime-project\n```",
-					desc: "Project tasks code block",
-				},
-				{
-					label: "@dueweek",
-					insert: "```flowtime-dueweek\n```",
-					desc: "Due this week code block",
-				},
-				{
-					label: "@weekplan",
-					insert: "```flowtime-weekplan\n```",
-					desc: "Week plan code block",
-				},
-			];
-			return macros
-				.filter((m) => m.label.slice(1).includes(q))
-				.map((m) => ({ ...m, type: "macro" }));
-		}
-
-		// ── DIRECTIVE MODE: normal @ completions ──
-		const suggestions = [];
-
-		const dates = [
-			{ label: "today", description: "Current date" },
-			{ label: "tomorrow", description: "Next day" },
-			{ label: "yesterday", description: "Previous day" },
-			{ label: "monday", description: "Next Monday" },
-			{ label: "tuesday", description: "Next Tuesday" },
-			{ label: "wednesday", description: "Next Wednesday" },
-			{ label: "thursday", description: "Next Thursday" },
-			{ label: "friday", description: "Next Friday" },
-			{ label: "saturday", description: "Next Saturday" },
-			{ label: "sunday", description: "Next Sunday" },
-			{ label: "next-week", description: "7 days from now" },
-			{ label: "next-monday", description: "Monday after next" },
-		];
-		const durations = [
-			{ label: "15m", description: "15 minutes" },
-			{ label: "30m", description: "30 minutes" },
-			{ label: "45m", description: "45 minutes" },
-			{ label: "1h", description: "1 hour" },
-			{ label: "1.5h", description: "1 hour 30 minutes" },
-			{ label: "2h", description: "2 hours" },
-			{ label: "3h", description: "3 hours" },
-		];
-		const buckets = (this.plugin?.settings?.buckets || []).map((b) => ({
-			label: "b:" + b.id,
-			description: b.name,
-		}));
-		const dueDates = [
-			{ label: "due:today", description: "Due today" },
-			{ label: "due:tomorrow", description: "Due tomorrow" },
-		];
-
-		// v0.4.0: Status & priority tags
-		const inboxAction = [
-			{ label: "inbox", description: "Capture line to inbox" },
-		];
-
-		// v0.4.0: Status & priority tags
-		const statusTags = [
-			{ label: "soon", description: "Up next / backlog item" },
-			{ label: "high", description: "🟥 High priority" },
-			{ label: "med", description: "🟨 Medium priority" },
-			{ label: "low", description: "🟩 Low priority" },
-		];
-
-		let projects = [];
-		try {
-			if (this.plugin?.projectEngine) {
-				const projList = await this.plugin.projectEngine.getAllProjects();
-				projects = projList.map((p) => ({
-					label: "p:" + p.name,
-					description: "Project",
-				}));
-			}
-		} catch (_) {}
-
-		if (q.startsWith("b:") || q.startsWith("bucket:")) {
-			const bucketQ = q.replace(/^(b:|bucket:)/, "");
-			for (const b of buckets) {
-				if (
-					b.label.toLowerCase().includes(bucketQ) ||
-					b.description.toLowerCase().includes(bucketQ)
-				)
-					suggestions.push({
-						label: "@" + b.label,
-						description: b.description,
-						type: "bucket",
-					});
-			}
-		} else if (q.startsWith("due:")) {
-			const dueQ = q.slice(4);
-			for (const d of dueDates) {
-				if (d.label.toLowerCase().includes(dueQ))
-					suggestions.push({
-						label: "@" + d.label,
-						description: d.description,
-						type: "due",
-					});
-			}
-		} else if (q.startsWith("p:")) {
-			const pQ = q.slice(2);
-			for (const p of projects) {
-				if (
-					p.label.toLowerCase().includes(pQ) ||
-					p.description.toLowerCase().includes(pQ)
-				)
-					suggestions.push({
-						label: "@" + p.label,
-						description: p.description,
-						type: "project",
-					});
-			}
-		} else {
-			for (const i of inboxAction)
-				if (i.label.toLowerCase().includes(q))
-					suggestions.push({
-						label: "@" + i.label,
-						description: i.description,
-						type: "status",
-					});
-			for (const d of dates)
-				if (d.label.toLowerCase().includes(q))
-					suggestions.push({
-						label: "@" + d.label,
-						description: d.description,
-						type: "date",
-					});
-			for (const d of durations)
-				if (d.label.toLowerCase().includes(q))
-					suggestions.push({
-						label: "@" + d.label,
-						description: d.description,
-						type: "duration",
-					});
-			for (const b of buckets)
-				if (
-					b.label.toLowerCase().includes(q) ||
-					b.description.toLowerCase().includes(q)
-				)
-					suggestions.push({
-						label: "@" + b.label,
-						description: b.description,
-						type: "bucket",
-					});
-			for (const d of dueDates)
-				if (d.label.toLowerCase().includes(q))
-					suggestions.push({
-						label: "@" + d.label,
-						description: d.description,
-						type: "due",
-					});
-			for (const p of projects)
-				if (
-					p.label.toLowerCase().includes(q) ||
-					p.description.toLowerCase().includes(q)
-				)
-					suggestions.push({
-						label: "@" + p.label,
-						description: p.description,
-						type: "project",
-					});
-			for (const s of statusTags)
-				if (s.label.toLowerCase().includes(q))
-					suggestions.push({
-						label: "@" + s.label,
-						description: s.description,
-						type: "status",
-					});
-		}
-
-		return suggestions.slice(0, 14);
-	}
-
-	renderSuggestion(suggestion, el) {
-		const icons = {
-			date: "📅",
-			duration: "⏱",
-			bucket: "📊",
-			due: "⏰",
-			project: "📁",
-			macro: "⚡",
-			status: "🏷",
-		};
-		const icon = icons[suggestion.type] || "•";
-		if (suggestion.type === "macro") {
-			el.createEl("span", {
-				text: icon + " " + suggestion.label,
-				cls: "ft-at-completion-label",
-			});
-			el.createEl("small", {
-				text: "  → " + (suggestion.insert || "").replace(/\n/g, "↵ "),
-				cls: "ft-at-completion-desc",
-			});
-		} else {
-			el.createEl("span", {
-				text: icon + " " + suggestion.label,
-				cls: "ft-at-completion-label",
-			});
-			el.createEl("small", {
-				text: "  " + suggestion.description,
-				cls: "ft-at-completion-desc",
-			});
-		}
-	}
-
-	selectSuggestion(suggestion, _event) {
-		if (!this.context) return;
-		const editor = this.context.editor;
-		const { start, end } = this.context;
-
-		// @inbox — capture preceding text to Inbox.md
-		if (suggestion.label === "@inbox") {
-			const line = editor.getLine(start.line);
-			const beforeText = line.slice(0, start.ch).trim();
-			if (!beforeText) {
-				this.plugin.notify(
-					"\u{1F4E5} Nothing to capture — type task text before @inbox",
-					true,
-				);
-				return;
-			}
-			let inboxLine = beforeText;
-			if (!inboxLine.startsWith("- [ ]") && !inboxLine.startsWith("- [x]")) {
-				inboxLine = "- [ ] " + inboxLine;
-			}
-			editor.replaceRange("", { line: start.line, ch: 0 }, end);
-			this._appendToInbox(inboxLine);
-			return;
-		}
-
-		// @p:Project — capture preceding text to that project's Tasks.md
-		if (suggestion.type === "project" && suggestion.label.startsWith("@p:")) {
-			const line = editor.getLine(start.line);
-			const beforeText = line.slice(0, start.ch).trim();
-			if (!beforeText) {
-				this.plugin.notify(
-					"\u{1F4C1} Nothing to capture — type task text before @p:",
-					true,
-				);
-				return;
-			}
-			let taskLine = beforeText;
-			if (!taskLine.startsWith("- [ ]") && !taskLine.startsWith("- [x]")) {
-				taskLine = "- [ ] " + taskLine;
-			}
-			editor.replaceRange("", { line: start.line, ch: 0 }, end);
-			this._appendToProject(taskLine, suggestion.label.slice(3));
-			return;
-		}
-
-		if (suggestion.type === "macro") {
-			editor.replaceRange(suggestion.insert, start, end);
-		} else {
-			editor.replaceRange(suggestion.label + " ", start, end);
-		}
-	}
-
-	/**
-	 * Append a task line to the inbox file asynchronously.
-	 */
-	async _appendToInbox(line) {
-		const path = this.plugin.settings.inboxPath || "Inbox.md";
-		try {
-			const app = this.plugin.app;
-			const exists = await app.vault.adapter.exists(path);
-			if (!exists) {
-				await app.vault.create(
-					path,
-					"# \u{1F4E5} Inbox\n\nCapture tasks, ideas, and notes here. One line per item.\nProcess them with **Flowtime: Process Inbox**.\n",
-				);
-			}
-			const file = app.vault.getAbstractFileByPath(path);
-			if (!file) return;
-			const content = await app.vault.read(file);
-			await app.vault.modify(
-				file,
-				content.trimEnd() + "\n" + line.trimEnd() + "\n",
-			);
-			this.plugin.notify("\u{1F4E5} Added to inbox");
-		} catch (e) {
-			console.warn("Flowtime: failed to append to inbox:", e.message);
-		}
-	}
-
-	/**
-	 * Append a task line to a project's Tasks.md file.
-	 */
-	async _appendToProject(line, projectName) {
-		try {
-			const projects = await this.plugin.projectEngine.getAllProjects();
-			const match = projects.find(
-				(p) => p.name.toLowerCase() === projectName.toLowerCase(),
-			);
-			if (!match) {
-				this.plugin.notify(
-					"\u{1F4C1} Project '" + projectName + "' not found",
-					true,
-				);
-				return;
-			}
-			// Derive Tasks.md path from project note path
-			const folder = match.path.substring(0, match.path.lastIndexOf("/"));
-			const tasksPath = folder + "/" + match.name + " Tasks.md";
-			const app = this.plugin.app;
-			let tasksFile = app.vault.getAbstractFileByPath(tasksPath);
-			if (!tasksFile) {
-				// Fall back to folder note
-				tasksFile = app.vault.getAbstractFileByPath(match.path);
-			}
-			if (!tasksFile) return;
-			const content = await app.vault.read(tasksFile);
-			await app.vault.modify(
-				tasksFile,
-				content.trimEnd() + "\n" + line.trimEnd() + "\n",
-			);
-			this.plugin.notify("\u{1F4C1} Added to " + match.name);
-		} catch (e) {
-			console.warn("Flowtime: failed to append to project:", e.message);
-		}
-	}
-}
-
-module.exports = class FlowtimePlugin extends Plugin {
-	async onload() {
+	override async onload(): Promise<void> {
 		const savedData = await this.loadData();
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, savedData);
 		// Ensure buckets default is populated if saved data has empty/null buckets
@@ -520,7 +88,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 			await this.saveData(this.settings);
 		}
 
-		this.notify = (message, isError = false) => {
+		this.notify = (message: string, isError: boolean = false): void => {
 			if (!isError && this.settings.quietMode) return;
 			new Notice(message, this.settings.noticeDuration);
 		};
@@ -564,7 +132,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 		// Track whether we've shown the cache-clean notice this session
 		this._notifiedCacheClean = false;
 
-		this._loadTaskCache = async () => {
+		this._loadTaskCache = async (): Promise<void> => {
 			try {
 				const cachePath = this._cacheFilePath();
 				if (await this.app.vault.adapter.exists(cachePath)) {
@@ -572,20 +140,24 @@ module.exports = class FlowtimePlugin extends Plugin {
 					const parsed = JSON.parse(raw);
 					this.taskCache.fromJSON(parsed);
 				} else if (savedData && savedData._taskCache) {
-					this.taskCache.fromJSON(savedData._taskCache);
+					this.taskCache.fromJSON(savedData._taskCache as Record<string, unknown>);
 					delete savedData._taskCache;
 				}
-			} catch (_) {}
+			} catch (_) {
+				/* ignore */
+			}
 		};
 
-		this._saveTaskCache = async () => {
+		this._saveTaskCache = async (): Promise<void> => {
 			try {
 				const data = this.taskCache.toJSON();
 				await this.app.vault.adapter.write(
 					this._cacheFilePath(),
 					JSON.stringify(data, null, 2),
 				);
-			} catch (_) {}
+			} catch (_) {
+				/* ignore */
+			}
 		};
 
 		// Load cache from separate file (with legacy fallback)
@@ -593,14 +165,16 @@ module.exports = class FlowtimePlugin extends Plugin {
 		console.log("Flowtime cache: loaded, cache size =", this.taskCache.size);
 
 		// Cross-session staleness: files modified while Obsidian was closed
-		const staleCount = await this.taskCache.evictStale(this.app.vault.adapter);
+		const staleCount = await this.taskCache.evictStale(
+			this.app.vault.adapter,
+		);
 		if (staleCount > 0) {
 			console.log("Flowtime cache: evicted stale =", staleCount);
 			await this._saveTaskCache();
 		}
 
 		// v0.4.0: Auto-evict stale cache entries (files that no longer exist)
-		const evicted = await this.taskCache.autoEvict(async (path) => {
+		const evicted = await this.taskCache.autoEvict(async (path: string) => {
 			return !!this.app.vault.getAbstractFileByPath(path);
 		});
 		console.log(
@@ -615,14 +189,16 @@ module.exports = class FlowtimePlugin extends Plugin {
 			// Show notice at most once per session to avoid repeating the same count
 			if (!this._notifiedCacheClean) {
 				this._notifiedCacheClean = true;
-				this.notify(`🧹 Task cache cleaned: ${evicted} stale entries removed`);
+				this.notify(
+					`\u{1F9F9} Task cache cleaned: ${evicted} stale entries removed`,
+				);
 			}
 		}
 
 		// v0.4.0: Check safety limits
 		const { warnings } = this.taskCache.checkSafetyLimits();
 		for (const w of warnings) {
-			this.notify("⚠️ " + w, true);
+			this.notify("\u26A0\uFE0F " + w, true);
 		}
 
 		// v0.7.0: Ensure session directory exists in plugin folder
@@ -636,21 +212,19 @@ module.exports = class FlowtimePlugin extends Plugin {
 
 		// v0.5.0: Auto-generate routine instances
 		if (this.settings.autoGenerateOnStartup !== false) {
-			this.routineEngine
-				.generateAllDue()
-				.then((count) => {
-					if (count > 0 && !this.settings.quietMode) {
-						this.notify(
-							"🔁 Generated " +
-								count +
-								" routine task" +
-								(count === 1 ? "" : "s"),
-						);
-					}
-				})
-				.catch((e) =>
-					console.warn("Flowtime: Routine generation error:", e.message),
-				);
+			try {
+				const count = await this.routineEngine.generateAllDue();
+				if (count > 0 && !this.settings.quietMode) {
+					this.notify(
+						"\u{1F501} Generated " +
+							count +
+							" routine task" +
+							(count === 1 ? "" : "s"),
+					);
+				}
+			} catch (e) {
+				console.warn("Flowtime: Routine generation error:", (e as Error).message);
+			}
 		}
 
 		// v0.8.0: Schedule twice-daily generation (morning 6 AM + evening 6 PM)
@@ -660,7 +234,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 		// Track old projectsRoot to detect changes
 		this._previousProjectsRoot = this.settings.projectsRoot;
 
-		const onFileChanged = (file) => {
+		const onFileChanged = (file: TAbstractFile): void => {
 			this.projectEngine.invalidate(file.path);
 			this.taskCache.invalid(file.path);
 			this._scheduleCacheSave();
@@ -673,20 +247,20 @@ module.exports = class FlowtimePlugin extends Plugin {
 		const routinesFolder = this.settings.routinesFolder || "Routines/";
 		this._routineWatchTimer = null;
 		this.registerEvent(
-			this.app.vault.on("modify", (file) => {
+			this.app.vault.on("modify", (file: TAbstractFile) => {
 				if (
 					file.path.startsWith(routinesFolder) &&
 					!file.path.endsWith(".generated.json")
 				) {
-					if (this._routineWatchTimer) clearTimeout(this._routineWatchTimer);
-					this._routineWatchTimer = setTimeout(() => {
-						this._routineWatchTimer = null;
-						this.routineEngine
-							.generateAllDue()
-							.catch((e) =>
-								console.warn("Flowtime: Routine auto-gen error:", e.message),
-							);
-					}, 5000);
+				if (this._routineWatchTimer) clearTimeout(this._routineWatchTimer);
+				this._routineWatchTimer = setTimeout(async () => {
+					this._routineWatchTimer = null;
+					try {
+						await this.routineEngine.generateAllDue();
+					} catch (e) {
+						console.warn("Flowtime: Routine auto-gen error:", (e as Error).message);
+					}
+				}, 5000);
 				}
 			}),
 		);
@@ -711,7 +285,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 		this.addCommand({
 			id: "add-task-inline",
 			name: "Add Task at Cursor",
-			editorCallback: (editor) => {
+			editorCallback: (editor: Editor) => {
 				const today = new Date().toISOString().split("T")[0];
 				const cursor = editor.getCursor();
 				const line = "- [ ]  @" + today + " ";
@@ -726,8 +300,8 @@ module.exports = class FlowtimePlugin extends Plugin {
 			id: "extract-to-new-note",
 			name: "Extract to new note",
 			hotkeys: [{ modifiers: ["Mod"], key: "G" }],
-			editorCallback: (editor, view) => {
-				new ExtractNoteHandler(this.app, editor, view, this).run();
+			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
+				new ExtractNoteHandler(this.app, editor, view as MarkdownView, this).run();
 			},
 		});
 
@@ -735,7 +309,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 		this.addCommand({
 			id: "undo-extract",
 			name: "Undo extract (delete created note)",
-			editorCallback: (editor, view) => {
+			editorCallback: async (editor: Editor, _view: MarkdownView | MarkdownFileInfo) => {
 				const ext = this._lastExtract;
 				if (!ext || Date.now() - ext.timestamp > 30000) {
 					new Notice("No recent extract to undo");
@@ -744,18 +318,12 @@ module.exports = class FlowtimePlugin extends Plugin {
 				// Undo the editor change
 				editor.undo();
 				// Delete the created file
-				const file = this.app.vault.getAbstractFileByPath(
-					ext.newFilePath,
-				);
+				const file = this.app.vault.getAbstractFileByPath(ext.newFilePath);
 				if (file) {
-					this.app.vault
-						.delete(file)
-						.then(() =>
-							this.notify(
-								`↩️ Undo extract: deleted "${ext.fileName}"`,
-							),
-						)
-						.catch(() => {});
+					try {
+						await this.app.vault.delete(file);
+						this.notify(`\u21A9\uFE0F Undo extract: deleted "${ext.fileName}"`);
+					} catch (_) { /* fine */ }
 				}
 				this._lastExtract = null;
 			},
@@ -766,13 +334,14 @@ module.exports = class FlowtimePlugin extends Plugin {
 			id: "append-to-inbox",
 			name: "Append to Inbox",
 			callback: () => {
-				const { Modal } = require("obsidian");
 				class AppendToInboxModal extends Modal {
-					constructor(app, plugin) {
+					plugin: FlowtimePlugin;
+
+					constructor(app: App, plugin: FlowtimePlugin) {
 						super(app);
 						this.plugin = plugin;
 					}
-					onOpen() {
+					override onOpen(): void {
 						const { contentEl } = this;
 						contentEl.createEl("h2", { text: "\u{1F4E5} Append to Inbox" });
 						const textarea = contentEl.createEl("textarea", {
@@ -807,7 +376,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 								let content = "";
 								if (await this.plugin.app.vault.adapter.exists(path)) {
 									content = await this.plugin.app.vault.read(
-										this.plugin.app.vault.getAbstractFileByPath(path),
+										this.plugin.app.vault.getAbstractFileByPath(path) as TFile,
 									);
 								}
 								// Split into lines, add the new text, write back
@@ -816,7 +385,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 									content.trimEnd() + "\n" + lines.join("\n") + "\n";
 								if (await this.plugin.app.vault.adapter.exists(path)) {
 									await this.plugin.app.vault.modify(
-										this.plugin.app.vault.getAbstractFileByPath(path),
+										this.plugin.app.vault.getAbstractFileByPath(path) as TFile,
 										newContent,
 									);
 								} else {
@@ -827,18 +396,21 @@ module.exports = class FlowtimePlugin extends Plugin {
 								);
 								this.close();
 							} catch (e) {
-								this.plugin.notify("Failed to append: " + e.message, true);
+								this.plugin.notify(
+									"Failed to append: " + (e as Error).message,
+									true,
+								);
 							}
 						});
 
 						// Ctrl+Enter or Cmd+Enter to submit
-						textarea.addEventListener("keydown", (e) => {
+						textarea.addEventListener("keydown", (e: KeyboardEvent) => {
 							if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
 								submitBtn.click();
 							}
 						});
 					}
-					onClose() {
+					override onClose(): void {
 						this.contentEl.empty();
 					}
 				}
@@ -869,7 +441,12 @@ module.exports = class FlowtimePlugin extends Plugin {
 			statusBarItem: this.addStatusBarItem(),
 			settings: this.settings,
 			notify: this.notify,
-			onSessionEnd: async (data) => {
+			onSessionEnd: async (data: {
+				startTime: string;
+				endTime: string;
+				durationMinutes: number;
+				taskText: string;
+			}): Promise<void> => {
 				await this.sessionStore.writeSession({
 					startTime: data.startTime,
 					endTime: data.endTime,
@@ -894,14 +471,13 @@ module.exports = class FlowtimePlugin extends Plugin {
 		this.registerDomEvent(
 			this.statusTimer.statusBarItem,
 			"contextmenu",
-			(e) => {
+			(e: MouseEvent) => {
 				e.preventDefault();
 				this.statusTimer.stop();
 			},
 		);
 
 		this.renderers = [];
-		const { WeekplanRenderer } = require("./weekplan-renderer");
 		for (const [name, mode] of [
 			["flowtime-today", "today"],
 			["flowtime-overdue", "overdue"],
@@ -912,29 +488,32 @@ module.exports = class FlowtimePlugin extends Plugin {
 			["flowtime-buckets", "budget"],
 			["flowtime-sessions", "sessions"],
 			["flowtime-sprints", "sprints"], // v0.6.0
-		]) {
-			this.registerMarkdownCodeBlockProcessor(name, (_src, el, ctx) => {
-				const r = new FlowtimeRenderer(
-					this.app,
-					el,
-					mode,
-					this.projectEngine,
-					ctx.sourcePath,
-				);
-				r.plugin = this;
-				this.renderers.push(r);
-				ctx.addChild(r);
-			});
+		] as Array<[string, string]>) {
+			this.registerMarkdownCodeBlockProcessor(
+				name,
+				(_src: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+					const r = new FlowtimeRenderer(
+						this.app,
+						el,
+						mode as any,
+						this.projectEngine,
+						ctx.sourcePath,
+					);
+					r.plugin = this as any;
+					this.renderers.push(r);
+					ctx.addChild(r);
+				},
+			);
 		}
 
 		// v0.5.0: Weekplan renderer (uses dedicated WeekplanRenderer)
 		this.registerMarkdownCodeBlockProcessor(
 			"flowtime-weekplan",
-			(_src, el, ctx) => {
+			(_src: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
 				const r = new WeekplanRenderer(
 					this.app,
 					el,
-					this,
+					this as any,
 					this.projectEngine,
 					ctx.sourcePath,
 				);
@@ -948,7 +527,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 		this.addCommand({
 			id: "insert-daily-dashboard",
 			name: "Insert daily dashboard",
-			editorCallback: (_editor) => {
+			editorCallback: (_editor: Editor) => {
 				this.templateEngine.insertDaily();
 			},
 		});
@@ -956,7 +535,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 		this.addCommand({
 			id: "insert-weekly-dashboard",
 			name: "Insert weekly dashboard",
-			editorCallback: (_editor) => {
+			editorCallback: (_editor: Editor) => {
 				this.templateEngine.insertWeekly();
 			},
 		});
@@ -964,7 +543,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 		this.addCommand({
 			id: "insert-weekplan",
 			name: "Insert weekplan",
-			editorCallback: (_editor) => {
+			editorCallback: (_editor: Editor) => {
 				this.templateEngine.insertWeekplan();
 			},
 		});
@@ -986,13 +565,17 @@ module.exports = class FlowtimePlugin extends Plugin {
 					const result = await this.templateEngine.createDashboard("daily");
 					if (result) {
 						const file = this.app.vault.getAbstractFileByPath(result);
-						if (file) await this.app.workspace.getLeaf().openFile(file);
-						this.notify("📋 Created Daily Dashboard");
+						if (file)
+							await this.app.workspace.getLeaf().openFile(file as TFile);
+						this.notify("\u{1F4CB} Created Daily Dashboard");
 					} else {
-						this.notify("📋 Daily Dashboard already exists", true);
+						this.notify("\u{1F4CB} Daily Dashboard already exists", true);
 					}
 				} catch (e) {
-					this.notify("Could not create dashboard: " + e.message, true);
+					this.notify(
+						"Could not create dashboard: " + (e as Error).message,
+						true,
+					);
 				}
 			},
 		});
@@ -1005,13 +588,17 @@ module.exports = class FlowtimePlugin extends Plugin {
 					const result = await this.templateEngine.createDashboard("weekly");
 					if (result) {
 						const file = this.app.vault.getAbstractFileByPath(result);
-						if (file) await this.app.workspace.getLeaf().openFile(file);
-						this.notify("📋 Created Weekly Dashboard");
+						if (file)
+							await this.app.workspace.getLeaf().openFile(file as TFile);
+						this.notify("\u{1F4CB} Created Weekly Dashboard");
 					} else {
-						this.notify("📋 Weekly Dashboard already exists", true);
+						this.notify("\u{1F4CB} Weekly Dashboard already exists", true);
 					}
 				} catch (e) {
-					this.notify("Could not create dashboard: " + e.message, true);
+					this.notify(
+						"Could not create dashboard: " + (e as Error).message,
+						true,
+					);
 				}
 			},
 		});
@@ -1021,13 +608,24 @@ module.exports = class FlowtimePlugin extends Plugin {
 			name: "New Project",
 			callback: () => {
 				class ProjectNameModal extends Modal {
-					constructor(app, onSubmit) {
+					onSubmit: (
+						name: string,
+						opts: { scaffoldTasks: boolean; scaffoldWiki: boolean },
+					) => void;
+					scaffoldTasks: boolean = true;
+					scaffoldWiki: boolean = true;
+
+					constructor(
+						app: App,
+						onSubmit: (
+							name: string,
+							opts: { scaffoldTasks: boolean; scaffoldWiki: boolean },
+						) => void,
+					) {
 						super(app);
 						this.onSubmit = onSubmit;
-						this.scaffoldTasks = true;
-						this.scaffoldWiki = true;
 					}
-					onOpen() {
+					override onOpen(): void {
 						const { contentEl } = this;
 						contentEl.createEl("h2", { text: "New Project" });
 						contentEl.createEl("p", {
@@ -1044,11 +642,14 @@ module.exports = class FlowtimePlugin extends Plugin {
 						input.focus();
 
 						// Scaffold options
-						contentEl.createEl("hr", { style: "margin: 12px 0" });
+						const hrEl = contentEl.createEl("hr");
+						hrEl.style.margin = "12px 0";
 						const tasksCb = contentEl.createEl("label", {
 							cls: "flowtime-label",
 						});
-						const tasksCheck = tasksCb.createEl("input", { type: "checkbox" });
+						const tasksCheck = tasksCb.createEl("input", {
+							type: "checkbox",
+						}) as HTMLInputElement;
 						tasksCheck.checked = this.scaffoldTasks;
 						tasksCheck.style.marginRight = "6px";
 						tasksCheck.addEventListener("change", () => {
@@ -1061,7 +662,9 @@ module.exports = class FlowtimePlugin extends Plugin {
 						const wikiCb = contentEl.createEl("label", {
 							cls: "flowtime-label",
 						});
-						const wikiCheck = wikiCb.createEl("input", { type: "checkbox" });
+						const wikiCheck = wikiCb.createEl("input", {
+							type: "checkbox",
+						}) as HTMLInputElement;
 						wikiCheck.checked = this.scaffoldWiki;
 						wikiCheck.style.marginRight = "6px";
 						wikiCheck.addEventListener("change", () => {
@@ -1092,7 +695,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 								this.close();
 							}
 						});
-						input.addEventListener("keydown", (e) => {
+						input.addEventListener("keydown", (e: KeyboardEvent) => {
 							if (e.key === "Enter") {
 								const name = input.value.trim();
 								if (name) {
@@ -1105,24 +708,40 @@ module.exports = class FlowtimePlugin extends Plugin {
 							}
 						});
 					}
-					onClose() {
+					override onClose(): void {
 						this.contentEl.empty();
 					}
 				}
 
-				new ProjectNameModal(this.app, async (name, opts) => {
-					try {
-						const result = await this.templateEngine.createProject(name, opts);
-						const parts = [result.notePath];
-						if (result.tasksPath) parts.push(result.tasksPath);
-						if (result.wikiPath) parts.push(result.wikiPath);
-						this.notify(
-							"✅ Project created: " + name + " (" + parts.length + " files)",
-						);
-					} catch (e) {
-						this.notify("❌ Failed to create project: " + e.message, true);
-					}
-				}).open();
+				new ProjectNameModal(
+					this.app,
+					async (
+						name: string,
+						opts: { scaffoldTasks: boolean; scaffoldWiki: boolean },
+					) => {
+						try {
+							const result = await this.templateEngine.createProject(
+								name,
+								opts,
+							);
+							const parts = [result.notePath];
+							if (result.tasksPath) parts.push(result.tasksPath);
+							if (result.wikiPath) parts.push(result.wikiPath);
+							this.notify(
+								"\u2705 Project created: " +
+									name +
+									" (" +
+									parts.length +
+									" files)",
+							);
+						} catch (e) {
+							this.notify(
+								"\u274C Failed to create project: " + (e as Error).message,
+								true,
+							);
+						}
+					},
+				).open();
 			},
 		});
 
@@ -1132,11 +751,13 @@ module.exports = class FlowtimePlugin extends Plugin {
 			name: "Add Bucket",
 			callback: () => {
 				class BucketModal extends Modal {
-					constructor(app, plugin) {
+					plugin: FlowtimePlugin;
+
+					constructor(app: App, plugin: FlowtimePlugin) {
 						super(app);
 						this.plugin = plugin;
 					}
-					onOpen() {
+					override onOpen(): void {
 						const { contentEl } = this;
 						contentEl.createEl("h2", { text: "Add Bucket" });
 						contentEl.createEl("p", {
@@ -1173,9 +794,9 @@ module.exports = class FlowtimePlugin extends Plugin {
 						const limitInput = contentEl.createEl("input", {
 							type: "number",
 							value: "10",
-							min: "1",
 							cls: "flowtime-input",
-						});
+						}) as HTMLInputElement;
+						limitInput.min = "1";
 
 						const btnRow = contentEl.createEl("div", {
 							cls: "flowtime-btn-row",
@@ -1217,11 +838,11 @@ module.exports = class FlowtimePlugin extends Plugin {
 							});
 							this.plugin.settings.buckets = buckets;
 							await this.plugin.saveData(this.plugin.settings);
-							this.plugin.notify("✅ Bucket created: " + name);
+							this.plugin.notify("\u2705 Bucket created: " + name);
 							this.close();
 						});
 					}
-					onClose() {
+					override onClose(): void {
 						this.contentEl.empty();
 					}
 				}
@@ -1235,9 +856,14 @@ module.exports = class FlowtimePlugin extends Plugin {
 			id: "generate-routines",
 			name: "Generate Routines",
 			callback: async () => {
-				const count = await this.routineEngine.generateAllDue({ force: true });
+				const count = await this.routineEngine.generateAllDue({
+					force: true,
+				});
 				this.notify(
-					"🔁 Generated " + count + " routine task" + (count === 1 ? "" : "s"),
+					"\u{1F501} Generated " +
+						count +
+						" routine task" +
+						(count === 1 ? "" : "s"),
 				);
 			},
 		});
@@ -1246,9 +872,11 @@ module.exports = class FlowtimePlugin extends Plugin {
 			id: "generate-routines-today",
 			name: "Generate Routines for Today",
 			callback: async () => {
-				const count = await this.routineEngine.generateToday({ force: true });
+				const count = await this.routineEngine.generateToday({
+					force: true,
+				});
 				this.notify(
-					"🔁 Generated " +
+					"\u{1F501} Generated " +
 						count +
 						" routine task" +
 						(count === 1 ? "" : "s") +
@@ -1263,7 +891,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 			callback: async () => {
 				await this.routineEngine.clearTracking();
 				this.notify(
-					"🗑 Routine tracking cleared. Regenerate to recreate instances.",
+					"\u{1F5D1} Routine tracking cleared. Regenerate to recreate instances.",
 				);
 			},
 		});
@@ -1274,12 +902,19 @@ module.exports = class FlowtimePlugin extends Plugin {
 			name: "Start Timer",
 			callback: () => {
 				class StartTimerModal extends Modal {
-					constructor(app, statusTimer, notify) {
+					statusTimer: StatusTimer;
+					notifyFn: (msg: string, isError?: boolean) => void;
+
+					constructor(
+						app: App,
+						statusTimer: StatusTimer,
+						notifyFn: (msg: string, isError?: boolean) => void,
+					) {
 						super(app);
 						this.statusTimer = statusTimer;
-						this.notify = notify;
+						this.notifyFn = notifyFn;
 					}
-					onOpen() {
+					override onOpen(): void {
 						const { contentEl } = this;
 						contentEl.createEl("h2", { text: "\u23F1 Start Timer" });
 
@@ -1302,9 +937,9 @@ module.exports = class FlowtimePlugin extends Plugin {
 						const durInput = contentEl.createEl("input", {
 							type: "number",
 							value: "25",
-							min: "1",
 							cls: "flowtime-input",
-						});
+						}) as HTMLInputElement;
+						durInput.min = "1";
 						durInput.style.width = "100px";
 
 						const btnRow = contentEl.createEl("div", {
@@ -1323,26 +958,26 @@ module.exports = class FlowtimePlugin extends Plugin {
 						startBtn.addEventListener("click", () => {
 							const name = nameInput.value.trim();
 							if (!name) {
-								this.notify("Task name is required", true);
+								this.notifyFn("Task name is required", true);
 								return;
 							}
 							const minutes = parseInt(durInput.value, 10);
 							if (!minutes || minutes < 1) {
-								this.notify("Duration must be at least 1 minute", true);
+								this.notifyFn("Duration must be at least 1 minute", true);
 								return;
 							}
 							this.statusTimer.start(name, minutes * 60);
-							this.notify(
+							this.notifyFn(
 								"\u23F1 Started timer: " + name + " (" + minutes + "m)",
 							);
 							this.close();
 						});
 
-						nameInput.addEventListener("keydown", (e) => {
+						nameInput.addEventListener("keydown", (e: KeyboardEvent) => {
 							if (e.key === "Enter") startBtn.click();
 						});
 					}
-					onClose() {
+					override onClose(): void {
 						this.contentEl.empty();
 					}
 				}
@@ -1379,13 +1014,17 @@ module.exports = class FlowtimePlugin extends Plugin {
 			name: "Reset to Defaults",
 			callback: async () => {
 				class ConfirmModal extends Modal {
-					constructor(app, onConfirm) {
+					onConfirm: () => void;
+
+					constructor(app: App, onConfirm: () => void) {
 						super(app);
 						this.onConfirm = onConfirm;
 					}
-					onOpen() {
+					override onOpen(): void {
 						const { contentEl } = this;
-						contentEl.createEl("h2", { text: "Reset Flowtime to Defaults?" });
+						contentEl.createEl("h2", {
+							text: "Reset Flowtime to Defaults?",
+						});
 						contentEl.createEl("p", {
 							text: "This will clear all settings, buckets, and the task cache. Project files and session data will NOT be affected.",
 							cls: "flowtime-label",
@@ -1408,7 +1047,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 							this.close();
 						});
 					}
-					onClose() {
+					override onClose(): void {
 						this.contentEl.empty();
 					}
 				}
@@ -1422,8 +1061,12 @@ module.exports = class FlowtimePlugin extends Plugin {
 						if (await this.app.vault.adapter.exists(cachePath)) {
 							await this.app.vault.adapter.remove(cachePath);
 						}
-					} catch (_) {}
-					this.notify("✅ Flowtime reset to defaults. Reload for full effect.");
+					} catch (_) {
+						/* ignore */
+					}
+					this.notify(
+						"\u2705 Flowtime reset to defaults. Reload for full effect.",
+					);
 				}).open();
 			},
 		});
@@ -1434,14 +1077,16 @@ module.exports = class FlowtimePlugin extends Plugin {
 			name: "Rebuild Task Cache",
 			callback: async () => {
 				this.taskCache.clear();
-				this.notify("🔄 Cache cleared. It will rebuild on next render.");
+				this.notify(
+					"\u{1F504} Cache cleared. It will rebuild on next render.",
+				);
 			},
 		});
 
 		/**
 		 * Debounced cache save — writes 2s after last change.
 		 */
-		this._scheduleCacheSave = (force) => {
+		this._scheduleCacheSave = (force?: boolean): void => {
 			if (force && this._cacheSaveTimer) {
 				clearTimeout(this._cacheSaveTimer);
 				this._cacheSaveTimer = null;
@@ -1455,10 +1100,12 @@ module.exports = class FlowtimePlugin extends Plugin {
 						// Also strip legacy _taskCache from data.json if present
 						const data = (await this.loadData()) || {};
 						if (data._taskCache) {
-							delete data._taskCache;
+							delete (data as Record<string, unknown>)._taskCache;
 							await this.saveData(data);
 						}
-					} catch (_) {}
+					} catch (_) {
+						/* ignore */
+					}
 				},
 				force ? 0 : 2000,
 			);
@@ -1500,8 +1147,9 @@ module.exports = class FlowtimePlugin extends Plugin {
 	 * Migrates any leftover data from the old vault-root flowtime/ location
 	 * and cleans up the empty parent folder.
 	 */
-	async _ensureSessionDir() {
-		const sessionDir = this.app.vault.configDir + "/plugins/flowtime/sessions";
+	async _ensureSessionDir(): Promise<void> {
+		const sessionDir =
+			this.app.vault.configDir + "/plugins/flowtime/sessions";
 		try {
 			if (!(await this.app.vault.adapter.exists(sessionDir))) {
 				await this.app.vault.createFolder(sessionDir);
@@ -1523,7 +1171,9 @@ module.exports = class FlowtimePlugin extends Plugin {
 				await this.app.vault.adapter.rmdir(oldDir, false);
 				if (count > 0) {
 					this.notify(
-						"📁 Migrated " + count + " session file(s) to plugin folder",
+						"\u{1F4C1} Migrated " +
+							count +
+							" session file(s) to plugin folder",
 					);
 				}
 			}
@@ -1531,7 +1181,10 @@ module.exports = class FlowtimePlugin extends Plugin {
 			// v0.7.0: Purge any remaining empty flowtime/ tree
 			await this._purgeFlowtime();
 		} catch (e) {
-			console.warn("Flowtime: Could not ensure sessions directory:", e.message);
+			console.warn(
+				"Flowtime: Could not ensure sessions directory:",
+				(e as Error).message,
+			);
 		}
 	}
 
@@ -1539,7 +1192,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 	 * Recursively nuke the old flowtime/ tree if it's empty of .md files
 	 * (only plugin debris like empty dirs + .ndjson leftovers).
 	 */
-	async _purgeFlowtime() {
+	async _purgeFlowtime(): Promise<void> {
 		try {
 			const root = "flowtime";
 			if (!(await this.app.vault.adapter.exists(root))) return;
@@ -1549,10 +1202,13 @@ module.exports = class FlowtimePlugin extends Plugin {
 				try {
 					if (await this.app.vault.adapter.exists(sub)) {
 						const list = await this.app.vault.adapter.list(sub);
-						for (const f of list.files) await this.app.vault.adapter.remove(f);
+						for (const f of list.files)
+							await this.app.vault.adapter.remove(f);
 						await this.app.vault.adapter.rmdir(sub, false);
 					}
-				} catch (_) {}
+				} catch (_) {
+					/* ignore */
+				}
 			}
 
 			// Nuke root if nothing left
@@ -1560,7 +1216,9 @@ module.exports = class FlowtimePlugin extends Plugin {
 			if (rootList.files.length === 0 && rootList.folders.length === 0) {
 				await this.app.vault.adapter.rmdir(root, false);
 			}
-		} catch (_) {}
+		} catch (_) {
+			/* ignore */
+		}
 	}
 
 	/**
@@ -1570,7 +1228,7 @@ module.exports = class FlowtimePlugin extends Plugin {
 	 * the next target time so long-running Obsidian sessions still get new
 	 * routine tasks every day without requiring a restart.
 	 */
-	_scheduleDailyGenerations() {
+	_scheduleDailyGenerations(): void {
 		if (this._dailyGenTimer) {
 			clearTimeout(this._dailyGenTimer);
 		}
@@ -1593,21 +1251,21 @@ module.exports = class FlowtimePlugin extends Plugin {
 
 		const delay = Math.max(0, target.getTime() - now.getTime());
 
-		this._dailyGenTimer = setTimeout(() => {
+		this._dailyGenTimer = setTimeout(async () => {
 			this._dailyGenTimer = null;
-			this.routineEngine
-				.generateAllDue()
-				.then((count) => {
-					if (count > 0 && !this.settings.quietMode) {
-						this.notify(
-							"🔁 Generated " +
-								count +
-								" routine task" +
-								(count === 1 ? "" : "s"),
-						);
-					}
-				})
-				.catch((e) => console.warn("Flowtime: Daily gen error:", e.message));
+			try {
+				const count = await this.routineEngine.generateAllDue();
+				if (count > 0 && !this.settings.quietMode) {
+					this.notify(
+						"\u{1F501} Generated " +
+							count +
+							" routine task" +
+							(count === 1 ? "" : "s"),
+					);
+				}
+			} catch (e) {
+				console.warn("Flowtime: Daily gen error:", (e as Error).message);
+			}
 			// Re-schedule for the next 6 AM or 6 PM
 			this._scheduleDailyGenerations();
 		}, delay);
@@ -1618,9 +1276,10 @@ module.exports = class FlowtimePlugin extends Plugin {
 	 * exists. No-op if not configured or already present — only creates (once)
 	 * if configured but missing. Never shows a notification.
 	 */
-	async _ensureDailyNotesFolder() {
+	async _ensureDailyNotesFolder(): Promise<void> {
 		try {
-			const dailyNotesPath = this.app.vault.configDir + "/daily-notes.json";
+			const dailyNotesPath =
+				this.app.vault.configDir + "/daily-notes.json";
 			if (!(await this.app.vault.adapter.exists(dailyNotesPath))) return;
 			const content = await this.app.vault.adapter.read(dailyNotesPath);
 			const config = JSON.parse(content);
@@ -1629,13 +1288,15 @@ module.exports = class FlowtimePlugin extends Plugin {
 			if (!(await this.app.vault.adapter.exists(folder))) {
 				await this.app.vault.createFolder(folder);
 			}
-		} catch (_) {}
+		} catch (_) {
+			/* ignore */
+		}
 	}
 
 	/**
 	 * Ensure the inbox file exists (used by inbox processor modal, not auto-created).
 	 */
-	async _ensureInbox() {
+	async _ensureInbox(): Promise<void> {
 		const path = this.settings.inboxPath || "Inbox.md";
 		try {
 			if (!(await this.app.vault.adapter.exists(path))) {
@@ -1648,7 +1309,7 @@ Process them with **Flowtime: Process Inbox**.
 				this.notify("\u{1F4E5} Created inbox: " + path);
 			}
 		} catch (e) {
-			console.warn("Flowtime: Could not create inbox:", e.message);
+			console.warn("Flowtime: Could not create inbox:", (e as Error).message);
 		}
 	}
 
@@ -1656,17 +1317,20 @@ Process them with **Flowtime: Process Inbox**.
 	 * Open or reveal the Today note in a new leaf.
 	 * v0.6.0
 	 */
-	async _openTodayNote() {
+	async _openTodayNote(): Promise<void> {
 		try {
 			const path = this.settings.todayNotePath || "Today.md";
 			// Ensure it exists
 			await this.templateEngine.createToday(path);
 			const file = this.app.vault.getAbstractFileByPath(path);
 			if (file) {
-				await this.app.workspace.getLeaf().openFile(file);
+				await this.app.workspace.getLeaf().openFile(file as TFile);
 			}
 		} catch (e) {
-			this.notify("Could not open Today note: " + e.message, true);
+			this.notify(
+				"Could not open Today note: " + (e as Error).message,
+				true,
+			);
 		}
 	}
-};
+}

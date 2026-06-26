@@ -1,23 +1,81 @@
-const { MarkdownRenderChild } = require("obsidian");
-const { parseTaskLine, formatDuration, formatTimer } = require("./task-parser");
-const { renderProgressBar, formatHours } = require("./budget-state");
-const {
-	DUR_OPTS,
-	START_H,
-	START_END,
-	parseStored,
-	calcEnd,
-	parseDurStr,
-	timeToRow,
-	getMonday,
-	getFriday,
-	getWeekNumber,
-	isFileInScope,
-	getFileTasks,
-	toggleCheck,
-	priorityWeight,
-	saveTimeWithDuration,
-} = require("./task-utils");
+/**
+ * WeekplanRenderer — day-by-day week planning view.
+ *
+ * Renders Monday–Friday with all tasks (routines + one-offs) per day,
+ * inline editing, daily budget bars, and toolbar actions.
+ */
+
+import { MarkdownRenderChild, TFile } from "obsidian";
+import type { App } from "obsidian";
+import { parseTaskLine, formatDuration, formatTimer } from "./task-parser";
+import { renderProgressBar, formatHours } from "./budget-state";
+import {
+  DUR_OPTS,
+  START_H,
+  START_END,
+  parseStored,
+  calcEnd,
+  parseDurStr,
+  timeToRow,
+  getMonday,
+  getFriday,
+  getWeekNumber,
+  isFileInScope,
+  getFileTasks,
+  toggleCheck,
+  priorityWeight,
+  saveTimeWithDuration,
+  fmtDateShort,
+  fmtDate,
+} from "./task-utils";
+import type { TaskRow, ParsedTask, FlowtimeSettings } from "./types";
+import { QuickEntryModal } from "./quick-entry";
+
+/* ─── Local types ─── */
+
+interface FlowtimePluginRef {
+	settings: FlowtimeSettings;
+	projectEngine?: {
+		getAllProjects(): Promise<Array<{ name: string; path: string }>>;
+		resolve(filePath: string): Promise<{ name: string | null; path: string | null; source: string | null }>;
+	};
+	taskCache?: {
+		get(filePath: string): { parsedTasks: Omit<ParsedTask, "file">[] } | null;
+		set(filePath: string, tasks: Omit<ParsedTask, "file">[]): void;
+		getTasksForDateRange(
+			dateFrom: string,
+			dateTo: string,
+		): Array<{ filePath: string; task: Omit<ParsedTask, "file"> }>;
+	};
+	routineEngine?: {
+		generateAllDue(options?: { force?: boolean }): Promise<number>;
+		loadGenerated(): Promise<void>;
+	};
+	notify: (msg: string, isError?: boolean) => void;
+	saveData?: (data: FlowtimeSettings) => Promise<void>;
+}
+
+/** Extended TaskRow with renderer-specific computed fields */
+interface WeekTask extends TaskRow {
+	isRoutine: boolean;
+}
+
+interface OccupiedSlot {
+	rowStart: number;
+	rowEnd: number;
+}
+
+/** DOM element carrying grid-slots data */
+interface GridElement extends HTMLElement {
+	_tgSlots?: string[];
+}
+
+/** DOM element carrying grid-task-card data */
+interface GridTaskCard extends HTMLElement {
+	_tgRowStart?: number;
+	_tgRowEnd?: number;
+	_tgTask?: WeekTask;
+}
 
 /**
  * WeekplanRenderer — day-by-day week planning view.
@@ -26,30 +84,56 @@ const {
  * inline editing, daily budget bars, and toolbar actions.
  */
 class WeekplanRenderer extends MarkdownRenderChild {
-	constructor(app, containerEl, plugin, projectEngine, sourcePath) {
+	app: App;
+	containerEl: HTMLElement;
+	plugin: FlowtimePluginRef;
+	projectEngine: FlowtimePluginRef["projectEngine"];
+	sourcePath: string;
+	dayTasks: Record<string, WeekTask[]>;
+	dayTotals: Record<string, number>;
+	dailyCap: number;
+	gridMode: boolean;
+	weekStart!: string;
+	weekEnd!: string;
+	dayOrder!: string[];
+	_tgEditPopup: HTMLElement | null;
+	_tgOccupied: Record<string, OccupiedSlot[]>;
+	_tgUtCount: Record<string, number>;
+
+	constructor(
+		app: App,
+		containerEl: HTMLElement,
+		plugin: FlowtimePluginRef,
+		projectEngine: FlowtimePluginRef["projectEngine"],
+		sourcePath: string,
+	) {
 		super(containerEl);
 		this.app = app;
 		this.containerEl = containerEl;
 		this.plugin = plugin;
 		this.projectEngine = projectEngine;
 		this.sourcePath = sourcePath;
-		this.dayTasks = {}; // dateStr → task[]
-		this.dayTotals = {}; // dateStr → total minutes
+		this.dayTasks = {};
+		this.dayTotals = {};
 		this.dailyCap = 12;
-		this.gridMode = false; // toggle: false=list, true=timeline grid
+		this.gridMode = false;
+		this._tgEditPopup = null;
+		this._tgOccupied = {};
+		this._tgUtCount = {};
 	}
 
-	async onload() {
+	override async onload(): Promise<void> {
 		try {
 			this.dailyCap = this.plugin?.settings?.dailyCap || 12;
 			// Phase 1: Render instantly from cache (fast, might miss recent changes)
 			this._loadFromCache();
-			this.renderView();
-			// Phase 2: Full scan in background, re-render when done
-			this.loadWeek().then(() => this.renderView());
+		this.renderView();
+		// Phase 2: Full scan in background, re-render when done
+		await this.loadWeek();
+		this.renderView();
 		} catch (e) {
 			this.containerEl.createEl("p", {
-				text: "⚠️ Error: " + e.message,
+				text: "⚠️ Error: " + (e as Error).message,
 				cls: "flowtime-empty",
 			});
 			console.error("Weekplan error:", e);
@@ -58,7 +142,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 
 	/* ─── helpers ─── */
 
-	_getMonday(d) {
+	_getMonday(d: string): string {
 		const date = new Date(d);
 		const day = date.getDay();
 		const diff = day === 0 ? -6 : 1 - day;
@@ -66,21 +150,21 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		return date.toISOString().split("T")[0];
 	}
 
-	_getFriday(mondayStr) {
+	_getFriday(mondayStr: string): string {
 		const m = new Date(mondayStr + "T12:00:00");
 		m.setDate(m.getDate() + 4);
 		return m.toISOString().split("T")[0];
 	}
 
-	_timeOpts(h1, h2) {
-		const r = [];
+	_timeOpts(h1: number, h2: number): string[] {
+		const r: string[] = [];
 		for (let h = h1; h <= h2; h++)
 			for (let m = 0; m < 60; m += 30)
 				r.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
 		return r;
 	}
 
-	_parseStored(t) {
+	_parseStored(t: string): { start: string; dur: number } {
 		if (!t) return { start: "", dur: 0 };
 		const m = t.match(/^(\d{1,2}:\d{2})\s*[—\-–]\s*(\d{1,2}:\d{2})$/);
 		if (!m) return { start: "", dur: 0 };
@@ -98,42 +182,24 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		};
 	}
 
-	_parseDurStr(s) {
+	_parseDurStr(s: string): number {
 		if (!s) return 0;
 		const m = s.match(/^(\d+(?:\.\d+)?)\s*([hm])$/);
 		if (m) return m[2] === "h" ? parseFloat(m[1]) * 60 : parseFloat(m[1]);
 		return parseInt(s, 10) || 0;
 	}
 
-	_calcEnd(s, d) {
+	_calcEnd(s: string, d: number): string {
 		if (!s || !d) return "";
 		const t = s.split(":").reduce((a, n) => +n + 60 * a, 0) + d;
 		return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(Math.round(t % 60)).padStart(2, "0")}`;
 	}
 
-	_fmtDate(dateStr) {
-		if (!dateStr) return "";
-		const today = new Date();
-		today.setHours(0, 0, 0, 0);
-		const d = new Date(dateStr + "T00:00:00");
-		const diff = Math.round((d - today) / 86400000);
-		const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-		const label = days[d.getDay()] + " " + d.getDate();
-		if (diff === 0) return label + " (Today)";
-		if (diff === 1) return label + " (Tomorrow)";
-		return label;
-	}
+	_fmtDate(dateStr: string): string {
+		return fmtDate(dateStr);
+  }
 
-	_isFileInScope(filePath) {
-		if (filePath.startsWith(".obsidian") || filePath.startsWith(".git"))
-			return false;
-		const root = this.plugin?.settings?.projectsRoot || "";
-		if (!root) return true;
-		const normalizedRoot = root.endsWith("/") ? root : root + "/";
-		return filePath.startsWith(normalizedRoot);
-	}
-
-	async _getFileTasks(file) {
+  async _getFileTasks(file: TFile): Promise<ParsedTask[]> {
 		const cache = this.plugin?.taskCache;
 		const cached = cache?.get(file.path);
 		if (cached) {
@@ -141,14 +207,14 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		}
 		const content = await this.app.vault.read(file);
 		const lines = content.split("\n");
-		const result = [];
+		const result: ParsedTask[] = [];
 		for (let i = 0; i < lines.length; i++) {
 			const parsed = parseTaskLine(lines[i], file, i);
 			if (parsed) result.push(parsed);
 		}
 		if (cache) {
 			const cacheable = result.map((t) => {
-				const { file: f, ...rest } = t;
+				const { file: _f, ...rest } = t;
 				return rest;
 			});
 			cache.set(file.path, cacheable);
@@ -156,31 +222,32 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		return result;
 	}
 
-	_priorityWeight(p) {
-		const w = { "🟥": 5, "🟨": 3, "🟩": 1 };
-		return w[p] || 0;
+	_priorityWeight(p: string | null | undefined): number {
+		const w: Record<string, number> = { "🟥": 5, "🟨": 3, "🟩": 1 };
+		return (p && w[p]) || 0;
 	}
 
 	/* ─── loading ─── */
 
 	/** Quick load from cache only — no I/O. Call before renderView(). */
-	_loadFromCache() {
+	_loadFromCache(): void {
 		const today = new Date().toISOString().split("T")[0];
 		const mon = getMonday(today);
 		const fri = getFriday(mon);
 		this._initWeek(mon, fri);
 
-		const cached = this.plugin?.taskCache?.getTasksForDateRange(mon, fri) || [];
+		const cached =
+			this.plugin?.taskCache?.getTasksForDateRange(mon, fri) || [];
 		for (const { filePath, task: parsed } of cached) {
 			const file = this.app.vault.getAbstractFileByPath(filePath);
-			if (!file || !parsed.taskDate) continue;
+			if (!(file instanceof TFile) || !parsed.taskDate) continue;
 			if (!this.dayTasks[parsed.taskDate]) continue;
 			this._addTaskNoProject(parsed, file);
 		}
 	}
 
 	/** Full scan — reads uncached files, refreshes cache. Call async after first render. */
-	async loadWeek() {
+	async loadWeek(): Promise<void> {
 		const today = new Date().toISOString().split("T")[0];
 		const root = this.plugin?.settings?.projectsRoot || "";
 		const mon = getMonday(today);
@@ -199,7 +266,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		const uncached = allFiles.filter((f) => !cachedPaths.has(f.path));
 
 		const freshResults = await Promise.all(
-			uncached.map(async (file) => ({
+			uncached.map(async (file: TFile) => ({
 				file,
 				tasks: await getFileTasks(file, this.app, cache),
 			})),
@@ -209,7 +276,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		for (const { filePath, task: parsed } of cached) {
 			if (!parsed.taskDate || !this.dayTasks[parsed.taskDate]) continue;
 			const file = this.app.vault.getAbstractFileByPath(filePath);
-			if (!file) continue;
+			if (!(file instanceof TFile)) continue;
 			await this._addTask(parsed, file);
 		}
 		for (const { file, tasks } of freshResults) {
@@ -229,7 +296,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 	}
 
 	/** Init day buckets for a Mon-Fri range */
-	_initWeek(mon, fri) {
+	_initWeek(mon: string, fri: string): void {
 		this.weekStart = mon;
 		this.weekEnd = fri;
 		this.dayTasks = {};
@@ -245,7 +312,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 	}
 
 	/** Add parsed task to day bucket (with project resolution) */
-	async _addTask(parsed, file) {
+	async _addTask(parsed: ParsedTask, file: TFile): Promise<void> {
 		const {
 			taskDate,
 			rawText,
@@ -256,7 +323,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			durationMinutes,
 		} = parsed;
 		const isRoutine = !!rawText.match(/🔁/);
-		let project = null;
+		let project: string | null = null;
 		if (this.projectEngine) {
 			const pj = await this.projectEngine.resolve(file.path);
 			project = pj?.name || null;
@@ -289,7 +356,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 	}
 
 	/** Fast path version — skips projectEngine resolve (no I/O) */
-	_addTaskNoProject(parsed, file) {
+	_addTaskNoProject(parsed: ParsedTask, file: TFile): void {
 		const {
 			taskDate,
 			rawText,
@@ -300,7 +367,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			durationMinutes,
 		} = parsed;
 		const isRoutine = !!rawText.match(/🔁/);
-		let project = null;
+		let project: string | null = null;
 		if (rawText) {
 			const pMatch = rawText.match(/@p:([^\s]+)/);
 			if (pMatch) project = pMatch[1];
@@ -329,7 +396,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 	}
 
 	/** Sort tasks in each day: priority → time */
-	_sortDays() {
+	_sortDays(): void {
 		for (const dateStr of Object.keys(this.dayTasks)) {
 			this.dayTasks[dateStr].sort((a, b) => {
 				const pa = priorityWeight(a.priority);
@@ -345,7 +412,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 
 	/* ─── rendering ─── */
 
-	renderView() {
+	renderView(): void {
 		this.containerEl.empty();
 
 		// ── Header bar ──
@@ -390,7 +457,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		vacBtn.addEventListener("click", async () => {
 			if (this.plugin) {
 				this.plugin.settings.vacationMode = !this.plugin.settings.vacationMode;
-				await this.plugin.saveData(this.plugin.settings);
+				await this.plugin.saveData?.(this.plugin.settings);
 				this.renderView();
 				this.plugin.notify?.(
 					this.plugin.settings.vacationMode
@@ -415,7 +482,6 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			cls: "ft-wp-btn ft-wp-btn-primary",
 		});
 		addBtn.addEventListener("click", () => {
-			const { QuickEntryModal } = require("./quick-entry");
 			const modal = new QuickEntryModal(this.app, this.plugin);
 			modal.open();
 		});
@@ -443,7 +509,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 	 * Convert a time string (HH:MM) to a grid row number.
 	 * Row 1 = header, Row 2 = START_H:00, each 30min = +1 row.
 	 */
-	_timeToRow(timeStr) {
+	_timeToRow(timeStr: string): number {
 		if (!timeStr) return -1;
 		const parts = timeStr.split(":");
 		const h = parseInt(parts[0], 10);
@@ -459,13 +525,13 @@ class WeekplanRenderer extends MarkdownRenderChild {
 	 * Map day names (dateStr) to grid column indexes.
 	 * Column 1 = time labels, columns 2-6 = Mon-Fri.
 	 */
-	_dateToCol(dateStr) {
+	_dateToCol(dateStr: string): number {
 		if (!this.dayOrder) return 2;
 		const idx = this.dayOrder.indexOf(dateStr);
 		return idx >= 0 ? idx + 2 : 2;
 	}
 
-	renderGridView() {
+	renderGridView(): void {
 		const today = new Date().toISOString().split("T")[0];
 		const days = Object.keys(this.dayTasks).sort();
 		this.dayOrder = days;
@@ -477,10 +543,10 @@ class WeekplanRenderer extends MarkdownRenderChild {
 
 		// ── Grid container ──
 		const wrap = this.containerEl.createEl("div", { cls: "ft-tg-wrap" });
-		const grid = wrap.createEl("div", { cls: "ft-tg-grid" });
+		const grid: GridElement = wrap.createEl("div", { cls: "ft-tg-grid" });
 
 		// Build time slots (every 30min from START_H to START_END)
-		const slots = [];
+		const slots: string[] = [];
 		for (let h = START_H; h <= START_END; h++) {
 			for (let m = 0; m < 60; m += 30) {
 				if (h === START_END && m > 0) break;
@@ -588,13 +654,13 @@ class WeekplanRenderer extends MarkdownRenderChild {
 	}
 
 	/** Render a single task card on the timeline grid */
-	_renderGridTask(grid, task, col) {
+	_renderGridTask(grid: GridElement, task: WeekTask, col: number): void {
 		const { start, dur } = parseStored(task.time);
 		if (start) {
-			const rowStart = timeToRow(start, START_H, START_END);
+			const rowStart = timeToRow(start, START_H);
 			const endTime = calcEnd(start, dur);
 			let rowEnd = endTime
-				? timeToRow(endTime, START_H, START_END)
+				? timeToRow(endTime, START_H)
 				: rowStart + 1;
 			if (rowEnd <= rowStart) rowEnd = rowStart + 1;
 			if (rowStart < 2) return; // outside visible range
@@ -608,7 +674,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			const stackLevel = overlaps.length; // 0 = first, 1 = second, etc.
 			this._tgOccupied[col].push({ rowStart, rowEnd });
 
-			const card = grid.createEl("div", {
+			const card: GridTaskCard = grid.createEl("div", {
 				cls:
 					"ft-tg-card" +
 					(task.status === "x" ? " ft-tg-done" : "") +
@@ -651,14 +717,14 @@ class WeekplanRenderer extends MarkdownRenderChild {
 
 			// ── Resize handle (v0.5.0) ──
 			const resizeHandle = card.createEl("div", { cls: "ft-tg-resize-handle" });
-			resizeHandle.addEventListener("mousedown", (e) => {
+			resizeHandle.addEventListener("mousedown", (e: MouseEvent) => {
 				e.preventDefault();
 				e.stopPropagation();
 				this._startCardResize(e, card, grid, timeLabel);
 			});
 
 			// Click to edit popup
-			card.addEventListener("click", (e) => {
+			card.addEventListener("click", (e: MouseEvent) => {
 				if (e.target === resizeHandle) return;
 				e.stopPropagation();
 				this._openTaskEditPopup(card, task, start, dur);
@@ -686,7 +752,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			if (task.project) {
 				card.createEl("span", { text: task.project, cls: "ft-tg-project" });
 			}
-			card.addEventListener("click", (e) => {
+			card.addEventListener("click", (e: MouseEvent) => {
 				e.stopPropagation();
 				this._openTaskEditPopup(card, task, "", 0);
 			});
@@ -696,16 +762,21 @@ class WeekplanRenderer extends MarkdownRenderChild {
 	/* ─── Drag-to-resize (v0.5.0) ─── */
 
 	/** Start dragging a card's resize handle */
-	_startCardResize(e, card, grid, timeLabel) {
+	_startCardResize(
+		e: MouseEvent,
+		card: GridTaskCard,
+		grid: GridElement,
+		timeLabel: HTMLElement,
+	): void {
 		const rowStart = card._tgRowStart;
-		if (rowStart < 2) return;
+		if (!rowStart || rowStart < 2) return;
 
 		// Grid row height from CSS: header=36px, data rows=28px
 		const HEADER_H = 36;
 		const ROW_H = 28;
 
 		// Snap a mouse Y to the nearest grid row, clamped to valid range
-		const yToRow = (clientY) => {
+		const yToRow = (clientY: number): number => {
 			const wrap = grid.closest(".ft-tg-wrap");
 			const scrollTop = wrap ? wrap.scrollTop : 0;
 			const rect = grid.getBoundingClientRect();
@@ -714,7 +785,9 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			const rawRow = 2 + Math.round((relY - HEADER_H) / ROW_H);
 			// Clamp: at least start+1, at most last data row
 			const maxRow =
-				2 + (parseInt(grid.style.getPropertyValue("--tg-rows"), 10) || 27) - 1;
+				2 +
+				(parseInt(grid.style.getPropertyValue("--tg-rows"), 10) || 27) -
+				1;
 			return Math.max(rowStart + 1, Math.min(rawRow, maxRow));
 		};
 
@@ -723,7 +796,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		dragIndicator.className = "ft-tg-resize-indicator";
 		grid.appendChild(dragIndicator);
 
-		const updateDrag = (_clientX, clientY) => {
+		const updateDrag = (_clientX: number, clientY: number): void => {
 			const newRowEnd = yToRow(clientY);
 			card.style.gridRow = `${rowStart} / ${newRowEnd}`;
 			card._tgRowEnd = newRowEnd;
@@ -742,21 +815,22 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			const newEndTime = this._rowToTime(newRowEnd);
 			const startTime = this._rowToTime(rowStart);
 			if (startTime && newEndTime) {
-				dragIndicator.setText(`${startTime}—${newEndTime}`);
+				dragIndicator.textContent = `${startTime}—${newEndTime}`;
 			}
 		};
 
-		const onMove = (ev) => {
+		const onMove = (ev: MouseEvent): void => {
 			ev.preventDefault();
 			updateDrag(ev.clientX, ev.clientY);
 		};
 
-		const onUp = async (_ev) => {
+		const onUp = async (_ev: MouseEvent): Promise<void> => {
 			document.removeEventListener("mousemove", onMove, true);
 			document.removeEventListener("mouseup", onUp, true);
 			dragIndicator.remove();
 
 			const newRowEnd = card._tgRowEnd;
+			if (!newRowEnd) return;
 			const newEndTime = this._rowToTime(newRowEnd);
 			const startTime = this._rowToTime(rowStart);
 			if (!startTime || !newEndTime) return;
@@ -770,11 +844,12 @@ class WeekplanRenderer extends MarkdownRenderChild {
 
 			// Update the task data
 			const task = card._tgTask;
+			if (!task) return;
 			task.time = startTime + "—" + newEndTime;
 			task.durationMinutes = durMinutes;
 
 			// Update time label on card
-			timeLabel.setText(startTime + "—" + newEndTime);
+			timeLabel.textContent = startTime + "—" + newEndTime;
 
 			// Persist to vault
 			await this._saveTaskInline(
@@ -792,7 +867,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 	}
 
 	/** Convert a grid row number back to a time string (HH:MM) */
-	_rowToTime(rowNum) {
+	_rowToTime(rowNum: number): string {
 		if (rowNum < 2) return "";
 		const slotIndex = rowNum - 2;
 		const totalMinutes = START_H * 60 + slotIndex * 30;
@@ -803,7 +878,12 @@ class WeekplanRenderer extends MarkdownRenderChild {
 	}
 
 	/** Open an edit popup for a grid task card */
-	_openTaskEditPopup(card, task, start, dur) {
+	_openTaskEditPopup(
+		card: GridTaskCard,
+		task: WeekTask,
+		start: string,
+		dur: number,
+	): void {
 		// Close any existing popup
 		if (this._tgEditPopup) {
 			this._tgEditPopup.remove();
@@ -874,7 +954,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 
 			// Toggle check
 			if (cb.checked !== (task.status === "x")) {
-				await this._toggleCheck(task, null);
+				await this._toggleCheck(task);
 			}
 
 			popup.remove();
@@ -892,8 +972,8 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		});
 
 		// Close on outside click
-		const closeHandler = (e) => {
-			if (!popup.contains(e.target) && e.target !== card) {
+		const closeHandler = (e: MouseEvent): void => {
+			if (!popup.contains(e.target as Node) && e.target !== card) {
 				popup.remove();
 				this._tgEditPopup = null;
 				document.removeEventListener("click", closeHandler, true);
@@ -906,7 +986,11 @@ class WeekplanRenderer extends MarkdownRenderChild {
 	}
 
 	/** Save time changes from the grid edit popup to the vault file */
-	async _saveTaskInline(task, startStr, durStr) {
+	async _saveTaskInline(
+		task: WeekTask,
+		startStr: string,
+		durStr: string,
+	): Promise<void> {
 		if (!task.file) return;
 		const durMinutes = this._parseDurStr(durStr);
 		const end =
@@ -953,7 +1037,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		await this.app.vault.modify(task.file, lines.join("\n"));
 	}
 
-	renderListView() {
+	renderListView(): void {
 		const today = new Date().toISOString().split("T")[0];
 		let hasAnyTasks = false;
 		const days = Object.keys(this.dayTasks).sort();
@@ -978,11 +1062,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 
 			// Budget bar
 			if (this.dailyCap > 0) {
-				const bar = renderProgressBar(
-					totalHours,
-					this.dailyCap,
-					`${formatHours(totalHours)}h / ${this.dailyCap}h`,
-				);
+				const bar = renderProgressBar(totalHours, this.dailyCap);
 				bar.style.minWidth = "180px";
 				bar.style.marginLeft = "12px";
 				dayHeader.appendChild(bar);
@@ -1004,7 +1084,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		}
 	}
 
-	_renderTaskRow(section, task) {
+	_renderTaskRow(section: HTMLElement, task: WeekTask): void {
 		const row = section.createEl("div", { cls: "ft-wp-task" });
 		if (task.status === "x" || task.status === "-") {
 			row.addClass("ft-wp-task-done");
@@ -1046,17 +1126,17 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			text: "",
 			cls: "ft-wp-end-preview",
 		});
-		const updateEnd = () => {
+		const updateEnd = (): void => {
 			const s = si.value;
 			const d = this._parseDurStr(di.value);
 			endPreview.setText(s && d > 0 ? "→" + this._calcEnd(s, d) : "");
 		};
 		const saveTime = (() => {
-			let timer;
-			return () => {
+			let timer: ReturnType<typeof setTimeout>;
+			return (): void => {
 				clearTimeout(timer);
 				timer = setTimeout(
-					() => this._saveTaskTime(task, si, di, endPreview),
+					() => this._saveTaskTime(task, si, di),
 					300,
 				);
 			};
@@ -1078,11 +1158,11 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		});
 		cb.addEventListener("click", async () => {
 			try {
-				await this._toggleCheck(task, cb);
-				cb.toggleClass("ft-checked");
-				row.toggleClass("ft-wp-task-done");
+				await this._toggleCheck(task);
+				cb.toggleClass("ft-checked", task.status === "x");
+				row.toggleClass("ft-wp-task-done", task.status === "x");
 			} catch (e) {
-				this.plugin?.notify?.("❌ " + e.message, true);
+				this.plugin.notify("❌ " + (e as Error).message, true);
 			}
 		});
 
@@ -1110,9 +1190,9 @@ class WeekplanRenderer extends MarkdownRenderChild {
 				attr: { title: task.file.basename + ":" + (task.line + 1) },
 			});
 			srcLink.addEventListener("click", () =>
-				this.app.workspace.openLinkText(task.file.path, "", false, {
+				this.app.workspace.openLinkText(task.file!.path, "", false, {
 					line: task.line + 1,
-				}),
+				} as any),
 			);
 		}
 
@@ -1125,7 +1205,12 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			cls: "ft-wp-timer-btn",
 		});
 		// Timer state for inline countdown
-		let timerState = null;
+		let timerState: {
+			remaining: number;
+			total: number;
+			running: boolean;
+			interval: ReturnType<typeof setInterval>;
+		} | null = null;
 		timerBtn.addEventListener("click", () => {
 			if (timerState && timerState.running) {
 				// Stop
@@ -1141,6 +1226,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 				total: totalSeconds,
 				running: true,
 				interval: setInterval(() => {
+					if (!timerState) return;
 					timerState.remaining -= 1;
 					timerBtn.setText(formatTimer(Math.max(0, timerState.remaining)));
 					if (timerState.remaining <= 0) {
@@ -1166,18 +1252,19 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			await this.loadWeek();
 			this.renderView();
 		});
-
-		// Store row reference
-		row._taskData = { task, si, di, endPreview };
 	}
 
 	/* ─── task operations ─── */
 
-	async _toggleCheck(task) {
+	async _toggleCheck(task: WeekTask): Promise<void> {
 		await toggleCheck(this.app.vault, task);
 	}
 
-	async _saveTaskTime(task, si, di) {
+	async _saveTaskTime(
+		task: WeekTask,
+		si: HTMLInputElement,
+		di: HTMLInputElement,
+	): Promise<void> {
 		const start = si.value.trim();
 		const durMinutes = parseDurStr(di.value.trim());
 		await saveTimeWithDuration(this.app.vault, task, start, durMinutes);
@@ -1187,7 +1274,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		task.durationMinutes = durMinutes;
 	}
 
-	async _removeTask(task) {
+	async _removeTask(task: WeekTask): Promise<void> {
 		if (!task.file) return;
 
 		// If it's a routine, mark in .generated.json so engine doesn't re-create
@@ -1195,16 +1282,12 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			await this.plugin.routineEngine.loadGenerated();
 			// Remove the task line from the file
 			await this._deleteTaskLine(task);
-			// Also add a tombstone entry if the routine line hash matches
-			// (the engine already checks .generated.json before creating, so
-			//  if we just leave the existing entry, it won't re-create)
-			// No need for tombstone — existing entry prevents re-creation
 		} else {
 			await this._deleteTaskLine(task);
 		}
 	}
 
-	async _deleteTaskLine(task) {
+	async _deleteTaskLine(task: WeekTask): Promise<void> {
 		if (!task.file) return;
 		const content = await this.app.vault.read(task.file);
 		const lines = content.split("\n");
@@ -1214,27 +1297,27 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		}
 	}
 
-	_getWeekNumber(dateStr) {
+	_getWeekNumber(dateStr: string): number {
 		const d = new Date(dateStr + "T12:00:00");
 		d.setHours(0, 0, 0, 0);
 		d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
 		const week1 = new Date(d.getFullYear(), 0, 4);
 		return (
 			1 +
-			Math.round(((d - week1) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7)
+			Math.round(((d.getTime() - week1.getTime()) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7)
 		);
 	}
 
-	_beep() {
+	_beep(): void {
 		if (this.plugin?.settings?.timerSound === false) return;
 		try {
 			for (const [freq, delay] of [
 				[880, 0],
 				[660, 0.2],
 			]) {
-				const ctx = new AudioContext(),
-					o = ctx.createOscillator(),
-					g = ctx.createGain();
+				const ctx = new AudioContext();
+				const o = ctx.createOscillator();
+				const g = ctx.createGain();
 				o.connect(g);
 				g.connect(ctx.destination);
 				o.frequency.value = freq;
@@ -1245,8 +1328,10 @@ class WeekplanRenderer extends MarkdownRenderChild {
 				);
 				o.start(ctx.currentTime + delay);
 			}
-		} catch (_) {}
+		} catch (_) {
+			// Audio not available — silent fallback
+		}
 	}
 }
 
-module.exports = { WeekplanRenderer };
+export { WeekplanRenderer };

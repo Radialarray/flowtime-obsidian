@@ -4,7 +4,7 @@ import process from "process";
 const prod = process.argv[2] === "production";
 
 const context = await esbuild.context({
-	entryPoints: ["src/main.js"],
+	entryPoints: ["src/main.ts"],
 	bundle: true,
 	format: "cjs",
 	target: "es2018",

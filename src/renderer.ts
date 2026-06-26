@@ -1031,7 +1031,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
         attr: { title: "Open source: " + (task.file.basename || "") + " line " + (task.line + 1) },
       });
       srcBtn.addEventListener("click", () => {
-        this.app.workspace.openLinkText(task.file!.path, "", false, { line: task.line + 1 } as any);
+        this.app.workspace.openLinkText(task.file!.path, "", true, { line: task.line + 1 } as any);
       });
     }
 
@@ -1085,7 +1085,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     projRow.createEl("label", { text: "Project", cls: "ft-fe-label" });
     if (task.project) {
       const pl = projRow.createEl("a", { text: task.project, cls: "ft-fe-link" });
-      pl.addEventListener("click", () => this.app.workspace.openLinkText(task.projectPath || task.project || "", "", false));
+      pl.addEventListener("click", () => this.app.workspace.openLinkText(task.projectPath || task.project || "", "", true));
     } else { projRow.createEl("span", { text: "\u2014", cls: "ft-fe-value" }); }
 
     // ── Buttons ──
@@ -1418,7 +1418,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       const pc = row.createEl("td", { cls: "ft-project-cell" });
       if (task.project) {
         const plink = pc.createEl("a", { text: task.project, cls: "ft-project-link" });
-        if (task.projectPath) { plink.addEventListener("click", () => this.app.workspace.openLinkText(task.projectPath!, "", false)); }
+        if (task.projectPath) { plink.addEventListener("click", () => this.app.workspace.openLinkText(task.projectPath!, "", true)); }
       } else { pc.createEl("span", { text: "\u2014", cls: "ft-project-none" }); }
     }
 
@@ -1449,7 +1449,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     if (this._columnVisibility!.source !== false) {
       const sc = row.createEl("td", { cls: "ft-source" });
       const lnk = sc.createEl("a", { text: task.file?.basename || "\u2014", cls: "ft-source-link" });
-      if (task.file) { lnk.addEventListener("click", () => this.app.workspace.openLinkText(task.file!.path, "", false, { line: task.line + 1 } as any)); }
+      if (task.file) { lnk.addEventListener("click", () => this.app.workspace.openLinkText(task.file!.path, "", true, { line: task.line + 1 } as any)); }
     }
 
     if (this._columnVisibility!.date !== false) {

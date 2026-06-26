@@ -1251,6 +1251,8 @@ export default class FlowtimePlugin extends Plugin {
 				if (!file || !this._isMobileAggregateFile(file)) return;
 				const { refreshAll } = await import("./task-aggregator");
 				await refreshAll(this.app, file, this, file.path);
+				// Re-enhance after aggregation writes to file
+				setTimeout(() => this.listEnhancer.check(), 300);
 			}),
 		);
 	}

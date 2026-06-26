@@ -2698,31 +2698,41 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-v
 }
 
 /* ── ListEnhancer: drag handles + timer buttons on native markdown tasks ── */
+.ft-enhance-actions {
+	float: right;
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	margin-left: 8px;
+	user-select: none;
+}
 .ft-enhance-drag {
 	cursor: grab;
 	color: var(--text-muted);
 	font-size: 14px;
 	line-height: 1;
-	padding: 0 6px;
-	flex-shrink: 0;
+	padding: 0 4px;
 	user-select: none;
+	touch-action: none;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 24px;
-	vertical-align: middle;
+	width: 20px;
 }
 .ft-enhance-drag:active {
 	cursor: grabbing;
 }
+.ft-enhance-drag:hover {
+	color: var(--text-accent);
+}
 .ft-enhance-timer {
 	cursor: pointer;
-	margin-left: 6px;
 	font-size: 0.85em;
 	opacity: 0.5;
 	user-select: none;
-	display: inline-block;
-	vertical-align: middle;
+	display: inline-flex;
+	align-items: center;
+	padding: 0 2px;
 }
 .ft-enhance-timer:hover {
 	opacity: 1;

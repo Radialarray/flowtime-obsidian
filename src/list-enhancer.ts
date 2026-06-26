@@ -52,8 +52,6 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
   let _currentPath: string | null = null;
   let _currentFile: TFile | null = null;
   let _dispose: (() => void) | null = null;
-  let _observer: MutationObserver | null = null;
-  let _observeTimer: ReturnType<typeof setTimeout> | undefined;
   let _taskLineMap: Map<HTMLElement, number> = new Map();
   let _dragListeners: { remove: () => void } | null = null;
 
@@ -147,15 +145,11 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
 
     const selector = ".task-list-item:not(.ft-list-enhanced), .HyperMD-task-line:not(.ft-list-enhanced)";
     const taskEls = container.querySelectorAll(selector);
-    if (taskEls.length === 0) {
-      setTimeout(() => _enhance(), 500);
-      return;
-    }
+    if (taskEls.length === 0) return;
 
     // Parse the note to map line numbers to DOM elements
     _taskLineMap = new Map<HTMLElement, number>();
     if (_currentFile) {
-      // Read the file content and match task lines to DOM order
       app.vault.read(_currentFile).then((content) => {
         const lines = content.split("\n");
         const taskLineNumbers: number[] = [];
@@ -164,7 +158,6 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
             taskLineNumbers.push(i);
           }
         }
-        // Match DOM task elements to line numbers by order
         let idx = 0;
         for (const el of taskEls) {
           if (idx < taskLineNumbers.length) {
@@ -178,19 +171,8 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
     for (const el of taskEls) {
       _enhanceTaskLine(el as HTMLElement);
     }
-
-    // Enhance headings as drop zones
     _enhanceHeadingDropZones(container);
-
     _setupDragDrop(container);
-
-    if (!_observer) {
-      _observer = new MutationObserver(() => {
-        clearTimeout(_observeTimer);
-        _observeTimer = setTimeout(() => _enhance(), 500);
-      });
-      _observer.observe(container, { childList: true, subtree: true });
-    }
   }
 
   /** Add drag handle, checkbox click, and inline timer to a task line element */
@@ -200,17 +182,19 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
 
     const isPreview = el.classList.contains("task-list-item");
 
-    // ── Drag handle at end of line ──
+    // ── Drag handle + timer wrapper (floated right, independent of text length) ──
+    const actions = document.createElement("span");
+    actions.className = "ft-enhance-actions";
+    el.appendChild(actions);
+
     const handle = document.createElement("span");
-    handle.textContent = "\u283F"; // ⠿ braille drag indicator
+    handle.textContent = "\u283F";
     handle.className = "ft-list-drag ft-enhance-drag";
     handle.setAttribute("title", "Drag to reorder or drop on heading");
-    el.appendChild(handle);
+    actions.appendChild(handle);
 
     if (!isPreview) {
-      // In Live Preview, keep handle inline but at end
       handle.style.display = "inline-block";
-      handle.style.verticalAlign = "middle";
     }
 
     // ── Checkbox click handler ──
@@ -298,7 +282,7 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
       }
     });
 
-    el.appendChild(timerBtn);
+    actions.appendChild(timerBtn);
   }
 
   /**
@@ -367,14 +351,9 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
       _dragListeners.remove();
       _dragListeners = null;
     }
-    if (_observer) {
-      _observer.disconnect();
-      _observer = null;
-    }
     document.querySelectorAll(".ft-list-enhanced").forEach((el) => {
       el.classList.remove("ft-list-enhanced");
-      // Remove added elements
-      el.querySelectorAll(".ft-enhance-drag, .ft-enhance-timer").forEach((c) => c.remove());
+      el.querySelectorAll(".ft-enhance-drag, .ft-enhance-timer, .ft-enhance-actions").forEach((c) => c.remove());
     });
     document.querySelectorAll("[data-ft-drop-zone]").forEach((el) => {
       delete (el as HTMLElement).dataset.ftDropZone;

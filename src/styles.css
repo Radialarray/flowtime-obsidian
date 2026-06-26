@@ -2215,21 +2215,90 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-v
 	white-space: nowrap;
 }
 
-.ft-list-timer {
+/* Time cell — display or inputs */
+.ft-list-time-cell {
+	display: flex;
+	align-items: center;
+	gap: 4px;
 	flex-shrink: 0;
+}
+
+.ft-list-time {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	font-family: var(--font-monospace);
+	padding: 2px 6px;
+	background: var(--background-secondary);
+	border-radius: 4px;
+	white-space: nowrap;
+}
+
+.ft-list-time-input,
+.ft-list-dur-input {
+	width: 48px;
+	font-size: var(--font-ui-small);
+	font-family: var(--font-monospace);
+	padding: 2px 4px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-primary);
+	text-align: center;
+}
+
+.ft-list-dur-input {
+	width: 44px;
+}
+
+.ft-list-time-input:focus,
+.ft-list-dur-input:focus {
+	border-color: var(--interactive-accent);
+	box-shadow: 0 0 0 2px var(--interactive-accent-hover);
+	outline: none;
+}
+
+.ft-list-preview {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+	font-family: var(--font-monospace);
+	white-space: nowrap;
+}
+
+/* Inline timer (same pattern as table view) */
+.ft-list-timer-cell {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	flex-shrink: 0;
+}
+
+.ft-list-timer-play,
+.ft-list-timer-reset {
 	background: none;
 	border: none;
 	cursor: pointer;
-	font-size: 16px;
-	padding: 0 4px;
+	font-size: 14px;
+	padding: 0 2px;
 	line-height: 1;
 	color: var(--text-muted);
-	border-radius: 4px;
+	border-radius: 3px;
 }
 
-.ft-list-timer:hover {
+.ft-list-timer-play:hover,
+.ft-list-timer-reset:hover {
 	background: var(--background-modifier-border-hover);
 	color: var(--text-normal);
+}
+
+.ft-list-timer-display {
+	font-size: var(--font-ui-smaller);
+	font-family: var(--font-monospace);
+	color: var(--text-muted);
+	min-width: 40px;
+	text-align: center;
+}
+
+.ft-list-timer-display.ft-timer-expired {
+	color: var(--color-red);
 }
 
 /* List view popover */

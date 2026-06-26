@@ -1392,42 +1392,174 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 			document.querySelectorAll(".ft-list-popover").forEach((p) => p.remove());
 		});
 
-		// Time range (if set)
+		// Time inputs: show time range if set, otherwise show editable inputs
+		const timeCell = row.createEl("span", { cls: "ft-list-time-cell" });
+
 		if (start) {
-			const timeEl = row.createEl("span", { cls: "ft-list-time" });
+			// Show time range
+			const timeEl = timeCell.createEl("span", { cls: "ft-list-time" });
 			if (dur && dur > 0) {
 				timeEl.setText(start + " → " + this._calcEnd(start, dur));
 			} else {
 				timeEl.setText(start);
 			}
+		} else {
+			// Editable time inputs (same pattern as table view)
+			const startId =
+				"ft-list-start-" +
+				Math.random().toString(36).slice(2, 6);
+			const si = timeCell.createEl("input", {
+				type: "text",
+				placeholder: "09:00",
+				cls: "ft-list-time-input",
+				attr: { list: startId },
+			});
+			const startList = timeCell.createEl("datalist", { attr: { id: startId } });
+			for (const t of this.startOpts) {
+				startList.createEl("option", { attr: { value: t } });
+			}
+
+			const durId =
+				"ft-list-dur-" +
+				Math.random().toString(36).slice(2, 6);
+			const ds = timeCell.createEl("input", {
+				type: "text",
+				placeholder: "30m",
+				cls: "ft-list-dur-input",
+				attr: { list: durId },
+			});
+			const durList = timeCell.createEl("datalist", { attr: { id: durId } });
+			for (const d of DUR_OPTS) {
+				durList.createEl("option", { attr: { value: formatDuration(d) } });
+			}
+
+			// End preview
+			const ps = timeCell.createEl("span", { text: "", cls: "ft-list-preview" });
+			const up = () => {
+				const s = si.value,
+					d = this._parseDurStr(ds.value);
+				ps.setText(s && d > 0 ? "→ " + this._calcEnd(s, d) : "");
+			};
+			const debounceSave = (() => {
+				let timer;
+				return () => {
+					if (timer) clearTimeout(timer);
+					timer = setTimeout(
+						() => this._autoSaveTime(task, si, ds),
+						300,
+					);
+				};
+			})();
+			si.addEventListener("input", () => { up(); debounceSave(); });
+			ds.addEventListener("input", () => { up(); debounceSave(); });
 		}
 
-		// Timer button
-		if (this._columnVisibility.timer !== false) {
-			const timerBtn = row.createEl("button", {
-				text: "⏱",
-				cls: "ft-list-timer",
-				attr: { title: "Start/pause timer" },
-			});
-			timerBtn.addEventListener("click", (e) => {
-				e.stopPropagation();
-				const { StatusTimer } = require("./status-timer");
-				const durMinutes = task.durationMinutes || 25;
-				const timer = new StatusTimer({
-					statusBarItem: this.plugin?.statusBarItem,
-					settings: this.plugin?.settings,
-					notify: this.plugin?.notify,
-					onSessionEnd: (rec) => {
-						this.plugin?.sessionStore?.writeSession({
-							...rec,
-							bucket: task.bucket,
-						});
-					},
-					onTimerStop: () => {},
-				});
-				timer.start(task.cleanText || task.rawText || "", durMinutes * 60);
-			});
-		}
+		// Inline timer (same pattern as table view)
+		const activeTimer = this.plugin?._activeRowTimer;
+		const matchActive =
+			activeTimer && activeTimer.taskName === task.cleanText;
+		const ts = {
+			remaining: matchActive ? activeTimer.remaining : (dur || 0) * 60,
+			total: matchActive ? activeTimer.total : (dur || 0) * 60,
+			interval: null,
+			running: false,
+		};
+
+		const timerCell = row.createEl("span", { cls: "ft-list-timer-cell" });
+		const pb = timerCell.createEl("button", {
+			text: "▶",
+			cls: "ft-list-timer-play",
+		});
+		const disp = timerCell.createEl("span", {
+			text: formatTimer(ts.remaining),
+			cls: "ft-list-timer-display",
+		});
+		const rb = timerCell.createEl("button", {
+			text: "↺",
+			cls: "ft-list-timer-reset",
+		});
+
+		const ud = () => {
+			disp.setText(formatTimer(ts.remaining));
+			disp.toggleClass("ft-timer-expired", ts.remaining <= 0);
+		};
+
+		const stp = () => {
+			if (this.plugin) this.plugin._activeRowTimer = null;
+			if (ts.interval) {
+				clearInterval(ts.interval);
+				ts.interval = null;
+			}
+			ts.running = false;
+			pb.setText("▶");
+			if (this.plugin?.statusTimer?.stop) {
+				this.plugin.statusTimer.stop();
+			}
+		};
+
+		pb.addEventListener("click", (e) => {
+			e.stopPropagation();
+			if (ts.remaining <= 0) {
+				ts.remaining = ts.total;
+				ud();
+			}
+			if (ts.running) {
+				// pause
+				if (ts.interval) {
+					clearInterval(ts.interval);
+					ts.interval = null;
+				}
+				ts.running = false;
+				pb.setText("▶");
+				if (this.plugin?.statusTimer?.pause) {
+					this.plugin.statusTimer.pause();
+				}
+			} else {
+				// start
+				if (this.plugin) {
+					this.plugin._activeRowTimer = ts;
+					this.plugin._activeRowTimerStop = stp;
+				}
+				pb.setText("⏸");
+				ts.running = true;
+				this.plugin?.statusTimer?.start(
+					task.cleanText || task.rawText || "",
+					ts.remaining,
+				);
+				if (!ts.interval) {
+					ts.interval = setInterval(() => {
+						ts.remaining--;
+						ud();
+						if (ts.remaining <= 0) {
+							stp();
+							this.plugin?.notify?.(
+								"⏱ Time's up! " + (task.cleanText || task.rawText || ""),
+							);
+							if (this.plugin?.sessionStore) {
+								const now = new Date();
+								this.plugin.sessionStore.writeSession({
+									startTime: new Date(
+										now.getTime() - ts.total * 1000,
+									).toISOString(),
+									endTime: now.toISOString(),
+									durationMinutes: Math.round(ts.total / 60),
+									bucket: task.bucket || "",
+									taskText: task.cleanText || task.rawText || "",
+									notes: "",
+								});
+							}
+						}
+					}, 1000);
+				}
+			}
+		});
+
+		rb.addEventListener("click", (e) => {
+			e.stopPropagation();
+			stp();
+			ts.remaining = ts.total;
+			ud();
+		});
 
 		return row;
 	}
@@ -1487,12 +1619,13 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 	_setupListDragDrop(listWrap) {
 		let dragData = null;
 
-		// ── Drag source ──
+		// Each row sets dragstart on itself in _renderListRow via attr
+		// Here we handle dragstart delegation on the container to filter by handle
 		listWrap.addEventListener("dragstart", (e) => {
 			const row = e.target.closest(".ft-list-row");
 			if (!row) return;
 			// Only start drag from the drag handle
-			if (!e.target.closest(".ft-list-drag")) {
+			if (!e.target.matches(".ft-list-drag")) {
 				e.preventDefault();
 				return;
 			}
@@ -1500,189 +1633,145 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 				path: row.dataset.sourcePath,
 				line: parseInt(row.dataset.line, 10),
 				taskId: row.dataset.taskId,
+				row,
 			};
 			row.classList.add("ft-list-dragging");
 			e.dataTransfer.effectAllowed = "move";
-			e.dataTransfer.setData("text/plain", dragData.taskId);
+			e.dataTransfer.setData("text/plain", row.dataset.taskId || "");
 		});
 
+		const dragRoot = this.containerEl;
+
 		listWrap.addEventListener("dragend", () => {
-			document
+			dragRoot
 				.querySelectorAll(".ft-list-dragging,.ft-list-drop-target")
 				.forEach((el) => {
 					el.classList.remove("ft-list-dragging", "ft-list-drop-target");
 				});
+			dragRoot
+				.querySelectorAll(".ft-list-heading-active")
+				.forEach((el) => el.classList.remove("ft-list-heading-active"));
 			dragData = null;
 		});
 
-		// ── Drop between rows (time reordering) ──
-		listWrap.addEventListener("dragover", (e) => {
+		// ── Drop between rows (time reordering) — document-level to catch all interactions ──
+
+		document.addEventListener("dragover", (e) => {
+			// Row-to-row drop
 			const targetRow = e.target.closest(".ft-list-row");
-			if (!targetRow || !dragData) return;
-			e.preventDefault();
-			// Clear previous indicators
-			listWrap
-				.querySelectorAll(".ft-list-drop-target")
-				.forEach((el) => el.classList.remove("ft-list-drop-target"));
-			targetRow.classList.add("ft-list-drop-target");
-		});
-
-		listWrap.addEventListener("drop", (e) => {
-			const targetRow = e.target.closest(".ft-list-row");
-			targetRow?.classList.remove("ft-list-drop-target");
-			if (!targetRow || !dragData) return;
-
-			e.preventDefault();
-
-			// Find source and target task objects
-			const srcIdx = this.tasks.findIndex(
-				(t) => t.file?.path === dragData.path && t.line === dragData.line,
-			);
-			const targetIdx = this.tasks.findIndex(
-				(t) => t.file?.path === targetRow.dataset.sourcePath && t.line === parseInt(targetRow.dataset.line, 10),
-			);
-			if (srcIdx < 0 || targetIdx < 0 || srcIdx === targetIdx) return;
-
-			const srcTask = this.tasks[srcIdx];
-			const targetTask = this.tasks[targetIdx];
-
-			// Determine drop position: before or after target
-			const rect = targetRow.getBoundingClientRect();
-			const midY = rect.top + rect.height / 2;
-			const dropBefore = e.clientY < midY;
-
-			if (dropBefore) {
-				// Before target: if target has time, assign midpoint of previous and target
-				const prevTask =
-					targetIdx > 0 ? this.tasks[targetIdx - 1] : null;
-				if (targetTask.time) {
-					if (prevTask?.time) {
-						// Assign midpoint time
-						const newTime = this._midpointTime(
-							prevTask.time,
-							targetTask.time,
-						);
-						this._setTaskTime(srcTask, newTime);
-					} else {
-						// Before first timed task with no predecessor — use target's time minus a slot
-						this._setTaskTime(srcTask, targetTask.time);
-					}
-				} else {
-					// Target has no time — clear source's time
-					this._setTaskTime(srcTask, "");
-				}
-			} else {
-				// After target
-				const nextTask =
-					targetIdx < this.tasks.length - 1
-						? this.tasks[targetIdx + 1]
-						: null;
-				if (targetTask.time && nextTask?.time) {
-					const newTime = this._midpointTime(
-						targetTask.time,
-						nextTask.time,
-					);
-					this._setTaskTime(srcTask, newTime);
-				} else if (targetTask.time && !nextTask) {
-					// After the last timed task — clear time
-					this._setTaskTime(srcTask, "");
-				} else if (targetTask.time && !nextTask?.time) {
-					// After a timed task followed by untimed — clear time
-					this._setTaskTime(srcTask, "");
-				} else {
-					// Between untimed — no change
-					this._setTaskTime(srcTask, "");
-				}
+			if (targetRow && dragData && dragData.row !== targetRow) {
+				e.preventDefault();
+				dragRoot
+					.querySelectorAll(".ft-list-drop-target")
+					.forEach((el) => el.classList.remove("ft-list-drop-target"));
+				targetRow.classList.add("ft-list-drop-target");
+				return;
 			}
 
-			// Re-sort and re-render
-			this._sort();
-			this.renderTable();
-			this.plugin?.notify?.("🔄 Time updated");
-		});
-
-		// ── Drop onto page headings (date/status changes) ──
-		this._registerHeadingDropZones();
-
-		// Global dragover for heading zones
-		document.addEventListener("dragover", (e) => {
+			// Heading drop zones
 			const heading = e.target.closest(
-				".ft-list-heading-zone, h1, h2, h3, h4, h5, h6",
+				"h1, h2, h3, h4, h5, h6",
 			);
 			if (heading && dragData) {
 				e.preventDefault();
 				heading.classList.add("ft-list-heading-active");
 			}
 		});
+
 		document.addEventListener("dragleave", (e) => {
 			const heading = e.target.closest(
-				".ft-list-heading-zone, h1, h2, h3, h4, h5, h6",
+				"h1, h2, h3, h4, h5, h6",
 			);
 			if (heading) heading.classList.remove("ft-list-heading-active");
 		});
-		document.addEventListener("drop", async (e) => {
-			const heading = e.target.closest(
-				".ft-list-heading-zone, h1, h2, h3, h4, h5, h6",
-			);
-			heading?.classList.remove("ft-list-heading-active");
-			if (!heading || !dragData) return;
 
+		document.addEventListener("drop", async (e) => {
+			// Clear all indicators
+			dragRoot
+				.querySelectorAll(".ft-list-drop-target,.ft-list-dragging")
+				.forEach((el) => el.classList.remove("ft-list-drop-target", "ft-list-dragging"));
+			const heading = e.target.closest(
+				"h1, h2, h3, h4, h5, h6",
+			);
+			if (heading) heading.classList.remove("ft-list-heading-active");
+
+			if (!dragData) return;
 			e.preventDefault();
 
-			// Find the source task
-			const srcTask = this.tasks.find(
-				(t) =>
-					t.file?.path === dragData.path && t.line === dragData.line,
-			);
-			if (!srcTask) return;
-
-			const text = heading.textContent.trim().toLowerCase();
-
-			// Match heading text to action
-			if (text === "today") {
-				await this.updateDate(srcTask, this._refDate());
-				this.plugin?.notify?.("📅 Moved to today");
-			} else if (text === "tomorrow") {
-				const tomorrow = new Date(Date.now() + 864e5)
-					.toISOString()
-					.split("T")[0];
-				await this.updateDate(srcTask, tomorrow);
-				this.plugin?.notify?.("📅 Moved to tomorrow");
-			} else if (text === "overdue" || text === "carry over") {
-				const yesterday = new Date(Date.now() - 864e5)
-					.toISOString()
-					.split("T")[0];
-				await this.updateDate(srcTask, yesterday);
-				this.plugin?.notify?.("📅 Moved to overdue");
-			} else if (text === "soon" || text === "up next") {
-				// Remove date and add @soon by clearing the date
-				await this.updateDate(srcTask, "");
-				this.plugin?.notify?.("◌ Back to @soon");
-			} else if (text === "next week") {
-				const nw = new Date(Date.now() + 7 * 864e5)
-					.toISOString()
-					.split("T")[0];
-				await this.updateDate(srcTask, nw);
-				this.plugin?.notify?.("📅 Moved to next week");
-			} else {
-				// Try YYYY-MM-DD date
-				const dateMatch = text.match(
-					/(\d{4})-(\d{1,2})-(\d{1,2})/,
+			// ── Row-to-row drop ──
+			const targetRow = e.target.closest(".ft-list-row");
+			if (targetRow && dragData.row && dragData.row !== targetRow) {
+				const srcIdx = this.tasks.findIndex(
+					(t) => t.file?.path === dragData.path && t.line === dragData.line,
 				);
-				if (dateMatch) {
-					await this.updateDate(srcTask, text);
-					this.plugin?.notify?.("📅 Date set to " + text);
+				const targetIdx = this.tasks.findIndex(
+					(t) => t.file?.path === targetRow.dataset.sourcePath && t.line === parseInt(targetRow.dataset.line, 10),
+				);
+				if (srcIdx >= 0 && targetIdx >= 0 && srcIdx !== targetIdx) {
+					const srcTask = this.tasks[srcIdx];
+					const targetTask = this.tasks[targetIdx];
+
+					const rect = targetRow.getBoundingClientRect();
+					const midY = rect.top + rect.height / 2;
+					const dropBefore = e.clientY < midY;
+
+					if (dropBefore) {
+						const prevTask = targetIdx > 0 ? this.tasks[targetIdx - 1] : null;
+						if (targetTask.time && prevTask?.time) {
+							await this._setTaskTime(srcTask, this._midpointTime(prevTask.time, targetTask.time));
+						} else if (targetTask.time) {
+							await this._setTaskTime(srcTask, targetTask.time);
+						} else {
+							await this._setTaskTime(srcTask, "");
+						}
+					} else {
+						const nextTask = targetIdx < this.tasks.length - 1 ? this.tasks[targetIdx + 1] : null;
+						if (targetTask.time && nextTask?.time) {
+							await this._setTaskTime(srcTask, this._midpointTime(targetTask.time, nextTask.time));
+						} else {
+							await this._setTaskTime(srcTask, "");
+						}
+					}
+
+					this._sort();
+					this.renderTable();
+					this.plugin?.notify?.("🔄 Time updated");
 				}
-				// Unknown heading — no action
+				return;
+			}
+
+			// ── Heading drop ──
+			if (heading) {
+				const srcTask = this.tasks.find(
+					(t) => t.file?.path === dragData.path && t.line === dragData.line,
+				);
+				if (srcTask) {
+					const text = heading.textContent.trim().toLowerCase();
+					if (text === "today") {
+						await this.updateDate(srcTask, this._refDate());
+						this.plugin?.notify?.("📅 Moved to today");
+					} else if (text === "tomorrow") {
+						await this.updateDate(srcTask, new Date(Date.now() + 864e5).toISOString().split("T")[0]);
+						this.plugin?.notify?.("📅 Moved to tomorrow");
+					} else if (text === "overdue" || text === "carry over") {
+						await this.updateDate(srcTask, new Date(Date.now() - 864e5).toISOString().split("T")[0]);
+						this.plugin?.notify?.("📅 Moved to overdue");
+					} else if (text === "soon" || text === "up next") {
+						await this.updateDate(srcTask, "");
+						this.plugin?.notify?.("◌ Back to @soon");
+					} else if (text === "next week") {
+						await this.updateDate(srcTask, new Date(Date.now() + 7 * 864e5).toISOString().split("T")[0]);
+						this.plugin?.notify?.("📅 Moved to next week");
+					} else {
+						const dateMatch = text.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+						if (dateMatch) {
+							await this.updateDate(srcTask, text);
+							this.plugin?.notify?.("📅 Date set to " + text);
+						}
+					}
+				}
 			}
 		});
-	}
-
-	/** Find h3 headings in the note text and add visual drop hints */
-	_registerHeadingDropZones() {
-		// Headings are native markdown — the dragover/drop handlers above
-		// catch events on h1-h6 elements directly. Visual feedback is handled
-		// via .ft-list-heading-active. No extra DOM manipulation needed.
 	}
 
 	/** Compute a midpoint time between two HH:MM strings */

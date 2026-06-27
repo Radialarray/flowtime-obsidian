@@ -81,7 +81,7 @@ export function createSessionStore(vault: Vault) {
         return "Session must have start_time (ISO string)";
       if (!record.end_time || typeof record.end_time !== "string")
         return "Session must have end_time (ISO string)";
-      if (typeof record.duration_minutes !== "number" || (record.duration_minutes as number) < 0)
+      if (typeof record.duration_minutes !== "number" || record.duration_minutes < 0)
         return "Session must have duration_minutes (number >= 0)";
     }
     if (record.type === "completion") {

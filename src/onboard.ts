@@ -210,7 +210,7 @@ async function detectSetupState(
     const dailyNotesPath = app.vault.configDir + "/daily-notes.json";
     if (await app.vault.adapter.exists(dailyNotesPath)) {
       const raw = await app.vault.adapter.read(dailyNotesPath);
-      const config = JSON.parse(raw);
+      const config = JSON.parse(raw) as { folder?: string };
       const folder = config.folder || "";
       if (folder) {
         const folderEntry = vault.getAbstractFileByPath(folder);

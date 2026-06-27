@@ -367,7 +367,7 @@ export class FlowtimeSettingsTab extends PluginSettingTab {
         .setName("Daily template")
         .setDesc("Template used for the daily note dashboard")
         .addTextArea((text) => {
-          dailyTaEl = text.inputEl as HTMLTextAreaElement;
+          dailyTaEl = text.inputEl;
           text
             .setPlaceholder("Enter daily template\u2026")
             .setValue(this.plugin.settings.dailyTemplate)
@@ -395,7 +395,7 @@ export class FlowtimeSettingsTab extends PluginSettingTab {
         .setName("Weekly template")
         .setDesc("Template used for the weekly review note")
         .addTextArea((text) => {
-          weeklyTaEl = text.inputEl as HTMLTextAreaElement;
+          weeklyTaEl = text.inputEl;
           text
             .setPlaceholder("Enter weekly template\u2026")
             .setValue(this.plugin.settings.weeklyTemplate)
@@ -423,7 +423,7 @@ export class FlowtimeSettingsTab extends PluginSettingTab {
         .setName("Project template")
         .setDesc("Template used when creating a new project folder note")
         .addTextArea((text) => {
-          projTaEl = text.inputEl as HTMLTextAreaElement;
+          projTaEl = text.inputEl;
           text
             .setPlaceholder("Enter project template\u2026")
             .setValue(this.plugin.settings.projectTemplate)

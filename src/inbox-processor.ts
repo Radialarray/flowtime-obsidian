@@ -523,6 +523,12 @@ export class ProcessInboxModal extends Modal {
   originalContent: string = "";
   file!: TFile;
 
+  // Refs for the currently displayed inline form fields
+  private _currentTaskRefs: TaskFieldRefs | null = null;
+  private _currentProjectRefs: ProjectFieldRefs | null = null;
+  private _currentWikiRefs: WikiFieldRefs | null = null;
+  private _currentSnoozeRefs: SnoozeFieldRefs | null = null;
+
   constructor(app: App, plugin: FlowtimePluginRef) {
     super(app);
     this.plugin = plugin;
@@ -786,7 +792,7 @@ export class ProcessInboxModal extends Modal {
       placeholder: "today, tomorrow, YYYY-MM-DD",
       value: tags.date || "today",
       cls: "flowtime-input",
-    }) as HTMLInputElement;
+    });
     const datePreview = dateRow.createEl("span", {
       text: "",
       cls: "flowtime-date-preview",
@@ -803,7 +809,7 @@ export class ProcessInboxModal extends Modal {
     container.createEl("label", { text: "Duration", cls: "flowtime-label" });
     const durSelect = container.createEl("select", {
       cls: "flowtime-select",
-    }) as HTMLSelectElement;
+    });
     const durations = [
       0, 10, 15, 20, 25, 30, 45, 60, 90, 120, 150, 180, 210, 240,
     ];
@@ -822,7 +828,7 @@ export class ProcessInboxModal extends Modal {
     container.createEl("label", { text: "Bucket", cls: "flowtime-label" });
     const bucketSelect = container.createEl("select", {
       cls: "flowtime-select",
-    }) as HTMLSelectElement;
+    });
     const buckets = this.plugin.settings.buckets || [];
     bucketSelect.createEl("option", { text: "None", value: "" });
     for (const b of buckets) {
@@ -838,13 +844,13 @@ export class ProcessInboxModal extends Modal {
       placeholder: "Project name",
       value: tags.project || "",
       cls: "flowtime-input",
-    }) as HTMLInputElement;
+    });
 
     // Priority
     container.createEl("label", { text: "Priority", cls: "flowtime-label" });
     const prioSelect = container.createEl("select", {
       cls: "flowtime-select",
-    }) as HTMLSelectElement;
+    });
     const priorities = [
       { value: "", text: "None" },
       { value: "\uD83D\uDFE5", text: "\uD83D\uDFE5 High" },
@@ -860,7 +866,7 @@ export class ProcessInboxModal extends Modal {
     container.createEl("label", { text: "Recurrence", cls: "flowtime-label" });
     const recSelect = container.createEl("select", {
       cls: "flowtime-select",
-    }) as HTMLSelectElement;
+    });
     const recurrences = [
       { value: "", text: "None" },
       { value: "every day", text: "Daily" },
@@ -875,14 +881,14 @@ export class ProcessInboxModal extends Modal {
       recSelect.value = tags.recurrence.replace("\uD83D\uDD01 every ", "");
 
     // Store refs for _processItem
-    (container as any)._taskRefs = {
+    this._currentTaskRefs = {
       dateInput,
       durSelect,
       bucketSelect,
       projInput,
       prioSelect,
       recSelect,
-    } as TaskFieldRefs;
+    };
   }
 
   _buildProjectFields(container: HTMLElement, tags: DetectedTags): void {
@@ -897,13 +903,13 @@ export class ProcessInboxModal extends Modal {
       placeholder: "Project name",
       value: cleanDescription(tags.project) || "",
       cls: "flowtime-input",
-    }) as HTMLInputElement;
+    });
 
     // Scaffold toggles
     const tasksCb = container.createEl("label", { cls: "flowtime-label" });
     const tasksCheck = tasksCb.createEl("input", {
       type: "checkbox",
-    }) as HTMLInputElement;
+    });
     tasksCheck.checked = true;
     tasksCheck.addClass("ft-mr-6");
     tasksCb.append(" Create Tasks.md");
@@ -911,16 +917,16 @@ export class ProcessInboxModal extends Modal {
     const wikiCb = container.createEl("label", { cls: "flowtime-label" });
     const wikiCheck = wikiCb.createEl("input", {
       type: "checkbox",
-    }) as HTMLInputElement;
+    });
     wikiCheck.checked = true;
     wikiCheck.addClass("ft-mr-6");
     wikiCb.append(" Create Wiki.md");
 
-    (container as any)._projectRefs = {
+    this._currentProjectRefs = {
       nameInput,
       tasksCheck,
       wikiCheck,
-    } as ProjectFieldRefs;
+    };
   }
 
   _buildWikiFields(container: HTMLElement, tags: DetectedTags): void {
@@ -932,7 +938,7 @@ export class ProcessInboxModal extends Modal {
       placeholder: "Project name to append to",
       value: tags.project || "",
       cls: "flowtime-input",
-    }) as HTMLInputElement;
+    });
 
     container.createEl("label", {
       text: "Section (optional)",
@@ -942,9 +948,9 @@ export class ProcessInboxModal extends Modal {
       type: "text",
       placeholder: "e.g. Ideas, Notes, Reference",
       cls: "flowtime-input",
-    }) as HTMLInputElement;
+    });
 
-    (container as any)._wikiRefs = { projInput, sectionInput } as WikiFieldRefs;
+    this._currentWikiRefs = { projInput, sectionInput };
   }
 
   _buildSnoozeFields(container: HTMLElement, tags: DetectedTags): void {
@@ -956,21 +962,21 @@ export class ProcessInboxModal extends Modal {
       placeholder: "tomorrow, monday, YYYY-MM-DD",
       value: tags.snoozeDate || "tomorrow",
       cls: "flowtime-input",
-    }) as HTMLInputElement;
+    });
 
-    (container as any)._snoozeRefs = { snoozeInput } as SnoozeFieldRefs;
+    this._currentSnoozeRefs = { snoozeInput };
   }
 
   async _processItem(
     item: InboxItem,
     action: string,
-    fieldsContainer: HTMLElement,
+    _fieldsContainer: HTMLElement,
   ): Promise<{ keepInFile?: boolean }> {
     const description = item.text;
 
     switch (action) {
       case "task": {
-        const refs = (fieldsContainer as any)._taskRefs as TaskFieldRefs;
+        const refs = this._currentTaskRefs!;
         const date = parseDate(refs.dateInput.value) || "";
         const dur = parseInt(refs.durSelect.value, 10) || 0;
         const bucket = refs.bucketSelect.value;
@@ -993,7 +999,7 @@ export class ProcessInboxModal extends Modal {
       }
 
       case "project": {
-        const refs = (fieldsContainer as any)._projectRefs as ProjectFieldRefs;
+        const refs = this._currentProjectRefs!;
         let name = refs.nameInput.value.trim();
         if (!name) name = description;
 
@@ -1023,7 +1029,7 @@ export class ProcessInboxModal extends Modal {
       }
 
       case "wiki": {
-        const refs = (fieldsContainer as any)._wikiRefs as WikiFieldRefs;
+        const refs = this._currentWikiRefs!;
         const projectName = refs.projInput.value.trim();
         if (!projectName) {
           this.plugin.notify(
@@ -1100,8 +1106,7 @@ export class ProcessInboxModal extends Modal {
         break;
 
       case "snooze": {
-        const refs = (fieldsContainer as any)
-          ._snoozeRefs as SnoozeFieldRefs;
+        const refs = this._currentSnoozeRefs!;
         const snoozeDate = parseDate(refs.snoozeInput.value);
         if (!snoozeDate) {
           this.plugin.notify("Invalid snooze date", true);

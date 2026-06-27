@@ -51,7 +51,7 @@ import type {
 
 /* ─── Plugin reference type ─── */
 
-interface FlowtimePluginRef {
+export interface FlowtimePluginRef {
   settings: FlowtimeSettings;
   notify: (msg: string, isError?: boolean) => void;
   isMobile?: boolean;
@@ -84,6 +84,7 @@ interface FlowtimePluginRef {
   projectEngine?: {
     resolve(filePath: string): Promise<ProjectResult>;
     resolveFromTag(text: string, prefix: string): string | null;
+    getAllProjects(): Promise<Array<{ name: string; path: string }>>;
   };
   sessionStore?: {
     writeSession(session: SessionEntry): Promise<void>;
@@ -646,7 +647,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       addBtn.addEventListener("click", () => {
         void (async () => {
           const mod = await import("./quick-entry");
-          new mod.QuickEntryModal(this.app, this.plugin as any).open();
+          new mod.QuickEntryModal(this.app, this.plugin!).open();
         })();
       });
       return;
@@ -1073,7 +1074,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       });
       srcBtn.addEventListener("click", () => {
         popup.remove();
-        void this.app.workspace.openLinkText(task.file!.path, "", true, { line: task.line + 1 } as any);
+        void this.app.workspace.openLinkText(task.file!.path, "", true, { eState: { line: task.line + 1 } });
       });
     }
 
@@ -1493,7 +1494,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     if (this._columnVisibility!.source !== false) {
       const sc = row.createEl("td", { cls: "ft-source" });
       const lnk = sc.createEl("a", { text: task.file?.basename || "\u2014", cls: "ft-source-link" });
-      if (task.file) { lnk.addEventListener("click", () => void this.app.workspace.openLinkText(task.file!.path, "", true, { line: task.line + 1 } as any)); }
+      if (task.file) { lnk.addEventListener("click", () => void this.app.workspace.openLinkText(task.file!.path, "", true, { eState: { line: task.line + 1 } })); }
     }
 
     if (this._columnVisibility!.date !== false) {

@@ -6,7 +6,7 @@
 
 import { EditorSuggest, TFile } from "obsidian";
 import type { App, Editor, EditorPosition } from "obsidian";
-import type { BucketDef } from "../types";
+import type { BucketDef, FlowtimeSettings } from "../types";
 import { QuickEntryModal } from "../quick-entry";
 
 // ── Suggestion types ──
@@ -27,14 +27,11 @@ interface AtCompletionSuggestion {
 
 interface FlowtimePluginRef {
   app: App;
-  settings: {
-    inboxPath: string;
-    buckets: BucketDef[];
-    quietMode: boolean;
-  };
+  settings: FlowtimeSettings;
   notify: (message: string, isError?: boolean) => void;
   projectEngine: {
     getAllProjects(): Promise<Array<{ name: string; path: string }>>;
+    resolve(filePath: string): Promise<{ name: string | null; path: string | null; source: string | null }>;
   };
 }
 
@@ -86,7 +83,7 @@ export class AddTaskSuggest extends EditorSuggest<AddTaskSuggestion> {
       const { start, end } = this.context;
       editor.replaceRange("", start, end);
     }
-    new QuickEntryModal(this.app, this.plugin as any).open();
+    new QuickEntryModal(this.app, this.plugin).open();
   }
 }
 

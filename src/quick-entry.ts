@@ -4,7 +4,7 @@ import { parseDate } from "./date-parser";
 import type { FlowtimeSettings } from "./types";
 import { activeDoc } from "./task-utils";
 
-interface FlowtimePluginRef {
+export interface FlowtimePluginRef {
   settings: FlowtimeSettings;
   notify: (msg: string, isError?: boolean) => void;
   projectEngine?: {

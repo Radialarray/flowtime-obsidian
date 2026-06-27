@@ -33,9 +33,11 @@ import { RoutineEngine } from "./routine-engine";
 import { extractNote } from "./extract-note";
 import { ListEnhancer } from "./list-enhancer";
 import { WeekplanRenderer } from "./weekplan-renderer";
+import type { FlowtimePluginRef as WeekplanPluginRef } from "./weekplan-renderer";
+import type { FlowtimePluginRef as RendererPluginRef } from "./renderer";
 import { AddTaskSuggest, AtCompletionsSuggest } from "./suggests/at-completions";
 import { TaskIndex } from "./task-index";
-import type { FlowtimeSettings, TaskRow, BucketDef } from "./types";
+import type { FlowtimeSettings, TaskRow, BucketDef, RenderMode } from "./types";
 
 /* ─── Inline types ─── */
 
@@ -723,11 +725,11 @@ export default class FlowtimePlugin extends Plugin {
 					const r = new FlowtimeRenderer(
 						this.app,
 						el,
-						mode as any,
+						mode as RenderMode,
 						this.projectEngine,
 						ctx.sourcePath,
 					);
-					r.plugin = this as any;
+					r.plugin = this as unknown as RendererPluginRef;
 					this.renderers.push(r);
 					ctx.addChild(r);
 				},
@@ -741,7 +743,7 @@ export default class FlowtimePlugin extends Plugin {
 				const r = new WeekplanRenderer(
 					this.app,
 					el,
-					this as any,
+					this as unknown as WeekplanPluginRef,
 					this.projectEngine,
 					ctx.sourcePath,
 				);
@@ -875,7 +877,7 @@ export default class FlowtimePlugin extends Plugin {
 						});
 						const tasksCheck = tasksCb.createEl("input", {
 							type: "checkbox",
-						}) as HTMLInputElement;
+						});
 						tasksCheck.checked = this.scaffoldTasks;
 						tasksCheck.addClass("ft-mr-6");
 						tasksCheck.addEventListener("change", () => {
@@ -890,7 +892,7 @@ export default class FlowtimePlugin extends Plugin {
 						});
 						const wikiCheck = wikiCb.createEl("input", {
 							type: "checkbox",
-						}) as HTMLInputElement;
+						});
 						wikiCheck.checked = this.scaffoldWiki;
 						wikiCheck.addClass("ft-mr-6");
 						wikiCheck.addEventListener("change", () => {
@@ -1021,7 +1023,7 @@ export default class FlowtimePlugin extends Plugin {
 							type: "number",
 							value: "10",
 							cls: "flowtime-input",
-						}) as HTMLInputElement;
+						});
 						limitInput.min = "1";
 
 						const btnRow = contentEl.createEl("div", {
@@ -1165,7 +1167,7 @@ export default class FlowtimePlugin extends Plugin {
 							type: "number",
 							value: "25",
 							cls: "flowtime-input",
-						}) as HTMLInputElement;
+						});
 						durInput.min = "1";
 						durInput.addClass("ft-w-100");
 
@@ -1326,9 +1328,9 @@ export default class FlowtimePlugin extends Plugin {
 						try {
 							await this._saveTaskCache();
 							// Also strip legacy _taskCache from data.json if present
-							const data = (await this.loadData()) || {};
-							if (data._taskCache) {
-								delete (data as Record<string, unknown>)._taskCache;
+							const data = (await this.loadData()) as FlowtimeSettings | null;
+							if (data?._taskCache) {
+								delete data._taskCache;
 								await this.saveData(data);
 							}
 						} catch (_) {
@@ -1463,16 +1465,16 @@ export default class FlowtimePlugin extends Plugin {
 	async aggregateTasksForMode(modeStr: string, sourcePath?: string): Promise<TaskRow[]> {
 		const { FlowtimeRenderer } = await import("./renderer");
 		const hidden = createDiv();
-		const r = new (FlowtimeRenderer as any)(
+		const r = new FlowtimeRenderer(
 			this.app,
 			hidden,
-			modeStr,
+			modeStr as RenderMode,
 			this.projectEngine,
 			sourcePath || "",
-		) as FlowtimeRenderer;
-		r.plugin = this as any;
-		await (r as any).loadTasks();
-		return (r as any).tasks || [];
+		);
+		r.plugin = this as unknown as RendererPluginRef;
+		await r.loadTasks();
+		return r.tasks || [];
 	}
 
 	/**

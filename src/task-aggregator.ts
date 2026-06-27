@@ -11,8 +11,9 @@ import type { App, TFile } from "obsidian";
 import type { TaskRow } from "./types";
 
 /* ─── Plugin reference ─── */
-// We use `any` here to avoid complex type-matching with the plugin class
-type AggregatorPluginRef = any;
+interface AggregatorPluginRef {
+  aggregateTasksForMode(mode: string, sourcePath?: string | null): Promise<TaskRow[]>;
+}
 
 /* ─── Mode mapping ─── */
 
@@ -195,7 +196,7 @@ export async function refreshAll(
   const modeCache: Record<string, TaskRow[]> = {};
   for (const h of found) {
     if (!modeCache[h.mode]) {
-      modeCache[h.mode] = await (plugin.aggregateTasksForMode(h.mode, sourcePath) as Promise<TaskRow[]>);
+      modeCache[h.mode] = await plugin.aggregateTasksForMode(h.mode, sourcePath);
     }
   }
 

@@ -32,7 +32,7 @@ import { QuickEntryModal } from "./quick-entry";
 
 /* ─── Local types ─── */
 
-interface FlowtimePluginRef {
+export interface FlowtimePluginRef {
 	settings: FlowtimeSettings;
 	isMobile?: boolean;
 	projectEngine?: {
@@ -1228,8 +1228,8 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			});
 			srcLink.addEventListener("click", () =>
 				void this.app.workspace.openLinkText(task.file!.path, "", false, {
-					line: task.line + 1,
-				} as any),
+					eState: { line: task.line + 1 },
+				}),
 			);
 		}
 

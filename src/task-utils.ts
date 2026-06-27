@@ -191,8 +191,8 @@ export function priorityWeight(p: string | null | undefined): number {
 /**
  * Check if a file path is within the plugin's scan scope.
  */
-export function isFileInScope(filePath: string, projectsRoot: string, configDir?: string): boolean {
-  if (filePath.startsWith(configDir ?? ".obsidian") || filePath.startsWith(".git")) return false;
+export function isFileInScope(filePath: string, projectsRoot: string, configDir: string): boolean {
+  if (filePath.startsWith(configDir) || filePath.startsWith(".git")) return false;
   if (!projectsRoot) return true;
   const normalizedRoot = projectsRoot.endsWith("/") ? projectsRoot : projectsRoot + "/";
   return filePath.startsWith(normalizedRoot);

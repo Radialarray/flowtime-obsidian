@@ -269,7 +269,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		// Scan uncached files in parallel
 		const allFiles = this.app.vault
 			.getMarkdownFiles()
-			.filter((f) => isFileInScope(f.path, root));
+			.filter((f) => isFileInScope(f.path, root, this.app.vault.configDir));
 		const uncached = allFiles.filter((f) => !cachedPaths.has(f.path));
 
 		const freshResults = await Promise.all(

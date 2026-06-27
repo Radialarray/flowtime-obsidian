@@ -187,7 +187,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     return this.containerEl?.ownerDocument ?? activeDocument;
   }
 
-  override async onload(): Promise<void> {
+  override onload(): void {
     this.containerEl.addClass("ft-mt-6");
 
     // Mobile (Platform.isMobile): show link to markdown view instead of custom UI
@@ -222,17 +222,19 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       }
     }
 
-    try {
-      await this.loadTasks();
-      this.renderTable();
-    } catch (e) {
-      this.containerEl.empty();
-      this.containerEl.createEl("p", {
-        text: "\u26a0\ufe0f Error: " + (e as Error).message,
-        cls: "flowtime-empty",
-      });
-      console.error("TP error:", e);
-    }
+    void (async (): Promise<void> => {
+      try {
+        await this.loadTasks();
+        this.renderTable();
+      } catch (e) {
+        this.containerEl.empty();
+        this.containerEl.createEl("p", {
+          text: "\u26a0\ufe0f Error: " + (e as Error).message,
+          cls: "flowtime-empty",
+        });
+        console.error("TP error:", e);
+      }
+    })();
   }
 
   /* ─── helpers ─── */

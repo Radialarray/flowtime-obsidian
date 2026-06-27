@@ -127,22 +127,24 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		return this.containerEl?.ownerDocument ?? activeDocument;
 	}
 
-	override async onload(): Promise<void> {
-		try {
-			this.dailyCap = this.plugin?.settings?.dailyCap || 12;
-			// Phase 1: Render instantly from cache (fast, might miss recent changes)
-			this._loadFromCache();
+	override onload(): void {
+		this.dailyCap = this.plugin?.settings?.dailyCap || 12;
+		// Phase 1: Render instantly from cache (fast, might miss recent changes)
+		this._loadFromCache();
 		this.renderView();
 		// Phase 2: Full scan in background, re-render when done
-		await this.loadWeek();
-		this.renderView();
-		} catch (e) {
-			this.containerEl.createEl("p", {
-				text: "⚠️ Error: " + (e as Error).message,
-				cls: "flowtime-empty",
-			});
-			console.error("Weekplan error:", e);
-		}
+		void (async (): Promise<void> => {
+			try {
+				await this.loadWeek();
+				this.renderView();
+			} catch (e) {
+				this.containerEl.createEl("p", {
+					text: "⚠️ Error: " + (e as Error).message,
+					cls: "flowtime-empty",
+				});
+				console.error("Weekplan error:", e);
+			}
+		})();
 	}
 
 	/* ─── helpers ─── */

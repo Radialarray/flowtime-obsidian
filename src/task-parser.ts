@@ -22,7 +22,7 @@ export function parseTaskLine(line: string, file: TFile, lineIndex: number): Par
   const indent = indentSpaces;
 
   // Extract date: /[@⏳📅]\s*(\d{4}-\d{2}-\d{2})/
-  const dateMatch = m[3].match(/[@⏳📅]\s*(\d{4}-\d{2}-\d{2})/);
+  const dateMatch = m[3].match(/[@⏳📅]\s*(\d{4}-\d{2}-\d{2})/u);
   let taskDate = (dateMatch || [])[1] || "";
 
   // Fallback — try natural language date parsing (@today, @tomorrow, etc.)
@@ -50,7 +50,7 @@ export function parseTaskLine(line: string, file: TFile, lineIndex: number): Par
 
   // Extract priority — color dots or @high/@med/@low aliases
   let priority: string | null = null;
-  const prioMatch = rest.match(/[🟥🟨🟩]/);
+  const prioMatch = rest.match(/[🟥🟨🟩]/u);
   if (prioMatch) priority = prioMatch[0];
   if (!priority) {
     if (rest.match(/@high\b/)) priority = "🟥";
@@ -141,7 +141,7 @@ export function cleanTaskText(text: string): string {
     .replace(/@\d{1,2}:\d{2}(?:[—\-–]\d{1,2}:\d{2})?/g, "")
     .replace(/@sprint:[^\s]+/g, "")
     .replace(/@i:[\d.]+/g, "")
-    .replace(/[🟥🟨🟩]/g, "")
+    .replace(/[🟥🟨🟩]/gu, "")
     .replace(/🔁 every .+$/gm, "")
     .replace(/#\S+/g, "")
     .replace(/\s+/g, " ")

@@ -311,7 +311,7 @@ export default class FlowtimePlugin extends Plugin {
 
 		/** Rebuild a source line: keep time prefix and original directives, replace task text */
 		const rebuildSourceLine = (origLine: string, newCore: string): string => {
-			const m = origLine.match(/^([-*+]\s+\[[ xX\-]\]\s*)(\d{1,2}:\d{2}(\s*[\u2014\-\u2013]\s*\d{1,2}:\d{2})?\s*)?(.*)$/);
+			const m = origLine.match(/^([-*+]\s+\[[ xX-]\]\s*)(\d{1,2}:\d{2}(\s*[\u2014\u2013-]\s*\d{1,2}:\d{2})?\s*)?(.*)$/);
 			if (!m) return origLine;
 			const prefix = m[1];          // "- [ ] "
 			const timePart = m[2] || "";  // "11:30—13:30 " or ""
@@ -332,7 +332,7 @@ export default class FlowtimePlugin extends Plugin {
 
 				const content = await this.app.vault.read(file);
 				const lines = content.split("\n");
-				const taskRe = /^[-*+]\s+\[([ xX\-])\]\s+(.+)/;
+				const taskRe = /^[-*+]\s+\[([ xX-])\]\s+(.+)/;
 				const srcLinkRe = /\[📄[^\]]*\]\([^)]*\)/;
 				const srcExtractRe = /📄\s*(.+?):(\d+)/;
 				const nativeLines: { index: number; status: string; text: string }[] = [];
@@ -357,7 +357,7 @@ export default class FlowtimePlugin extends Plugin {
 						const srcContent = await this.app.vault.read(srcFile);
 						const srcLines = srcContent.split("\n");
 						if (srcLineNum >= srcLines.length) continue;
-						const srcText = stripMeta(srcLines[srcLineNum].replace(/^[-*+]\s+\[[ xX\-]\]\s*/, ""));
+						const srcText = stripMeta(srcLines[srcLineNum].replace(/^[-*+]\s+\[[ xX-]\]\s*/, ""));
 
 						if (mobileText !== srcText) {
 							editedLines.push({ index: i, status: m[1], text: m[2].trim(), srcPath, srcLine: srcLineNum });

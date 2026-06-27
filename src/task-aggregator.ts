@@ -131,7 +131,7 @@ export async function injectSection(
   let inSection = false;
   for (let i = headingIdx + 1; i < sectionEnd; i++) {
     const line = lines[i];
-    const isTask = /^\s*[-*+]\s+\[[ xX\-]\]/.test(line);
+    const isTask = /^\s*[-*+]\s+\[[ xX-]\]/.test(line);
     if (isTask) {
       if (!inSection) inSection = true;
       continue; // Skip task lines — we replace all of them
@@ -178,7 +178,7 @@ export async function refreshAll(
   const content = await app.vault.read(file);
   const lines = content.split("\n");
   const headingRegex = /^(#{1,6})\s+(.+)$/;
-  const taskRegex = /^[-*+]\s+\[([ xX\-])\]\s+(.*)$/;
+  const taskRegex = /^[-*+]\s+\[([ xX-])\]\s+(.*)$/;
 
   // Collect headings with position and mode
   const found: { index: number; level: number; text: string; mode: string }[] = [];

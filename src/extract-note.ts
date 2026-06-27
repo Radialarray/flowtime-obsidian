@@ -43,7 +43,9 @@ function cleanTitle(line: string): string {
 }
 
 function sanitizeFilename(title: string): string {
-  let name = title.replace(/[<>:"/\\|?*\u0000-\u001F]/g, "");
+  let name = title.replace(/[<>:"/\\|?*]/g, "");
+  // eslint-disable-next-line no-control-regex
+  name = name.replace(/[\u0000-\u001F]/g, "");
   name = name.replace(/\s+/g, " ").trim();
   if (name.length > 100) name = name.slice(0, 100).trim();
   if (name.endsWith(".")) name = name.slice(0, -1).trim();

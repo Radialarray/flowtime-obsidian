@@ -27,7 +27,8 @@ import { QuickEntryModal } from "./quick-entry";
 import { runOnboard } from "./onboard";
 import { StatusTimer } from "./status-timer";
 import { SessionStore } from "./session-store";
-import { TaskCache } from "./cache";
+import { createTaskCache } from "./cache";
+import type { TaskCacheInstance } from "./cache";
 import { RoutineEngine } from "./routine-engine";
 import { extractNote } from "./extract-note";
 import { ListEnhancer } from "./list-enhancer";
@@ -54,7 +55,7 @@ export default class FlowtimePlugin extends Plugin {
 	notify!: (message: string, isError?: boolean) => void;
 	projectEngine!: ProjectEngine;
 	sessionStore!: SessionStore;
-	taskCache!: TaskCache;
+	taskCache!: TaskCacheInstance;
 	taskIndex!: TaskIndex;
 	routineEngine!: RoutineEngine;
 	statusTimer!: StatusTimer;
@@ -62,6 +63,11 @@ export default class FlowtimePlugin extends Plugin {
 	renderers: (FlowtimeRenderer | WeekplanRenderer)[] = [];
 	isMobile: boolean = false;
 	onHeadingDrop?: () => Promise<void>;
+
+	/** Get active document for popout window compatibility */
+	private get _doc(): Document {
+		return this.app.workspace.activeLeaf?.view?.containerEl?.ownerDocument ?? document;
+	}
 
 	_activeRowTimer: unknown = null;
 	_activeRowTimerStop: (() => void) | null = null;
@@ -136,14 +142,14 @@ export default class FlowtimePlugin extends Plugin {
 
 		// Apply content width preset
 		if (this.settings.contentWidthPreset) {
-			document.body.classList.add(
+			this._doc.body.classList.add(
 				"ft-wide-" + this.settings.contentWidthPreset,
 			);
 		}
 
 		this.projectEngine = new ProjectEngine(this.app, this.settings);
 		this.sessionStore = new SessionStore(this.app.vault);
-		this.taskCache = new TaskCache();
+		this.taskCache = createTaskCache();
 		this.taskIndex = new TaskIndex();
 		this.routineEngine = new RoutineEngine(this.app, this);
 
@@ -224,7 +230,7 @@ export default class FlowtimePlugin extends Plugin {
 		}
 
 		// v1.4.0: TaskIndex — cached task index with incremental updates
-		const indexLoaded = await this.taskIndex.load(this.app.vault.adapter);
+		const indexLoaded = await this.taskIndex.load(this.app.vault.adapter, this.app.vault.configDir);
 		if (!indexLoaded) {
 			console.log("Flowtime: Building task index...");
 			await this.taskIndex.scanAll(
@@ -232,7 +238,7 @@ export default class FlowtimePlugin extends Plugin {
 				this.app.vault,
 				this.settings.projectsRoot,
 			);
-			await this.taskIndex.save(this.app.vault.adapter);
+			await this.taskIndex.save(this.app.vault.adapter, this.app.vault.configDir);
 			console.log("Flowtime: Task index built —", this.taskIndex.totalTasks, "tasks");
 		} else {
 			console.log("Flowtime: Task index loaded from disk —", this.taskIndex.totalTasks, "tasks");
@@ -250,7 +256,7 @@ export default class FlowtimePlugin extends Plugin {
 		// v0.5.0: Auto-generate routine instances.
 		// Delayed 3s so Obsidian finishes opening its startup file first.
 		// (vault.create on mobile can otherwise steal focus to the daily note.)
-		setTimeout(async () => {
+		window.setTimeout(async () => {
 			if (this.settings.autoGenerateOnStartup === false) return;
 			try {
 				const count = await this.routineEngine.generateAllDue();
@@ -431,8 +437,8 @@ export default class FlowtimePlugin extends Plugin {
 					file.path.startsWith(routinesFolder) &&
 					!file.path.endsWith(".generated.json")
 				) {
-				if (this._routineWatchTimer) clearTimeout(this._routineWatchTimer);
-				this._routineWatchTimer = setTimeout(async () => {
+				if (this._routineWatchTimer) window.clearTimeout(this._routineWatchTimer);
+				this._routineWatchTimer = window.setTimeout(async () => {
 					this._routineWatchTimer = null;
 					try {
 						await this.routineEngine.generateAllDue();
@@ -454,7 +460,6 @@ export default class FlowtimePlugin extends Plugin {
 		this.addCommand({
 			id: "add-task",
 			name: "Add Task",
-			hotkeys: [{ modifiers: ["Mod", "Shift"], key: "I" }],
 			callback: () => {
 				new QuickEntryModal(this.app, this).open();
 			},
@@ -478,7 +483,6 @@ export default class FlowtimePlugin extends Plugin {
 		this.addCommand({
 			id: "extract-to-new-note",
 			name: "Extract to new note",
-			hotkeys: [{ modifiers: ["Mod"], key: "G" }],
 			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
 				extractNote(this.app, editor, view as MarkdownView, this);
 			},
@@ -500,7 +504,7 @@ export default class FlowtimePlugin extends Plugin {
 				const file = this.app.vault.getAbstractFileByPath(ext.newFilePath);
 				if (file) {
 					try {
-						await this.app.vault.delete(file);
+						await this.app.fileManager.trashFile(file);
 						this.notify(`\u21A9\uFE0F Undo extract: deleted "${ext.fileName}"`);
 					} catch (_) { /* fine */ }
 				}
@@ -525,10 +529,8 @@ export default class FlowtimePlugin extends Plugin {
 						contentEl.createEl("h2", { text: "\u{1F4E5} Append to Inbox" });
 						const textarea = contentEl.createEl("textarea", {
 							placeholder: "What's on your mind?",
-							cls: "flowtime-input",
+							cls: "flowtime-input ft-w-full ft-min-h-80",
 						});
-						textarea.style.width = "100%";
-						textarea.style.minHeight = "80px";
 						textarea.focus();
 
 						const btnRow = contentEl.createEl("div", {
@@ -841,14 +843,12 @@ export default class FlowtimePlugin extends Plugin {
 						const input = contentEl.createEl("input", {
 							type: "text",
 							placeholder: "Project name",
-							cls: "flowtime-input",
+							cls: "flowtime-input ft-mt-8",
 						});
-						input.style.marginTop = "8px";
 						input.focus();
 
 						// Scaffold options
-						const hrEl = contentEl.createEl("hr");
-						hrEl.style.margin = "12px 0";
+						contentEl.createEl("hr", { cls: "ft-my-12" });
 						const tasksCb = contentEl.createEl("label", {
 							cls: "flowtime-label",
 						});
@@ -856,7 +856,7 @@ export default class FlowtimePlugin extends Plugin {
 							type: "checkbox",
 						}) as HTMLInputElement;
 						tasksCheck.checked = this.scaffoldTasks;
-						tasksCheck.style.marginRight = "6px";
+						tasksCheck.addClass("ft-mr-6");
 						tasksCheck.addEventListener("change", () => {
 							this.scaffoldTasks = tasksCheck.checked;
 						});
@@ -871,7 +871,7 @@ export default class FlowtimePlugin extends Plugin {
 							type: "checkbox",
 						}) as HTMLInputElement;
 						wikiCheck.checked = this.scaffoldWiki;
-						wikiCheck.style.marginRight = "6px";
+						wikiCheck.addClass("ft-mr-6");
 						wikiCheck.addEventListener("change", () => {
 							this.scaffoldWiki = wikiCheck.checked;
 						});
@@ -989,10 +989,8 @@ export default class FlowtimePlugin extends Plugin {
 						const colorInput = contentEl.createEl("input", {
 							type: "color",
 							value: "#4a9eff",
-							cls: "flowtime-input",
+							cls: "flowtime-input ft-p-2 ft-w-60",
 						});
-						colorInput.style.padding = "2px";
-						colorInput.style.width = "60px";
 
 						contentEl.createEl("label", {
 							text: "Weekly limit (hours)",
@@ -1132,9 +1130,8 @@ export default class FlowtimePlugin extends Plugin {
 						const nameInput = contentEl.createEl("input", {
 							type: "text",
 							placeholder: "What are you working on?",
-							cls: "flowtime-input",
+							cls: "flowtime-input ft-w-full",
 						});
-						nameInput.style.width = "100%";
 						nameInput.focus();
 
 						contentEl.createEl("label", {
@@ -1147,7 +1144,7 @@ export default class FlowtimePlugin extends Plugin {
 							cls: "flowtime-input",
 						}) as HTMLInputElement;
 						durInput.min = "1";
-						durInput.style.width = "100px";
+						durInput.addClass("ft-w-100");
 
 						const btnRow = contentEl.createEl("div", {
 							cls: "flowtime-btn-row",
@@ -1247,7 +1244,7 @@ export default class FlowtimePlugin extends Plugin {
 							text: "Reset",
 							cls: "flowtime-btn-submit",
 						});
-						confirmBtn.style.background = "var(--text-error)";
+						confirmBtn.addClass("ft-bg-error");
 						cancelBtn.addEventListener("click", () => this.close());
 						confirmBtn.addEventListener("click", () => {
 							this.onConfirm();
@@ -1295,11 +1292,11 @@ export default class FlowtimePlugin extends Plugin {
 		 */
 		this._scheduleCacheSave = (force?: boolean): void => {
 			if (force && this._cacheSaveTimer) {
-				clearTimeout(this._cacheSaveTimer);
+				window.clearTimeout(this._cacheSaveTimer);
 				this._cacheSaveTimer = null;
 			}
 			if (this._cacheSaveTimer) return;
-			this._cacheSaveTimer = setTimeout(
+			this._cacheSaveTimer = window.setTimeout(
 				async () => {
 					this._cacheSaveTimer = null;
 					try {
@@ -1321,15 +1318,15 @@ export default class FlowtimePlugin extends Plugin {
 		// Save cache on unload as well
 		this.register(() => {
 			if (this._cacheSaveTimer) {
-				clearTimeout(this._cacheSaveTimer);
+				window.clearTimeout(this._cacheSaveTimer);
 				this._cacheSaveTimer = null;
 			}
 			if (this._dailyGenTimer) {
-				clearTimeout(this._dailyGenTimer);
+				window.clearTimeout(this._dailyGenTimer);
 				this._dailyGenTimer = null;
 			}
 			// Clean up content width preset classes
-			document.body.classList.remove(
+			this._doc.body.classList.remove(
 				"ft-wide-s",
 				"ft-wide-m",
 				"ft-wide-l",
@@ -1416,7 +1413,7 @@ export default class FlowtimePlugin extends Plugin {
 				const { refreshAll } = await import("./task-aggregator");
 				await refreshAll(this.app, file, this, file.path);
 				// Re-enhance after aggregation writes to file
-				setTimeout(() => this.listEnhancer.check(), 300);
+				window.setTimeout(() => this.listEnhancer.check(), 300);
 			}),
 		);
 	}
@@ -1539,7 +1536,7 @@ export default class FlowtimePlugin extends Plugin {
 	 */
 	_scheduleDailyGenerations(): void {
 		if (this._dailyGenTimer) {
-			clearTimeout(this._dailyGenTimer);
+			window.clearTimeout(this._dailyGenTimer);
 		}
 
 		const now = new Date();
@@ -1560,7 +1557,7 @@ export default class FlowtimePlugin extends Plugin {
 
 		const delay = Math.max(0, target.getTime() - now.getTime());
 
-		this._dailyGenTimer = setTimeout(async () => {
+		this._dailyGenTimer = window.setTimeout(async () => {
 			this._dailyGenTimer = null;
 			try {
 				const count = await this.routineEngine.generateAllDue();

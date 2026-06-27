@@ -413,14 +413,14 @@ class DashboardStepModal extends Modal {
     const dailyCb = contentEl.createEl("label", { cls: "flowtime-label" });
     const dailyCheck = dailyCb.createEl("input", { type: "checkbox" });
     dailyCheck.checked = true;
-    dailyCheck.style.marginRight = "6px";
+    dailyCheck.addClass("ft-mr-6");
     dailyCb.append(
       " Dashboard.md — daily overview (overdue + today + due this week)",
     );
 
     const weeklyCb = contentEl.createEl("label", { cls: "flowtime-label" });
     const weeklyCheck = weeklyCb.createEl("input", { type: "checkbox" });
-    weeklyCheck.style.marginRight = "6px";
+    weeklyCheck.addClass("ft-mr-6");
     weeklyCb.append(
       " Dashboard Weekly.md — full overview (+ weekly + budget + sessions + weekplan)",
     );
@@ -499,7 +499,7 @@ class TodayNoteStepModal extends Modal {
     });
     const createCheck = createCb.createEl("input", { type: "checkbox" });
     createCheck.checked = true;
-    createCheck.style.marginRight = "6px";
+    createCheck.addClass("ft-mr-6");
     createCb.append(" Create Today.md (auto-creates on plugin load anyway)");
 
     const btnRow = contentEl.createEl("div", { cls: "flowtime-btn-row" });
@@ -712,7 +712,7 @@ class RoutineStepModal extends Modal {
     });
     const createCheck = createCb.createEl("input", { type: "checkbox" });
     createCheck.checked = true;
-    createCheck.style.marginRight = "6px";
+    createCheck.addClass("ft-mr-6");
     createCb.append(" Create sample routine files (recommended)");
 
     const btnRow = contentEl.createEl("div", { cls: "flowtime-btn-row" });
@@ -774,13 +774,13 @@ class ProjectStepModal extends Modal {
     });
     const tasksCheck = tasksCb.createEl("input", { type: "checkbox" });
     tasksCheck.checked = true;
-    tasksCheck.style.marginRight = "6px";
+    tasksCheck.addClass("ft-mr-6");
     tasksCb.append(" Create Tasks.md");
 
     const wikiCb = contentEl.createEl("label", { cls: "flowtime-label" });
     const wikiCheck = wikiCb.createEl("input", { type: "checkbox" });
     wikiCheck.checked = true;
-    wikiCheck.style.marginRight = "6px";
+    wikiCheck.addClass("ft-mr-6");
     wikiCb.append(" Create Wiki.md");
 
     const btnRow = contentEl.createEl("div", { cls: "flowtime-btn-row" });

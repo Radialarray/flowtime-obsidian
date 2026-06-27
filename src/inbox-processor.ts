@@ -639,8 +639,8 @@ export class ProcessInboxModal extends Modal {
       500,
     );
     textInput.value = displayText;
-    textInput.style.width = "100%";
-    textInput.style.minHeight = "50px";
+    textInput.addClass("ft-w-full");
+    textInput.addClass("ft-min-h-50");
     textInput.focus();
 
     // ── Action dropdown ──
@@ -897,7 +897,7 @@ export class ProcessInboxModal extends Modal {
       type: "checkbox",
     }) as HTMLInputElement;
     tasksCheck.checked = true;
-    tasksCheck.style.marginRight = "6px";
+    tasksCheck.addClass("ft-mr-6");
     tasksCb.append(" Create Tasks.md");
 
     const wikiCb = container.createEl("label", { cls: "flowtime-label" });
@@ -905,7 +905,7 @@ export class ProcessInboxModal extends Modal {
       type: "checkbox",
     }) as HTMLInputElement;
     wikiCheck.checked = true;
-    wikiCheck.style.marginRight = "6px";
+    wikiCheck.addClass("ft-mr-6");
     wikiCb.append(" Create Wiki.md");
 
     (container as any)._projectRefs = {

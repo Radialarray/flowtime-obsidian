@@ -122,6 +122,11 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		this._tgUtCount = {};
 	}
 
+	/** Get active document for popout window compatibility */
+	private get _doc(): Document {
+		return this.containerEl?.ownerDocument ?? document;
+	}
+
 	override async onload(): Promise<void> {
 		try {
 			this.dailyCap = this.plugin?.settings?.dailyCap || 12;
@@ -572,8 +577,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 
 		// ── Header row ──
 		const hc = grid.createEl("div", { cls: "ft-tg-hc" });
-		hc.style.gridRow = "1";
-		hc.style.gridColumn = "1";
+		hc.setCssProps({ gridRow: "1", gridColumn: "1" });
 
 		const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 		for (let di = 0; di < days.length; di++) {
@@ -585,8 +589,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			const hd = grid.createEl("div", {
 				cls: "ft-tg-hd" + (isToday ? " ft-tg-today" : ""),
 			});
-			hd.style.gridRow = "1";
-			hd.style.gridColumn = String(di + 2);
+			hd.setCssProps({ gridRow: "1", gridColumn: String(di + 2) });
 			hd.createEl("span", { text: dayName, cls: "ft-tg-hd-day" });
 			hd.createEl("span", { text: String(dayNum), cls: "ft-tg-hd-date" });
 		}
@@ -598,8 +601,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 
 			// Time label (col 1)
 			const tl = grid.createEl("div", { cls: "ft-tg-time" });
-			tl.style.gridRow = String(rowNum);
-			tl.style.gridColumn = "1";
+			tl.setCssProps({ gridRow: String(rowNum), gridColumn: "1" });
 			tl.setText(timeLabel);
 
 			// Background cells for each day at this time
@@ -804,7 +806,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		};
 
 		// Live drag indicator
-		const dragIndicator = document.createElement("div");
+		const dragIndicator = this._doc.createElement("div");
 		dragIndicator.className = "ft-tg-resize-indicator";
 		grid.appendChild(dragIndicator);
 
@@ -818,10 +820,12 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			const scrollTop = wrap ? wrap.scrollTop : 0;
 			const rowIndex = newRowEnd - 2;
 			const yPos = HEADER_H + rowIndex * ROW_H - scrollTop;
-			dragIndicator.style.top = yPos + "px";
-			dragIndicator.style.left = "60px";
-			dragIndicator.style.width = "calc(100% - 60px)";
-			dragIndicator.style.display = "block";
+			dragIndicator.setCssStyles({
+				top: yPos + "px",
+				left: "60px",
+				width: "calc(100% - 60px)",
+				display: "block",
+			});
 
 			// Show time label on indicator
 			const newEndTime = this._rowToTime(newRowEnd);
@@ -839,11 +843,11 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		const touchOnMove = (ev: TouchEvent): void => onMove(ev);
 
 		const cleanup = async (): Promise<void> => {
-			document.removeEventListener("mousemove", onMove as EventListener, true);
-			document.removeEventListener("mouseup", onUp as EventListener, true);
-			document.removeEventListener("touchmove", touchOnMove, true);
-			document.removeEventListener("touchend", onTouchUp, true);
-			document.removeEventListener("touchcancel", onTouchUp, true);
+			this._doc.removeEventListener("mousemove", onMove as EventListener, true);
+			this._doc.removeEventListener("mouseup", onUp as EventListener, true);
+			this._doc.removeEventListener("touchmove", touchOnMove, true);
+			this._doc.removeEventListener("touchend", onTouchUp, true);
+			this._doc.removeEventListener("touchcancel", onTouchUp, true);
 			dragIndicator.remove();
 
 			const newRowEnd = card._tgRowEnd;
@@ -879,11 +883,11 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		const onUp = (): void => { cleanup(); };
 		const onTouchUp = (): void => { cleanup(); };
 
-		document.addEventListener("mousemove", onMove as EventListener, true);
-		document.addEventListener("mouseup", onUp as EventListener, true);
-		document.addEventListener("touchmove", touchOnMove, true);
-		document.addEventListener("touchend", onTouchUp, true);
-		document.addEventListener("touchcancel", onTouchUp, true);
+		this._doc.addEventListener("mousemove", onMove as EventListener, true);
+		this._doc.addEventListener("mouseup", onUp as EventListener, true);
+		this._doc.addEventListener("touchmove", touchOnMove, true);
+		this._doc.addEventListener("touchend", onTouchUp, true);
+		this._doc.addEventListener("touchcancel", onTouchUp, true);
 
 		// Init position
 		updateDrag(e.clientX, e.clientY);
@@ -913,7 +917,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			this._tgEditPopup = null;
 		}
 
-		const popup = document.createElement("div");
+		const popup = this._doc.createElement("div");
 		popup.className = "ft-tg-popup";
 
 		// Position near the card (clamped to viewport)
@@ -999,12 +1003,12 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			if (!popup.contains(e.target as Node) && e.target !== card) {
 				popup.remove();
 				this._tgEditPopup = null;
-				document.removeEventListener("click", closeHandler, true);
+				this._doc.removeEventListener("click", closeHandler, true);
 			}
 		};
-		setTimeout(() => document.addEventListener("click", closeHandler, true), 0);
+		window.setTimeout(() => this._doc.addEventListener("click", closeHandler, true), 0);
 
-		document.body.appendChild(popup);
+		this._doc.body.appendChild(popup);
 		this._tgEditPopup = popup;
 	}
 
@@ -1085,9 +1089,9 @@ class WeekplanRenderer extends MarkdownRenderChild {
 
 			// Budget bar
 			if (this.dailyCap > 0) {
-				const bar = renderProgressBar(totalHours, this.dailyCap);
-				bar.style.minWidth = "180px";
-				bar.style.marginLeft = "12px";
+				const bar = renderProgressBar(totalHours, this.dailyCap, undefined, dayHeader);
+				bar.addClass("ft-min-w-180");
+				bar.addClass("ft-ml-12");
 				dayHeader.appendChild(bar);
 			}
 
@@ -1157,8 +1161,8 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		const saveTime = (() => {
 			let timer: ReturnType<typeof setTimeout>;
 			return (): void => {
-				clearTimeout(timer);
-				timer = setTimeout(
+				window.clearTimeout(timer);
+				timer = window.setTimeout(
 					() => this._saveTaskTime(task, si, di),
 					300,
 				);
@@ -1237,7 +1241,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		timerBtn.addEventListener("click", () => {
 			if (timerState && timerState.running) {
 				// Stop
-				clearInterval(timerState.interval);
+				window.clearInterval(timerState.interval);
 				timerState.running = false;
 				timerBtn.setText(dur > 0 ? formatTimer(timerState.remaining) : "⏱");
 				return;
@@ -1248,12 +1252,12 @@ class WeekplanRenderer extends MarkdownRenderChild {
 				remaining: totalSeconds,
 				total: totalSeconds,
 				running: true,
-				interval: setInterval(() => {
+				interval: window.setInterval(() => {
 					if (!timerState) return;
 					timerState.remaining -= 1;
 					timerBtn.setText(formatTimer(Math.max(0, timerState.remaining)));
 					if (timerState.remaining <= 0) {
-						clearInterval(timerState.interval);
+						window.clearInterval(timerState.interval);
 						timerState.running = false;
 						this._beep();
 						timerBtn.setText("⏱ Done");

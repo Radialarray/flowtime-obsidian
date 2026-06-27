@@ -2,6 +2,7 @@ import { Modal } from "obsidian";
 import type { App, TFile } from "obsidian";
 import { parseDate } from "./date-parser";
 import type { FlowtimeSettings } from "./types";
+import { activeDoc } from "./task-utils";
 
 interface FlowtimePluginRef {
   settings: FlowtimeSettings;
@@ -63,22 +64,24 @@ export class QuickEntryModal extends Modal {
       cls: "flowtime-input",
     });
 
-    const projDD = document.createElement("div");
+    const projDD = activeDoc(this.app).createElement("div");
     projDD.className = "flowtime-proj-dd";
     let allProjects: Array<{ name: string; path: string }> = [];
 
     const openDD = (): void => {
       const r = projInput.getBoundingClientRect();
-      projDD.style.left = Math.max(4, Math.min(r.left, window.innerWidth - r.width - 8)) + "px";
-      projDD.style.top = Math.min(r.bottom + 4, window.innerHeight - 220) + "px";
-      projDD.style.width = r.width + "px";
-      projDD.style.display = "block";
-      document.body.appendChild(projDD);
+      projDD.setCssStyles({
+        left: Math.max(4, Math.min(r.left, window.innerWidth - r.width - 8)) + "px",
+        top: Math.min(r.bottom + 4, window.innerHeight - 220) + "px",
+        width: r.width + "px",
+        display: "block",
+      });
+      activeDoc(this.app).body.appendChild(projDD);
       populateDD(projInput.value);
     };
 
     const closeDD = (): void => {
-      projDD.style.display = "none";
+      projDD.setCssProps({ display: "none" });
       if (projDD.parentNode) projDD.parentNode.removeChild(projDD);
     };
 
@@ -111,7 +114,7 @@ export class QuickEntryModal extends Modal {
       if (e.key === "Escape") closeDD();
     });
     projInput.addEventListener("blur", () => {
-      setTimeout(closeDD, 150);
+      window.setTimeout(closeDD, 150);
     });
 
     // Load projects + auto-detect (deferred — defined after updateLivePreview)

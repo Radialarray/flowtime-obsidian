@@ -34,8 +34,8 @@ export function createTaskIndex() {
   let _totalTasks = 0;
   let _initialized = false;
 
-  function _isInScope(filePath: string, projectsRoot: string): boolean {
-    if (filePath.startsWith(".obsidian") || filePath.startsWith(".git")) return false;
+  function _isInScope(filePath: string, projectsRoot: string, configDir: string): boolean {
+    if (filePath.startsWith(configDir) || filePath.startsWith(".git")) return false;
     if (!projectsRoot) return true;
     const normalized = projectsRoot.endsWith("/") ? projectsRoot : projectsRoot + "/";
     return filePath.startsWith(normalized);
@@ -74,7 +74,7 @@ export function createTaskIndex() {
     const root = projectsRoot || "";
 
     for (const file of files) {
-      if (!_isInScope(file.path, root)) continue;
+      if (!_isInScope(file.path, root, vault.configDir)) continue;
       await _indexFile(file, vault);
     }
 
@@ -84,7 +84,7 @@ export function createTaskIndex() {
   /* ─── Incremental Updates ─── */
 
   async function indexFile(file: TFile, vault: Vault, projectsRoot: string): Promise<void> {
-    if (!_isInScope(file.path, projectsRoot)) return;
+    if (!_isInScope(file.path, projectsRoot, vault.configDir)) return;
     removeFile(file.path);
     await _indexFile(file, vault);
   }
@@ -164,7 +164,7 @@ export function createTaskIndex() {
 
   /* ─── Persistence ─── */
 
-  async function save(adapter: { write(path: string, data: string): Promise<void> }): Promise<void> {
+  async function save(adapter: { write(path: string, data: string): Promise<void> }, configDir: string): Promise<void> {
     const slim: Record<string, Array<{
       d: string; m: number; b: string | null; s: string | null; p: string | null; i: number; st: string;
     }>> = {};
@@ -182,13 +182,13 @@ export function createTaskIndex() {
     }
 
     await adapter.write(
-      ".obsidian/plugins/flowtime/task-index.json",
+      `${configDir}/plugins/flowtime/task-index.json`,
       JSON.stringify({ v: 1, entries: slim }),
     );
   }
 
-  async function load(adapter: { read(path: string): Promise<string>; exists(path: string): Promise<boolean> }): Promise<boolean> {
-    const path = ".obsidian/plugins/flowtime/task-index.json";
+  async function load(adapter: { read(path: string): Promise<string>; exists(path: string): Promise<boolean> }, configDir: string): Promise<boolean> {
+    const path = `${configDir}/plugins/flowtime/task-index.json`;
     try {
       if (!(await adapter.exists(path))) return false;
       const raw = await adapter.read(path);
@@ -291,11 +291,11 @@ export class TaskIndex {
     return this._impl.getDailyDurationTotal(dateStr);
   }
 
-  save(adapter: { write(path: string, data: string): Promise<void> }): Promise<void> {
-    return this._impl.save(adapter);
+  save(adapter: { write(path: string, data: string): Promise<void> }, configDir: string): Promise<void> {
+    return this._impl.save(adapter, configDir);
   }
 
-  load(adapter: { read(path: string): Promise<string>; exists(path: string): Promise<boolean> }): Promise<boolean> {
-    return this._impl.load(adapter);
+  load(adapter: { read(path: string): Promise<string>; exists(path: string): Promise<boolean> }, configDir: string): Promise<boolean> {
+    return this._impl.load(adapter, configDir);
   }
 }

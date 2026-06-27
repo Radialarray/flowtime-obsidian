@@ -63,6 +63,10 @@
 	min-width: 0;
 }
 
+.flowtime-table th {
+	width: var(--ft-col-width, auto);
+}
+
 .flowtime-table th.col-check {
 	width: 36px;
 	text-align: center;
@@ -2651,8 +2655,8 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-v
 	.ft-tg-grid { min-width: 0; } /* allow grid to shrink on tablets */
 
 	/* Table column width compression for tablet portrait */
-	.flowtime-table th.col-time { width: 18% !important; }
-	.flowtime-table th.col-timer { width: 18% !important; }
+	.flowtime-table th.col-time { width: 18%; }
+	.flowtime-table th.col-timer { width: 18%; }
 	.ft-table td { padding: 6px 4px; }
 	.ft-start-input, .ft-dur-input {
 		font-size: var(--font-ui-smaller);
@@ -2738,3 +2742,26 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-v
 	height: 32px;
 	margin: 4px 0;
 }
+
+/* ═══ Utility classes (replace inline styles for Obsidian lint compliance) ═══ */
+.ft-w-full { width: 100%; }
+.ft-w-60 { width: 60px; }
+.ft-w-100 { width: 100px; }
+.ft-min-h-50 { min-height: 50px; }
+.ft-min-h-80 { min-height: 80px; }
+.ft-min-w-100 { min-width: 100px; }
+.ft-min-w-180 { min-width: 180px; }
+.ft-min-w-200 { min-width: 200px; }
+.ft-min-w-250 { min-width: 250px; }
+.ft-mr-6 { margin-right: 6px; }
+.ft-ml-12 { margin-left: 12px; }
+.ft-mt-6 { margin-top: 6px; }
+.ft-mt-8 { margin-top: 8px; }
+.ft-mt-12 { margin-top: 12px; }
+.ft-my-12 { margin-top: 12px; margin-bottom: 12px; }
+.ft-p-2 { padding: 2px; }
+.ft-op-05 { opacity: 0.5; }
+.ft-op-07 { opacity: 0.7; }
+.ft-op-0 { opacity: 0; }
+.ft-bg-error { background: var(--text-error); }
+.ft-pl-8 { padding-left: 8px; }

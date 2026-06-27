@@ -8,6 +8,13 @@ import type { App, TFile, Vault } from "obsidian";
 import type { ParsedTask, TaskRow } from "./types";
 import { parseTaskLine } from "./task-parser";
 
+/* ─── Document helper ─── */
+
+/** Get active document for popout window compatibility */
+export function activeDoc(app: App): Document {
+  return app.workspace.activeLeaf?.view?.containerEl?.ownerDocument ?? document;
+}
+
 /* ─── Constants ─── */
 
 export const DUR_OPTS = [10, 15, 20, 25, 30, 45, 60, 90, 120, 150, 180, 210, 240];
@@ -184,8 +191,8 @@ export function priorityWeight(p: string | null | undefined): number {
 /**
  * Check if a file path is within the plugin's scan scope.
  */
-export function isFileInScope(filePath: string, projectsRoot: string): boolean {
-  if (filePath.startsWith(".obsidian") || filePath.startsWith(".git")) return false;
+export function isFileInScope(filePath: string, projectsRoot: string, configDir?: string): boolean {
+  if (filePath.startsWith(configDir ?? ".obsidian") || filePath.startsWith(".git")) return false;
   if (!projectsRoot) return true;
   const normalizedRoot = projectsRoot.endsWith("/") ? projectsRoot : projectsRoot + "/";
   return filePath.startsWith(normalizedRoot);

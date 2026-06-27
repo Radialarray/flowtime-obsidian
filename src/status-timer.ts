@@ -66,7 +66,7 @@ export function createStatusTimer(opts: StatusTimerOpts): {
       interval: null,
     };
 
-    currentTimer.interval = setInterval(() => {
+    currentTimer.interval = window.setInterval(() => {
       currentTimer!.remaining--;
       updateDisplay();
 
@@ -81,7 +81,7 @@ export function createStatusTimer(opts: StatusTimerOpts): {
 
   function stop(): void {
     if (currentTimer?.interval) {
-      clearInterval(currentTimer.interval);
+      window.clearInterval(currentTimer.interval);
     }
     const hadTimer = !!currentTimer;
     if (currentTimer && !_sessionRecorded) {
@@ -105,7 +105,7 @@ export function createStatusTimer(opts: StatusTimerOpts): {
 
   function pause(): void {
     if (currentTimer?.interval) {
-      clearInterval(currentTimer.interval);
+      window.clearInterval(currentTimer.interval);
       currentTimer.interval = null;
     }
     updateDisplay();
@@ -115,10 +115,10 @@ export function createStatusTimer(opts: StatusTimerOpts): {
     if (!currentTimer) return;
 
     if (currentTimer.interval) {
-      clearInterval(currentTimer.interval);
+      window.clearInterval(currentTimer.interval);
       currentTimer.interval = null;
     } else if (currentTimer.remaining > 0) {
-      currentTimer.interval = setInterval(() => {
+    currentTimer.interval = window.setInterval(() => {
         currentTimer!.remaining--;
         updateDisplay();
 

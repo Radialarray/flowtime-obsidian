@@ -83,9 +83,10 @@ export class FlowtimeSettingsTab extends PluginSettingTab {
   }
 
   private _applyWidthPreset(preset: string): void {
-    document.body.classList.remove("ft-wide-s", "ft-wide-m", "ft-wide-l", "ft-wide-xl");
+    const body = this.containerEl?.ownerDocument?.body ?? document.body;
+    body.classList.remove("ft-wide-s", "ft-wide-m", "ft-wide-l", "ft-wide-xl");
     if (preset && ["s", "m", "l", "xl"].includes(preset)) {
-      document.body.classList.add("ft-wide-" + preset);
+      body.classList.add("ft-wide-" + preset);
     }
   }
 
@@ -97,7 +98,7 @@ export class FlowtimeSettingsTab extends PluginSettingTab {
 
     // ═══ Projects ═══
     _g = containerEl.createEl("div", { cls: "ft-settings-group" });
-    _g.createEl("h2", { text: "Projects" });
+    new Setting(_g).setName("Projects").setHeading();
 
     new Setting(_g)
       .setName("Frontmatter key")
@@ -186,11 +187,11 @@ export class FlowtimeSettingsTab extends PluginSettingTab {
 
     // ═══ Buckets & Budget ═══
     _g = containerEl.createEl("div", { cls: "ft-settings-group" });
-    _g.createEl("h2", { text: "Buckets & Budget" });
+    new Setting(_g).setName("Buckets & Budget").setHeading();
     _g.createEl("p", {
       text: "Buckets are stored in Flowtime/Buckets.md (canonical). Edits here sync to both the markdown file and plugin settings.",
-      cls: "setting-item-description",
-    }).style.opacity = "0.7";
+      cls: "setting-item-description ft-op-07",
+    });
 
     new Setting(_g)
       .setName("Bucket tag prefix")
@@ -221,7 +222,7 @@ export class FlowtimeSettingsTab extends PluginSettingTab {
           }),
       );
 
-    containerEl.createEl("h3", { text: "Bucket definitions" });
+    new Setting(containerEl).setName("Bucket definitions").setHeading();
 
     const buckets = this.plugin.settings.buckets || [];
     for (const bucket of buckets) {
@@ -292,7 +293,7 @@ export class FlowtimeSettingsTab extends PluginSettingTab {
 
     // ═══ Task Capture ═══
     _g = containerEl.createEl("div", { cls: "ft-settings-group" });
-    _g.createEl("h2", { text: "Task Capture" });
+    new Setting(_g).setName("Task Capture").setHeading();
 
     new Setting(_g)
       .setName("Quick Entry target")
@@ -358,7 +359,7 @@ export class FlowtimeSettingsTab extends PluginSettingTab {
 
     // ═══ Templates ═══
     _g = containerEl.createEl("div", { cls: "ft-settings-group" });
-    _g.createEl("h2", { text: "Templates" });
+    new Setting(_g).setName("Templates").setHeading();
 
     {
       let dailyTaEl: HTMLTextAreaElement;
@@ -446,7 +447,7 @@ export class FlowtimeSettingsTab extends PluginSettingTab {
 
     // ═══ Planning & Routines ═══
     _g = containerEl.createEl("div", { cls: "ft-settings-group" });
-    _g.createEl("h2", { text: "Planning & Routines" });
+    new Setting(_g).setName("Planning & Routines").setHeading();
 
     new Setting(_g)
       .setName("Today note")
@@ -470,7 +471,7 @@ export class FlowtimeSettingsTab extends PluginSettingTab {
       );
 
     // Sprints
-    containerEl.createEl("h3", { text: "Sprints" });
+    new Setting(containerEl).setName("Sprints").setHeading();
 
     const sprints = this.plugin.settings.sprints || [];
     for (const sprint of sprints) {
@@ -558,7 +559,7 @@ export class FlowtimeSettingsTab extends PluginSettingTab {
     );
 
     // Routines
-    containerEl.createEl("h3", { text: "Routines" });
+    new Setting(containerEl).setName("Routines").setHeading();
 
     new Setting(_g)
       .setName("Routines folder")
@@ -656,7 +657,7 @@ export class FlowtimeSettingsTab extends PluginSettingTab {
 
     // ═══ Display & Layout ═══
     _g = containerEl.createEl("div", { cls: "ft-settings-group" });
-    _g.createEl("h2", { text: "Display & Layout" });
+    new Setting(_g).setName("Display & Layout").setHeading();
 
     new Setting(_g)
       .setName("Default view")
@@ -716,7 +717,7 @@ export class FlowtimeSettingsTab extends PluginSettingTab {
 
     // ═══ Notifications ═══
     _g = containerEl.createEl("div", { cls: "ft-settings-group" });
-    _g.createEl("h2", { text: "Notifications" });
+    new Setting(_g).setName("Notifications").setHeading();
 
     new Setting(_g)
       .setName("Play sound on timer expiry")

@@ -12,6 +12,7 @@
 import type { App, TFile } from "obsidian";
 import type { FlowtimeSettings } from "./types";
 import { parseRecurrence, isRecurrenceDue } from "./task-parser";
+import { activeDoc } from "./task-utils";
 
 interface FlowtimePluginRef {
   app: App;
@@ -37,10 +38,10 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
     _cleanupDOM();
     const view = app.workspace.activeEditor as { previewEl?: HTMLElement } | null;
     const container =
-      view?.previewEl || document.querySelector(".markdown-source-view") as HTMLElement | null;
+      view?.previewEl || activeDoc(app).querySelector(".markdown-source-view") as HTMLElement | null;
 
     if (!container) {
-      setTimeout(() => _enhance(), 300);
+      window.setTimeout(() => _enhance(), 300);
       return;
     }
 
@@ -106,9 +107,9 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
 
           // Trigger re-aggregation so mobile view reflects the change
           if (plugin.onHeadingDrop) {
-            setTimeout(async () => {
+            window.setTimeout(async () => {
               await plugin.onHeadingDrop?.();
-              setTimeout(() => _enhance(), 400);
+              window.setTimeout(() => _enhance(), 400);
             }, 300);
           }
         } catch (e) {
@@ -118,13 +119,13 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
     }
 
     // ── Inline timer button ──
-    const timerBtn = document.createElement("span");
+    const timerBtn = activeDoc(app).createElement("span");
     timerBtn.textContent = "\u23F1";
     timerBtn.className = "ft-enhance-timer";
     timerBtn.setAttribute("title", "Start timer");
 
     let timerActive = false;
-    const taskText = (el.textContent || "").replace(/^\s*[-*+]\s*\[[ xX\-]\]\s*/, "").trim();
+    const taskText = (el.textContent || "").replace(/^\s*[-*+]\s*\[[ xX-]\]\s*/, "").trim();
 
     timerBtn.addEventListener("click", (e: MouseEvent) => {
       e.stopPropagation();
@@ -134,7 +135,7 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
         plugin.statusTimer.stop();
         timerActive = false;
         timerBtn.textContent = "\u23F1";
-        timerBtn.style.opacity = "0.5";
+        timerBtn.addClass("ft-op-05");
       } else {
         const durMatch = taskText.match(/@(\d+(?:\.\d+)?)([hm])/);
         const seconds = durMatch
@@ -143,7 +144,7 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
         plugin.statusTimer.start(taskText, Math.round(seconds));
         timerActive = true;
         timerBtn.textContent = "\u23F8";
-        timerBtn.style.opacity = "1";
+        timerBtn.removeClass("ft-op-05");
       }
     });
 
@@ -191,7 +192,7 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
   /* ─── Cleanup ─── */
 
   function _cleanupDOM(): void {
-    document.querySelectorAll(".ft-list-enhanced").forEach((el) => {
+    activeDoc(app).querySelectorAll(".ft-list-enhanced").forEach((el) => {
       el.classList.remove("ft-list-enhanced");
       el.querySelectorAll(".ft-enhance-timer").forEach((c) => c.remove());
     });
@@ -221,7 +222,7 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
     _active = true;
     _currentPath = file.path;
     _currentFile = file;
-    setTimeout(() => _enhance(), 500);
+    window.setTimeout(() => _enhance(), 500);
   }
 
   function deactivate(): void {

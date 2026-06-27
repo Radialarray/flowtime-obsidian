@@ -1,7 +1,8 @@
 {
   "name": "flowtime",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "tsc --noEmit && eslint src/ --max-warnings 0 && node esbuild.config.mjs production && cp manifest.json src/styles.css dist/",
     "dev": "node esbuild.config.mjs",

@@ -182,8 +182,13 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     this._closePopups = null;
   }
 
+  /** Get active document for popout window compatibility */
+  private get _doc(): Document {
+    return this.containerEl?.ownerDocument ?? document;
+  }
+
   override async onload(): Promise<void> {
-    this.containerEl.style.marginTop = "6px";
+    this.containerEl.addClass("ft-mt-6");
 
     // Mobile (Platform.isMobile): show link to markdown view instead of custom UI
     if (this.plugin?.isMobile) {
@@ -254,7 +259,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
   }
 
   _isFileInScope(filePath: string): boolean {
-    if (filePath.startsWith(".obsidian") || filePath.startsWith(".git")) return false;
+    if (filePath.startsWith(this.app.vault.configDir) || filePath.startsWith(".git")) return false;
     const root = this.plugin?.settings?.projectsRoot || "";
     if (!root) return true;
     const inboxPath = (this.plugin?.settings?.inboxPath || "Inbox.md").replace(/^\.\//, "");
@@ -649,7 +654,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       today: "\ud83d\udca1 Times and durations auto-save to source files",
       overdue: "\ud83d\udccb Tasks past their scheduled date \u2014 reassign or backlog",
       dueweek: "\u26a0\ufe0f Tasks due this week \u2014 schedule or defer",
-      weekly: "\ud83d\udcca This week\'s tasks grouped by project",
+      weekly: "\ud83d\udcca This week's tasks grouped by project",
       soon: "\u25cc Up next \u2014 @soon backlog items surfaced for attention",
       project: "\ud83d\udcc1 Tasks for this project",
     };
@@ -677,7 +682,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     }
 
     const colBtn = toolbar.createEl("button", { text: "\u2630 Columns", cls: "ft-col-btn" });
-    const colDD = document.createElement("div"); colDD.className = "ft-col-dd";
+    const colDD = this._doc.createElement("div"); colDD.className = "ft-col-dd";
     const dropdownLabels: Record<string, string> = {
       time: "Time", check: "\u2713", priority: "Prio", soon: "Soon", task: "Task",
       project: "Project", bucket: "Bucket", sprint: "Sprint", source: "Source", date: "Date", actions: "Actions", timer: "\u23f1",
@@ -698,7 +703,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       const r = colBtn.getBoundingClientRect();
       colDD.style.left = Math.max(4, Math.min(r.left, window.innerWidth - colDD.offsetWidth - 8)) + "px";
       colDD.style.top = Math.min(r.bottom + 4, window.innerHeight - colDD.offsetHeight - 8) + "px";
-      colDD.classList.toggle("ft-col-dd-open"); document.body.appendChild(colDD);
+      colDD.classList.toggle("ft-col-dd-open"); this._doc.body.appendChild(colDD);
     };
     colBtn.addEventListener("click", (e: MouseEvent) => { e.stopPropagation(); toggleDD(); });
     const closeDD = (e: MouseEvent): void => {
@@ -707,7 +712,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
         if (colDD.parentNode) colDD.parentNode.removeChild(colDD);
       }
     };
-    document.addEventListener("click", closeDD, true);
+    this._doc.addEventListener("click", closeDD, true);
 
     const viewBtn = toolbar.createEl("button", { text: this._viewMode === "list" ? "\u229e Table" : "\u2630 List", cls: "ft-view-btn" });
     viewBtn.addEventListener("click", () => {
@@ -722,7 +727,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
     const filterBtn = toolbar.createEl("button", { text: "\ud83d\udd0d Filter", cls: "ft-filter-btn" });
     if (this._activeFilter) { filterBtn.addClass("ft-filter-active-btn"); } else { filterBtn.removeClass("ft-filter-active-btn"); }
-    const filterPanel = document.createElement("div"); filterPanel.className = "ft-filter-panel";
+    const filterPanel = this._doc.createElement("div"); filterPanel.className = "ft-filter-panel";
 
     const buildFilterUI = (): void => {
       filterPanel.empty();
@@ -767,12 +772,12 @@ class FlowtimeRenderer extends MarkdownRenderChild {
         const r = filterBtn.getBoundingClientRect();
         filterPanel.style.left = Math.max(4, Math.min(r.left, window.innerWidth - 300)) + "px";
         filterPanel.style.top = Math.min(r.bottom + 4, window.innerHeight - 200) + "px";
-        buildFilterUI(); filterPanel.classList.add("ft-filter-open"); document.body.appendChild(filterPanel);
+        buildFilterUI(); filterPanel.classList.add("ft-filter-open"); this._doc.body.appendChild(filterPanel);
       }
     };
     const closePanel = (): void => { filterPanel.classList.remove("ft-filter-open"); if (filterPanel.parentNode) filterPanel.parentNode.removeChild(filterPanel); };
     const closeFilterPanelOnOutside = (e: MouseEvent): void => { if (!filterPanel.contains(e.target as Node) && e.target !== filterBtn) closePanel(); };
-    document.addEventListener("click", closeFilterPanelOnOutside, true);
+    this._doc.addEventListener("click", closeFilterPanelOnOutside, true);
     filterBtn.addEventListener("click", (e: MouseEvent) => { e.stopPropagation(); toggleFilterPanel(); });
 
     if (!this._groupConfig) this._groupConfig = { primary: null, secondary: null };
@@ -843,12 +848,12 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
     const makeSortableHeader = (label: string, field: string | null, cls: string, width: string): HTMLTableHeaderCellElement => {
       const th = hr.createEl("th", { cls }); th.classList.add("ft-sortable");
-      if (width) th.style.width = width; th.createEl("span", { text: label });
+      if (width) th.setCssProps({ "--ft-col-width": width }); th.createEl("span", { text: label });
       if (field) { th.createEl("span", { cls: "ft-sort-indicator", text: sortIndicator(field) }); th.addEventListener("click", sortByColumn(field)); }
       return th;
     };
     const makeHeader = (cls: string, width: string): HTMLTableHeaderCellElement => {
-      const th = hr.createEl("th", { cls }); if (width) th.style.width = width; return th;
+      const th = hr.createEl("th", { cls }); if (width) th.setCssProps({ "--ft-col-width": width }); return th;
     };
 
     for (const col of COLUMNS) {
@@ -874,8 +879,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       const capSection = this.containerEl.createEl("div", { cls: "ft-budget-section" });
       capSection.createEl("div", { text: "Daily Budget", cls: "ft-budget-section-title" });
       const capRow = capSection.createEl("div", { cls: "ft-budget-row" });
-      const bar = renderProgressBar(this._budgetDailyCapUsed, this._budgetDailyCap);
-      bar.style.minWidth = "250px"; capRow.appendChild(bar);
+      const bar = renderProgressBar(this._budgetDailyCapUsed, this._budgetDailyCap, undefined, capSection);
+      bar.addClass("ft-min-w-250"); capRow.appendChild(bar);
     }
     const section = this.containerEl.createEl("div", { cls: "ft-budget-section" });
     section.createEl("div", { text: "Weekly Bucket Budgets", cls: "ft-budget-section-title" });
@@ -887,8 +892,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       const swatch = info.createEl("span", { cls: "ft-bucket-swatch" }); swatch.style.backgroundColor = def.color;
       info.createEl("span", { text: def.name, cls: "ft-budget-name" });
       const usedHours = task.durationMinutes / 60;
-      const bar = renderProgressBar(usedHours, def.weeklyLimit);
-      bar.style.minWidth = "200px"; row.appendChild(bar);
+      const bar = renderProgressBar(usedHours, def.weeklyLimit, undefined, row);
+      bar.addClass("ft-min-w-200"); row.appendChild(bar);
     }
     if (sorted.length === 0) { section.createEl("p", { text: "No buckets configured. Add buckets in Settings.", cls: "ft-budget-empty" }); }
   }
@@ -904,7 +909,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       const card = this.containerEl.createEl("div", { cls: "ft-budget-section" });
       const header = card.createEl("div", { cls: "ft-budget-section-title ft-sprint-card-header" });
       const nameEl = header.createEl("span", { text: def.name, cls: "ft-sprint-name" });
-      if (def.color) { nameEl.style.borderLeft = "3px solid " + def.color; nameEl.style.paddingLeft = "8px"; }
+      if (def.color) { nameEl.setCssProps({ "border-left": "3px solid " + def.color }); nameEl.addClass("ft-pl-8"); }
       if (def.goal) { card.createEl("div", { text: def.goal, cls: "ft-sprint-goal" }); }
       if (def.start || def.end) { card.createEl("div", { text: `${def.start || "?"} \u2192 ${def.end || "?"}`, cls: "ft-sprint-dates" }); }
       if (tasks.length > 0) {
@@ -912,13 +917,13 @@ class FlowtimeRenderer extends MarkdownRenderChild {
         const total = tasks.length;
         const taskRow = card.createEl("div", { cls: "ft-budget-row" });
         taskRow.createEl("span", { text: `Tasks: ${done}/${total}`, cls: "ft-sprint-stat" });
-        const taskBar = renderProgressBar(done, total, `${Math.round((done / total) * 100)}%`); taskBar.style.minWidth = "200px"; taskRow.appendChild(taskBar);
+        const taskBar = renderProgressBar(done, total, `${Math.round((done / total) * 100)}%`, card); taskBar.addClass("ft-min-w-200"); taskRow.appendChild(taskBar);
         const totalMinutes = tasks.reduce((sum, t) => sum + (t.durationMinutes || 0), 0);
         const doneMinutes = tasks.filter((t) => t.status === "x" || t.status === "X").reduce((sum, t) => sum + (t.durationMinutes || 0), 0);
         if (totalMinutes > 0) {
           const timeRow = card.createEl("div", { cls: "ft-budget-row" });
           timeRow.createEl("span", { text: `Time: ${formatHours(doneMinutes / 60)}h / ${formatHours(totalMinutes / 60)}h`, cls: "ft-sprint-stat" });
-          const timeBar = renderProgressBar(doneMinutes, totalMinutes, `${Math.round((doneMinutes / totalMinutes) * 100)}%`); timeBar.style.minWidth = "200px"; timeRow.appendChild(timeBar);
+          const timeBar = renderProgressBar(doneMinutes, totalMinutes, `${Math.round((doneMinutes / totalMinutes) * 100)}%`, card); timeBar.addClass("ft-min-w-200"); timeRow.appendChild(timeBar);
         }
       } else { card.createEl("p", { text: "No tasks tagged with @sprint:" + def.id, cls: "ft-sprint-empty" }); }
     }
@@ -931,8 +936,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     const totalToday = this.tasks.reduce((sum, t) => { if (t.taskDate === refTdy) return sum + (t.durationMinutes || 0); return sum; }, 0) / 60;
     const capRow = this.containerEl.createEl("div", { cls: "ft-daily-cap" });
     capRow.createEl("span", { text: "Daily Budget: ", cls: "ft-cap-label" });
-    const bar = renderProgressBar(totalToday, dailyCap);
-    bar.style.minWidth = "200px"; capRow.appendChild(bar);
+    const bar = renderProgressBar(totalToday, dailyCap, undefined, capRow);
+    bar.addClass("ft-min-w-200"); capRow.appendChild(bar);
   }
 
   _renderListView(tdy: string): void {
@@ -988,19 +993,18 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     row.addEventListener("touchmove", (e: TouchEvent) => {
       if (!swiping || e.touches.length !== 1) return;
       swipeDeltaX = e.touches[0].clientX - swipeStartX;
-      row.style.transform = `translateX(${swipeDeltaX}px)`;
-      row.style.transition = "none";
+      row.setCssProps({ transform: `translateX(${swipeDeltaX}px)`, transition: "none" });
     }, { passive: true });
 
     row.addEventListener("touchend", async () => {
       if (!swiping) return;
       swiping = false;
-      row.style.transition = "transform 200ms ease-out";
+      row.setCssProps({ transition: "transform 200ms ease-out" });
       if (swipeDeltaX > SWIPE_THRESHOLD) {
         // Swipe right → complete
-        row.style.transform = "translateX(100%)";
-        row.style.opacity = "0";
-        setTimeout(async () => {
+        row.setCssProps({ transform: "translateX(100%)" });
+        row.addClass("ft-op-0");
+        window.setTimeout(async () => {
           await toggleCheck(this.app.vault, task);
           task.status = "x";
           this.plugin?.notify?.("\u2705 Task completed");
@@ -1010,9 +1014,9 @@ class FlowtimeRenderer extends MarkdownRenderChild {
         return;
       } else if (swipeDeltaX < -SWIPE_THRESHOLD) {
         // Swipe left → reschedule to tomorrow
-        row.style.transform = "translateX(-100%)";
-        row.style.opacity = "0";
-        setTimeout(async () => {
+        row.setCssProps({ transform: "translateX(-100%)" });
+        row.addClass("ft-op-0");
+        window.setTimeout(async () => {
           const tomorrow = new Date();
           tomorrow.setDate(tomorrow.getDate() + 1);
           const tomorrowStr = tomorrow.toISOString().split("T")[0];
@@ -1024,7 +1028,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
         return;
       }
       // Reset position
-      row.style.transform = "";
+      row.setCssProps({ transform: "" });
     });
 
     return row;
@@ -1035,9 +1039,9 @@ class FlowtimeRenderer extends MarkdownRenderChild {
    * Click opens editor (NOT source file). Source link button top-right.
    */
   _showFloatingEditor(task: TaskRow, anchorEl: HTMLElement): void {
-    document.querySelectorAll(".ft-floating-editor,.ft-list-popover,.ft-detail-popup").forEach((e) => e.remove());
+    this._doc.querySelectorAll(".ft-floating-editor,.ft-list-popover,.ft-detail-popup").forEach((e) => e.remove());
 
-    const popup = document.createElement("div");
+    const popup = this._doc.createElement("div");
     popup.className = "ft-floating-editor";
 
     // ── Header: heading + source link button ──
@@ -1059,9 +1063,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     const textRow = popup.createEl("div", { cls: "ft-fe-row" });
     textRow.createEl("label", { text: "Task", cls: "ft-fe-label" });
     const textInput = textRow.createEl("input", {
-      type: "text", value: task.cleanText, cls: "ft-fe-input ft-fe-text",
+      type: "text", value: task.cleanText, cls: "ft-fe-input ft-fe-text ft-w-full",
     });
-    textInput.style.width = "100%";
 
     // ── Date ──
     const dateRow = popup.createEl("div", { cls: "ft-fe-row" });
@@ -1212,26 +1215,27 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
     const rect = anchorEl.getBoundingClientRect();
     const popupW = Math.min(360, window.innerWidth - 16);
-    popup.style.left = Math.max(4, Math.min(rect.left, window.innerWidth - popupW - 8)) + "px";
     // Position: prefer below anchor, flip above if not enough room
     const spaceBelow = window.innerHeight - rect.bottom;
     const estimateH = 300; // estimated editor height
-    if (spaceBelow >= estimateH || spaceBelow > rect.top) {
-      popup.style.top = Math.min(rect.bottom + 4, window.innerHeight - estimateH) + "px";
-    } else {
-      popup.style.top = Math.max(4, rect.top - estimateH - 4) + "px";
-    }
-    popup.style.maxWidth = popupW + "px";
-    popup.style.maxHeight = (window.innerHeight - 16) + "px";
-    popup.style.overflowY = "auto";
+    const popupTop = spaceBelow >= estimateH || spaceBelow > rect.top
+      ? Math.min(rect.bottom + 4, window.innerHeight - estimateH) + "px"
+      : Math.max(4, rect.top - estimateH - 4) + "px";
+    popup.setCssStyles({
+      left: Math.max(4, Math.min(rect.left, window.innerWidth - popupW - 8)) + "px",
+      top: popupTop,
+      maxWidth: popupW + "px",
+      maxHeight: (window.innerHeight - 16) + "px",
+      overflowY: "auto",
+    });
 
     const closeOutside = (e: MouseEvent): void => {
       if (popup.contains(e.target as Node)) return;
-      document.removeEventListener("click", closeOutside, true);
+      this._doc.removeEventListener("click", closeOutside, true);
       popup.remove();
     };
-    setTimeout(() => document.addEventListener("click", closeOutside, true), 200);
-    document.body.appendChild(popup);
+    window.setTimeout(() => this._doc.addEventListener("click", closeOutside, true), 200);
+    this._doc.body.appendChild(popup);
     textInput.focus(); textInput.select();
   }
 
@@ -1262,12 +1266,12 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       row.classList.add("ft-list-dragging");
     });
     let moveFrame: number | null = null;
-    document.addEventListener("mousemove", (e: MouseEvent) => {
+    this._doc.addEventListener("mousemove", (e: MouseEvent) => {
       if (!dragState || moveFrame) return;
-      moveFrame = requestAnimationFrame(() => {
+      moveFrame = window.requestAnimationFrame(() => {
         moveFrame = null; const ds = dragState; if (!ds) return;
         // Batch all DOM reads first
-        const el = document.elementFromPoint(e.clientX, e.clientY);
+        const el = this._doc.elementFromPoint(e.clientX, e.clientY);
         // Then batch all DOM writes together
         clearIndicators(); ds.row.classList.add("ft-list-dragging");
         if (!el) return;
@@ -1280,9 +1284,9 @@ class FlowtimeRenderer extends MarkdownRenderChild {
         if (heading && !heading.closest(".ft-list-wrap")) { heading.classList.add("ft-list-heading-active"); }
       });
     });
-    document.addEventListener("mouseup", async (e: MouseEvent) => {
+    this._doc.addEventListener("mouseup", async (e: MouseEvent) => {
       if (!dragState) return;
-      const el = document.elementFromPoint(e.clientX, e.clientY); clearIndicators();
+      const el = this._doc.elementFromPoint(e.clientX, e.clientY); clearIndicators();
       const srcIdx = rowToIndex?.get(dragState.row) ?? -1;
       if (srcIdx < 0) { dragState = null; return; }
       const targetRow = (el as HTMLElement | null)?.closest(".ft-list-row") as HTMLDivElement | null;
@@ -1358,8 +1362,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
   buildRows(tbody: HTMLTableSectionElement): void {
     tbody.empty(); this.rowData = []; this._resyncDone = false;
-    document.querySelectorAll(".ft-date-popup,.ft-detail-popup").forEach((e) => e.remove());
-    if (this._closePopups) { document.removeEventListener("click", this._closePopups, true); this._closePopups = null; }
+    this._doc.querySelectorAll(".ft-date-popup,.ft-detail-popup").forEach((e) => e.remove());
+    if (this._closePopups) { this._doc.removeEventListener("click", this._closePopups, true); this._closePopups = null; }
     const tdy = this._refDate();
     const od = this.mode === "overdue", _dw = this.mode === "dueweek", wk = this.mode === "weekly", pj = this.mode === "project";
     const isCompact = od || _dw || wk;
@@ -1419,7 +1423,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       for (const d of DUR_OPTS) { durList.createEl("option", { attr: { value: formatDuration(d) } }); }
       const ps = timeRow.createEl("span", { text: "", cls: "ft-preview" });
       const up = (): void => { const s = si!.value; const d = parseDurStr(ds!.value); ps.setText(s && d > 0 ? "\u2192 " + this._calcEnd(s, d) : ""); };
-      const debounceSave = (() => { let timer: ReturnType<typeof setTimeout>; return (): void => { if (timer) clearTimeout(timer); timer = setTimeout(() => this._autoSaveTime(task, si!, ds!), 300); }; })();
+      const debounceSave = (() => { let timer: ReturnType<typeof setTimeout>; return (): void => { if (timer) window.clearTimeout(timer); timer = window.setTimeout(() => this._autoSaveTime(task, si!, ds!), 300); }; })();
       si.addEventListener("input", () => { up(); debounceSave(); }); ds.addEventListener("input", () => { up(); debounceSave(); }); up();
     }
 
@@ -1450,8 +1454,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
           bc.createEl("div", { text: bucketDef.name, cls: "ft-bucket-label" });
           if (bucketDef.weeklyLimit > 0) {
             const used = (this.bucketTotals?.[task.bucket] || 0) / 60;
-            const bar = renderProgressBar(used, bucketDef.weeklyLimit);
-            bar.style.minWidth = "100px"; bc.appendChild(bar);
+            const bar = renderProgressBar(used, bucketDef.weeklyLimit, undefined, bc);
+            bar.addClass("ft-min-w-100"); bc.appendChild(bar);
           } else { bc.createEl("div", { text: "no limit", cls: "ft-bucket-nolimit" }); }
         } else { bc.createEl("span", { text: task.bucket, cls: "ft-bucket-missing" }); }
       } else { bc.createEl("span", { text: "\u2014", cls: "ft-bucket-none" }); }
@@ -1476,23 +1480,23 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       const dc = row.createEl("td", { cls: "ft-date-cell" }); const dw = dc.createEl("div", { cls: "ft-date-wrap" });
       const hasDate = !!task.taskDate;
       const ds2 = dw.createEl("span", { text: hasDate ? this._fmtDate(task.taskDate) : "+", cls: "ft-date-badge" + (hasDate ? "" : " ft-date-none") });
-      const dp = document.createElement("div"); dp.className = "ft-date-popup";
+      const dp = this._doc.createElement("div"); dp.className = "ft-date-popup";
       const dpi = dp.createEl("input", { type: "date", value: task.taskDate || "", cls: "ft-dp-input" });
       const mkDpBtn = (txt: string, cls: string): HTMLButtonElement => dp.createEl("button", { text: txt, cls });
       const bTdy = mkDpBtn("Today", "ft-dp-btn"), bTmw = mkDpBtn("Tomorrow", "ft-dp-btn"), bNw = mkDpBtn("Next Week", "ft-dp-btn"), bBkl = mkDpBtn("\u21a9\ufe0f Backlog", "ft-dp-btn");
       const fmt = (d: Date): string => d.toISOString().split("T")[0];
       if (!this._closePopups) {
         this._closePopups = (ev: MouseEvent): void => {
-          document.querySelectorAll(".ft-date-popup.ft-dp-open").forEach((p) => {
+          this._doc.querySelectorAll(".ft-date-popup.ft-dp-open").forEach((p) => {
             if (p.contains(ev.target as Node) || ((p as HTMLDivElement & { _badge?: HTMLElement })._badge?.contains(ev.target as Node))) return;
             p.classList.remove("ft-dp-open"); if (p.parentNode) p.parentNode.removeChild(p);
           });
         };
-        document.addEventListener("click", this._closePopups, true);
+        this._doc.addEventListener("click", this._closePopups, true);
       }
       (dp as HTMLDivElement & { _badge?: HTMLElement })._badge = ds2;
-      const op = (): void => { const r = dw.getBoundingClientRect(); dp.style.left = Math.max(4, Math.min(r.left, window.innerWidth - 190)) + "px"; dp.style.top = Math.min(r.bottom + 4, window.innerHeight - 250) + "px"; document.body.appendChild(dp); requestAnimationFrame(() => { if (dp.parentNode) dp.classList.add("ft-dp-open"); }); };
-      const cp = (): void => { dp.classList.remove("ft-dp-open"); setTimeout(() => { if (dp.parentNode) dp.parentNode.removeChild(dp); }, 150); };
+      const op = (): void => { const r = dw.getBoundingClientRect(); dp.style.left = Math.max(4, Math.min(r.left, window.innerWidth - 190)) + "px"; dp.style.top = Math.min(r.bottom + 4, window.innerHeight - 250) + "px"; this._doc.body.appendChild(dp); window.requestAnimationFrame(() => { if (dp.parentNode) dp.classList.add("ft-dp-open"); }); };
+      const cp = (): void => { dp.classList.remove("ft-dp-open"); window.setTimeout(() => { if (dp.parentNode) dp.parentNode.removeChild(dp); }, 150); };
       ds2.addEventListener("click", (e: MouseEvent) => { e.stopPropagation(); dp.classList.contains("ft-dp-open") ? cp() : op(); });
       const ap = async (nd: string): Promise<void> => {
         cp();
@@ -1560,7 +1564,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
     const stp = (): void => {
       if (this.plugin) this.plugin._activeRowTimerStop = null;
-      if (ts.interval) { clearInterval(ts.interval); ts.interval = null; }
+      if (ts.interval) { window.clearInterval(ts.interval); ts.interval = null; }
       ts.running = false;
       pb.setText("\u25b6");
       if (this.plugin?.statusTimer?.stop) this.plugin.statusTimer.stop();
@@ -1570,7 +1574,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       if (ts.remaining <= 0) return;
       ts.running = true;
       pb.setText("\u23f8");
-      ts.interval = setInterval(() => {
+      ts.interval = window.setInterval(() => {
         ts.remaining--;
         ud();
         if (ts.remaining <= 0) {
@@ -1601,7 +1605,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     };
 
     const pauseTimer = (): void => {
-      if (ts.interval) { clearInterval(ts.interval); ts.interval = null; }
+      if (ts.interval) { window.clearInterval(ts.interval); ts.interval = null; }
       ts.running = false;
       pb.setText("\u25b6");
       if (this.plugin?.statusTimer?.pause) this.plugin.statusTimer.pause();
@@ -1752,7 +1756,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
         const typeCell = row.createEl("td"); typeCell.createEl("span", { text: (rec as Record<string, string>).type === "session" ? "\u23f1" : "\u2611", cls: "ft-sesh-type-icon" });
         row.createEl("td", { text: (rec as Record<string, string>).date, cls: "ft-sesh-date" });
         const timeCell = row.createEl("td", { cls: "ft-sesh-time" });
-        if ((rec as Record<string, string>).type === "session" && (rec as Record<string, string>).start_time && (rec as Record<string, string>).end_time) { const fmt = (iso: string) => iso.split("T")[1]?.slice(0, 5) || ""; timeCell.setText(`${fmt((rec as Record<string, string>).start_time)}\"u2014${fmt((rec as Record<string, string>).end_time)}`); }
+        if ((rec as Record<string, string>).type === "session" && (rec as Record<string, string>).start_time && (rec as Record<string, string>).end_time) { const fmt = (iso: string) => iso.split("T")[1]?.slice(0, 5) || ""; timeCell.setText(`${fmt((rec as Record<string, string>).start_time)}\u2014${fmt((rec as Record<string, string>).end_time)}`); }
         else if ((rec as Record<string, string>).completed_at) { timeCell.setText((rec as Record<string, string>).completed_at.split("T")[1]?.slice(0, 5) || ""); }
         row.createEl("td", { text: (rec as Record<string, number>).duration_minutes ? `${(rec as Record<string, number>).duration_minutes}m` : "\u2014", cls: "ft-sesh-dur" });
         const bucketCell = row.createEl("td", { cls: "ft-sesh-bucket" });

@@ -23,7 +23,7 @@ function cleanTitle(line: string): string {
     .replace(/^#+\s*/, "")
     .replace(/^\s*\d+[.)]\s*/, "")
     .replace(/^>\s*/, "")
-    .replace(/[\[\]]/g, "")
+    .replace(/[[\]]/g, "")
     .replace(/@\d{4}-\d{2}-\d{2}/g, "")
     .replace(
       /@(today|tomorrow|yesterday|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next-week|next-monday)\b/gi,

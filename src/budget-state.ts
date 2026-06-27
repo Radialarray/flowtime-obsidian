@@ -32,20 +32,22 @@ export function getBudgetState(used: number, total: number): { ratio: number; st
  * @param used - Amount used
  * @param total - Total budget
  * @param label - Optional text, auto-generated if omitted
+ * @param contextEl - Optional context element; its ownerDocument is used for popout compatibility
  */
-export function renderProgressBar(used: number, total: number, label?: string): HTMLElement {
+export function renderProgressBar(used: number, total: number, label?: string, contextEl?: HTMLElement): HTMLElement {
   const { ratio, state } = getBudgetState(used, total);
   const pct = Math.min(Math.round(ratio * 100), 100);
 
-  const bar = document.createElement("div");
+  const doc = contextEl?.ownerDocument ?? document;
+  const bar = doc.createElement("div");
   bar.className = `ft-progress-bar ft-state-${state}`;
 
-  const fill = document.createElement("div");
+  const fill = doc.createElement("div");
   fill.className = "ft-progress-fill";
   fill.style.width = pct + "%";
   bar.appendChild(fill);
 
-  const text = document.createElement("span");
+  const text = doc.createElement("span");
   text.className = "ft-progress-label";
   text.textContent = label || `${formatHours(used)} / ${formatHours(total)}h`;
   bar.appendChild(text);

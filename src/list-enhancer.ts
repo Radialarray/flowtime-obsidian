@@ -9,7 +9,8 @@
  * - Triggers re-aggregation after changes (for mobile markdown view)
  */
 
-import type { App, TFile } from "obsidian";
+import type { App } from "obsidian";
+import { TFile } from "obsidian";
 import type { FlowtimeSettings } from "./types";
 import { parseRecurrence, isRecurrenceDue } from "./task-parser";
 import { activeDoc } from "./task-utils";
@@ -84,8 +85,9 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
         const srcPath = decodeURIComponent(srcMatch[1]);
         const srcLine = parseInt(srcMatch[2], 10) - 1; // back to 0-indexed
 
-        const srcFile = app.vault.getAbstractFileByPath(srcPath) as TFile | null;
-        if (!srcFile) return;
+        const af = app.vault.getAbstractFileByPath(srcPath);
+        if (!(af instanceof TFile)) return;
+        const srcFile: TFile = af;
 
         try {
           const content = await app.vault.read(srcFile);

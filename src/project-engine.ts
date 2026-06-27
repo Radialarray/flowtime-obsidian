@@ -1,4 +1,5 @@
-import type { App, TFile } from "obsidian";
+import type { App } from "obsidian";
+import { TFile } from "obsidian";
 import type { FlowtimeSettings, ProjectResult, FrontmatterResult } from "./types";
 
 // ═══════════════════════════════════════════════════════════════════
@@ -57,9 +58,8 @@ async function _resolveFromFrontmatter(
     const candidatePath = dir + dirName + ".md";
     const afile = app.vault.getAbstractFileByPath(candidatePath);
 
-    if (afile) {
-      const file = afile as TFile;
-      const content = await app.vault.read(file);
+    if (afile instanceof TFile) {
+      const content = await app.vault.read(afile);
       const { found, name } = _parseFrontmatter(content, settings);
       if (found) {
         return {

@@ -7,7 +7,8 @@
  */
 
 import { Notice } from "obsidian";
-import type { App, Editor, MarkdownView, TFile } from "obsidian";
+import type { App, Editor, MarkdownView } from "obsidian";
+import { TFile } from "obsidian";
 
 interface FlowtimePluginRef {
   notify: (msg: string, isError?: boolean) => void;
@@ -179,9 +180,9 @@ export async function extractNote(
     timestamp: Date.now(),
   };
 
-  const newFile = app.vault.getAbstractFileByPath(newPath);
-  if (newFile) {
-    await app.workspace.getLeaf("tab").openFile(newFile as TFile);
+  const abstractFile = app.vault.getAbstractFileByPath(newPath);
+  if (abstractFile instanceof TFile) {
+    await app.workspace.getLeaf("tab").openFile(abstractFile);
   }
 
   plugin.notify(`\u2705 Extracted to "${finalName}"`);

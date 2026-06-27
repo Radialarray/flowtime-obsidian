@@ -1,5 +1,5 @@
-import { Modal } from "obsidian";
-import type { App, TFile } from "obsidian";
+import { Modal, TFile } from "obsidian";
+import type { App } from "obsidian";
 import { parseDate } from "./date-parser";
 import type { FlowtimeSettings } from "./types";
 import { createProject } from "./template-engine";
@@ -338,9 +338,8 @@ export async function appendTaskToTarget(
       (p) => p.name.toLowerCase() === projectMatch[1].toLowerCase(),
     );
     if (match && match.path) {
-      targetFile = app.vault.getAbstractFileByPath(
-        match.path,
-      ) as TFile | null;
+      const af = app.vault.getAbstractFileByPath(match.path);
+      targetFile = af instanceof TFile ? af : null;
     }
   }
 
@@ -361,14 +360,13 @@ export async function appendTaskToTarget(
         const dailyPath = folder
           ? folder + "/" + today + ".md"
           : today + ".md";
-        targetFile = app.vault.getAbstractFileByPath(
-          dailyPath,
-        ) as TFile | null;
+        const dailyAf = app.vault.getAbstractFileByPath(dailyPath);
+        targetFile = dailyAf instanceof TFile ? dailyAf : null;
         if (!targetFile) {
-          targetFile = (await app.vault.create(
+          targetFile = await app.vault.create(
             dailyPath,
             "# " + today + "\n\n",
-          )) as unknown as TFile;
+          );
         }
       } catch (_) {
         /* ignore */
@@ -410,7 +408,8 @@ export async function autoParseInbox(
     throw new Error("Inbox not found at " + path);
   }
 
-  const file = app.vault.getAbstractFileByPath(path) as TFile;
+  const file = app.vault.getAbstractFileByPath(path);
+  if (!(file instanceof TFile)) throw new Error("Inbox path is not a file: " + path);
   const content = await app.vault.read(file);
   const { items, headings } = parseInbox(content);
 
@@ -573,7 +572,12 @@ export class ProcessInboxModal extends Modal {
         this.close();
         return;
       }
-      this.file = file as TFile;
+      if (!(file instanceof TFile)) {
+        this.plugin.notify("Inbox path is not a regular file", true);
+        this.close();
+        return;
+      }
+      this.file = file;
       const content = await this.app.vault.read(this.file);
       const { items, headings } = parseInbox(content);
       this.headings = headings;
@@ -1000,11 +1004,11 @@ export class ProcessInboxModal extends Modal {
           const tasksFile = this.app.vault.getAbstractFileByPath(
             result.tasksPath,
           );
-          if (tasksFile) {
+          if (tasksFile instanceof TFile) {
             const taskLine = buildTaskLine(description, { date: "today" });
-            const content = await this.app.vault.read(tasksFile as TFile);
+            const content = await this.app.vault.read(tasksFile);
             await this.app.vault.modify(
-              tasksFile as TFile,
+              tasksFile,
               content.trimEnd() + "\n" + taskLine,
             );
           }
@@ -1053,8 +1057,8 @@ export class ProcessInboxModal extends Modal {
           const wikiPath = folder + "/" + match.name + " Wiki.md";
           const wikiFile = this.app.vault.getAbstractFileByPath(wikiPath);
 
-          if (wikiFile) {
-            let content = await this.app.vault.read(wikiFile as TFile);
+          if (wikiFile instanceof TFile) {
+            let content = await this.app.vault.read(wikiFile);
             const sectionHeader = `## \u{1F4E5} ${section}`;
             if (content.includes(sectionHeader)) {
               // Append after the section header
@@ -1070,7 +1074,7 @@ export class ProcessInboxModal extends Modal {
                 "\n" +
                 wikiLine;
             }
-            await this.app.vault.modify(wikiFile as TFile, content);
+            await this.app.vault.modify(wikiFile, content);
           } else {
             // Create wiki file if it doesn't exist
             const wikiContent = `# ${match.name} — Wiki\n\n## \u{1F4E5} ${section}\n${wikiLine}`;
@@ -1129,14 +1133,13 @@ export class ProcessInboxModal extends Modal {
         const dailyPath = folder
           ? folder + "/" + today + ".md"
           : today + ".md";
-        targetFile = this.app.vault.getAbstractFileByPath(
-          dailyPath,
-        ) as TFile | null;
+        const dailyAf = this.app.vault.getAbstractFileByPath(dailyPath);
+        targetFile = dailyAf instanceof TFile ? dailyAf : null;
         if (!targetFile) {
-          targetFile = (await this.app.vault.create(
+          targetFile = await this.app.vault.create(
             dailyPath,
             "# " + today + "\n\n",
-          )) as unknown as TFile;
+          );
         }
       } catch (_) {
         // ignore
@@ -1152,9 +1155,8 @@ export class ProcessInboxModal extends Modal {
           (p) => p.name.toLowerCase() === projectMatch[1].toLowerCase(),
         );
         if (match && match.path) {
-          targetFile = this.app.vault.getAbstractFileByPath(
-            match.path,
-          ) as TFile | null;
+          const af = this.app.vault.getAbstractFileByPath(match.path);
+          targetFile = af instanceof TFile ? af : null;
         }
       }
       if (!targetFile) targetFile = this.app.workspace.getActiveFile();

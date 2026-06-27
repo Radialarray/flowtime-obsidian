@@ -1,5 +1,5 @@
-import { Modal } from "obsidian";
-import type { App, TFile } from "obsidian";
+import { Modal, TFile } from "obsidian";
+import type { App } from "obsidian";
 import { parseDate } from "./date-parser";
 import type { FlowtimeSettings } from "./types";
 import { activeDoc } from "./task-utils";
@@ -159,7 +159,7 @@ export class QuickEntryModal extends Modal {
         const inbox = this.app.vault.getAbstractFileByPath(
           this.plugin.settings.inboxPath || "Inbox.md",
         );
-        if (inbox) target = inbox as TFile;
+        if (inbox instanceof TFile) target = inbox;
       }
 
       if (!target) return;
@@ -285,20 +285,20 @@ export class QuickEntryModal extends Modal {
             : "";
           const path = folder ? folder + "/" + today + ".md" : today + ".md";
           const resolved = this.app.vault.getAbstractFileByPath(path);
-          if (resolved) targetFile = resolved as TFile;
+          if (resolved instanceof TFile) targetFile = resolved;
         } catch (_) { /* fine */ }
       } else if (target === "project-file" && project) {
         const engine = this.plugin.projectEngine as unknown as { cache?: Map<string, { path: string | null }> } | undefined;
         const cached = activeFile && engine?.cache?.get?.(activeFile.path);
         if (cached?.path) {
           const f = this.app.vault.getAbstractFileByPath(cached.path);
-          if (f) targetFile = f as TFile;
+          if (f instanceof TFile) targetFile = f;
         }
       } else if (target === "inbox") {
         const inboxPath = this.plugin.settings.inboxPath || "Inbox.md";
         const f = this.app.vault.getAbstractFileByPath(inboxPath);
-        if (f) {
-          targetFile = f as TFile;
+        if (f instanceof TFile) {
+          targetFile = f;
         } else {
           this.plugin.notify("Inbox not found. Run Flowtime: Process Inbox to create it.", true);
           return;

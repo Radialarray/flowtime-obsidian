@@ -4,8 +4,8 @@
  * - AtCompletionsSuggest: @-completions (macros + directives)
  */
 
-import { EditorSuggest } from "obsidian";
-import type { App, Editor, EditorPosition, TFile } from "obsidian";
+import { EditorSuggest, TFile } from "obsidian";
+import type { App, Editor, EditorPosition } from "obsidian";
 import type { BucketDef } from "../types";
 import { QuickEntryModal } from "../quick-entry";
 
@@ -344,9 +344,9 @@ export class AtCompletionsSuggest extends EditorSuggest<AtCompletionSuggestion> 
         );
       }
       const file = app.vault.getAbstractFileByPath(path);
-      if (!file) return;
-      const content = await app.vault.read(file as TFile);
-      await app.vault.modify(file as TFile, content.trimEnd() + "\n" + line.trimEnd() + "\n");
+      if (!(file instanceof TFile)) return;
+      const content = await app.vault.read(file);
+      await app.vault.modify(file, content.trimEnd() + "\n" + line.trimEnd() + "\n");
       this.plugin.notify("\u{1F4E5} Added to inbox");
     } catch (e) {
       console.warn("Flowtime: failed to append to inbox:", (e as Error).message);
@@ -368,9 +368,9 @@ export class AtCompletionsSuggest extends EditorSuggest<AtCompletionSuggestion> 
       if (!tasksFile) {
         tasksFile = app.vault.getAbstractFileByPath(match.path);
       }
-      if (!tasksFile) return;
-      const content = await app.vault.read(tasksFile as TFile);
-      await app.vault.modify(tasksFile as TFile, content.trimEnd() + "\n" + line.trimEnd() + "\n");
+      if (!(tasksFile instanceof TFile)) return;
+      const content = await app.vault.read(tasksFile);
+      await app.vault.modify(tasksFile, content.trimEnd() + "\n" + line.trimEnd() + "\n");
       this.plugin.notify("\u{1F4C1} Added to " + match.name);
     } catch (e) {
       console.warn("Flowtime: failed to append to project:", (e as Error).message);

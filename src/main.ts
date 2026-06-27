@@ -349,8 +349,9 @@ export default class FlowtimePlugin extends Plugin {
 						if (!srcMatch) continue;
 						const srcPath = srcMatch[1];
 						const srcLineNum = parseInt(srcMatch[2], 10) - 1;
-						const srcFile = this.app.vault.getAbstractFileByPath(srcPath) as TFile | null;
-						if (!srcFile) continue;
+						const af = this.app.vault.getAbstractFileByPath(srcPath);
+						if (!(af instanceof TFile)) continue;
+						const srcFile: TFile = af;
 
 						// Compare core text (without directives / source link) with source
 						const mobileText = stripMeta(m[2]); // text from mobile, stripped of directives+link
@@ -381,9 +382,11 @@ export default class FlowtimePlugin extends Plugin {
 					}
 				} catch (_) { /* use default */ }
 
-				const targetFile = this.app.vault.getAbstractFileByPath(dnPath) as TFile | null;
+				const _targetAf = this.app.vault.getAbstractFileByPath(dnPath);
+				const targetFile = _targetAf instanceof TFile ? _targetAf : null;
 				const inboxPath = this.settings.inboxPath || "Inbox.md";
-				const inboxFile = this.app.vault.getAbstractFileByPath(inboxPath) as TFile | null;
+				const _inboxAf = this.app.vault.getAbstractFileByPath(inboxPath);
+				const inboxFile = _inboxAf instanceof TFile ? _inboxAf : null;
 
 				this._redirectingMobile = true;
 				try {
@@ -400,8 +403,9 @@ export default class FlowtimePlugin extends Plugin {
 
 					// ── Sync edits back to source files ──
 					for (const el of editedLines) {
-						const srcFile = this.app.vault.getAbstractFileByPath(el.srcPath) as TFile | null;
-						if (!srcFile) continue;
+						const af = this.app.vault.getAbstractFileByPath(el.srcPath);
+						if (!(af instanceof TFile)) continue;
+						const srcFile: TFile = af;
 						const cb = el.status.toLowerCase() === "x" ? "[x]" : "[ ]";
 						// Build new source line: preserve original structure, replace text
 						const srcContent = await this.app.vault.read(srcFile);
@@ -556,19 +560,28 @@ export default class FlowtimePlugin extends Plugin {
 							try {
 								let content = "";
 								if (await this.plugin.app.vault.adapter.exists(path)) {
-									content = await this.plugin.app.vault.read(
-										this.plugin.app.vault.getAbstractFileByPath(path) as TFile,
-									);
+									const af = this.plugin.app.vault.getAbstractFileByPath(path);
+									if (!(af instanceof TFile)) {
+										this.plugin.notify("Inbox path is not a regular file", true);
+										this.close();
+										return;
+									}
+									content = await this.plugin.app.vault.read(af);
 								}
 								// Split into lines, add the new text, write back
 								const lines = text.split("\n").filter((l) => l.trim());
 								const newContent =
 									content.trimEnd() + "\n" + lines.join("\n") + "\n";
 								if (await this.plugin.app.vault.adapter.exists(path)) {
-									await this.plugin.app.vault.modify(
-										this.plugin.app.vault.getAbstractFileByPath(path) as TFile,
-										newContent,
-									);
+									const af = this.plugin.app.vault.getAbstractFileByPath(path);
+									if (af instanceof TFile) {
+										await this.plugin.app.vault.modify(
+											af,
+											newContent,
+										);
+									} else {
+										await this.plugin.app.vault.create(path, newContent);
+									}
 								} else {
 									await this.plugin.app.vault.create(path, newContent);
 								}
@@ -772,8 +785,8 @@ export default class FlowtimePlugin extends Plugin {
 					const result = await createDashboard(this.app, "daily");
 					if (result) {
 						const file = this.app.vault.getAbstractFileByPath(result);
-						if (file)
-							await this.app.workspace.getLeaf().openFile(file as TFile);
+						if (file instanceof TFile)
+							await this.app.workspace.getLeaf().openFile(file);
 						this.notify("\u{1F4CB} Created Daily Dashboard");
 					} else {
 						this.notify("\u{1F4CB} Daily Dashboard already exists", true);
@@ -795,8 +808,8 @@ export default class FlowtimePlugin extends Plugin {
 					const result = await createDashboard(this.app, "weekly");
 					if (result) {
 						const file = this.app.vault.getAbstractFileByPath(result);
-						if (file)
-							await this.app.workspace.getLeaf().openFile(file as TFile);
+						if (file instanceof TFile)
+							await this.app.workspace.getLeaf().openFile(file);
 						this.notify("\u{1F4CB} Created Weekly Dashboard");
 					} else {
 						this.notify("\u{1F4CB} Weekly Dashboard already exists", true);
@@ -1376,11 +1389,11 @@ export default class FlowtimePlugin extends Plugin {
 								// If back-file is already open in a leaf, focus it; otherwise open in active leaf
 								const existingLeaf = this.app.workspace.getLeavesOfType("markdown")
 									.find((l) => (l.view as MarkdownView)?.file?.path === backPath);
-								if (existingLeaf) {
-									this.app.workspace.setActiveLeaf(existingLeaf);
-								} else {
-									this.app.workspace.getLeaf().openFile(backFile as TFile);
-								}
+						if (existingLeaf) {
+								this.app.workspace.setActiveLeaf(existingLeaf);
+							} else if (backFile instanceof TFile) {
+								this.app.workspace.getLeaf().openFile(backFile);
+							}
 							}
 						}
 					}
@@ -1629,8 +1642,8 @@ Process them with **Flowtime: Process Inbox**.
 			// Ensure it exists
 			await createToday(this.app, path);
 			const file = this.app.vault.getAbstractFileByPath(path);
-			if (file) {
-				await this.app.workspace.getLeaf().openFile(file as TFile);
+			if (file instanceof TFile) {
+				await this.app.workspace.getLeaf().openFile(file);
 			}
 		} catch (e) {
 			this.notify(

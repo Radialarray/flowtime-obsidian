@@ -256,21 +256,23 @@ export default class FlowtimePlugin extends Plugin {
 		// v0.5.0: Auto-generate routine instances.
 		// Delayed 3s so Obsidian finishes opening its startup file first.
 		// (vault.create on mobile can otherwise steal focus to the daily note.)
-		window.setTimeout(async () => {
-			if (this.settings.autoGenerateOnStartup === false) return;
-			try {
-				const count = await this.routineEngine.generateAllDue();
-				if (count > 0 && !this.settings.quietMode) {
-					this.notify(
-						"\u{1F501} Generated " +
-							count +
-							" routine task" +
-							(count === 1 ? "" : "s"),
-					);
+		window.setTimeout(() => {
+			void (async () => {
+				if (this.settings.autoGenerateOnStartup === false) return;
+				try {
+					const count = await this.routineEngine.generateAllDue();
+					if (count > 0 && !this.settings.quietMode) {
+						this.notify(
+							"\u{1F501} Generated " +
+								count +
+								" routine task" +
+								(count === 1 ? "" : "s"),
+						);
+					}
+				} catch (e) {
+					console.warn("Flowtime: Routine generation error:", (e as Error).message);
 				}
-			} catch (e) {
-				console.warn("Flowtime: Routine generation error:", (e as Error).message);
-			}
+			})();
 		}, 3000);
 
 		// v0.8.0: Schedule twice-daily generation (morning 6 AM + evening 6 PM)
@@ -326,109 +328,111 @@ export default class FlowtimePlugin extends Plugin {
 		// - Edited sourced lines → sync text changes back to source file
 		// Re-aggregation then normalises everything.
 		this.registerEvent(
-			this.app.vault.on("modify", async (file) => {
-				if (this._redirectingMobile) return;
-				if (!(file instanceof TFile) || !this._isMobileAggregateFile(file)) return;
+			this.app.vault.on("modify", (file) => {
+				void (async () => {
+					if (this._redirectingMobile) return;
+					if (!(file instanceof TFile) || !this._isMobileAggregateFile(file)) return;
 
-				const content = await this.app.vault.read(file);
-				const lines = content.split("\n");
-				const taskRe = /^[-*+]\s+\[([ xX-])\]\s+(.+)/;
-				const srcLinkRe = /\[📄[^\]]*\]\([^)]*\)/;
-				const srcExtractRe = /📄\s*(.+?):(\d+)/;
-				const nativeLines: { index: number; status: string; text: string }[] = [];
-				const editedLines: { index: number; status: string; text: string; srcPath: string; srcLine: number }[] = [];
+					const content = await this.app.vault.read(file);
+					const lines = content.split("\n");
+					const taskRe = /^[-*+]\s+\[([ xX-])\]\s+(.+)/;
+					const srcLinkRe = /\[📄[^\]]*\]\([^)]*\)/;
+					const srcExtractRe = /📄\s*(.+?):(\d+)/;
+					const nativeLines: { index: number; status: string; text: string }[] = [];
+					const editedLines: { index: number; status: string; text: string; srcPath: string; srcLine: number }[] = [];
 
-				for (let i = 0; i < lines.length; i++) {
-					const m = lines[i].match(taskRe);
-					if (!m) continue;
-					if (!srcLinkRe.test(lines[i])) {
-						nativeLines.push({ index: i, status: m[1], text: m[2].trim() });
-					} else {
-						// Sourced line — check if text was edited
-						const srcMatch = lines[i].match(srcExtractRe);
-						if (!srcMatch) continue;
-						const srcPath = srcMatch[1];
-						const srcLineNum = parseInt(srcMatch[2], 10) - 1;
-						const af = this.app.vault.getAbstractFileByPath(srcPath);
-						if (!(af instanceof TFile)) continue;
-						const srcFile: TFile = af;
+					for (let i = 0; i < lines.length; i++) {
+						const m = lines[i].match(taskRe);
+						if (!m) continue;
+						if (!srcLinkRe.test(lines[i])) {
+							nativeLines.push({ index: i, status: m[1], text: m[2].trim() });
+						} else {
+							// Sourced line — check if text was edited
+							const srcMatch = lines[i].match(srcExtractRe);
+							if (!srcMatch) continue;
+							const srcPath = srcMatch[1];
+							const srcLineNum = parseInt(srcMatch[2], 10) - 1;
+							const af = this.app.vault.getAbstractFileByPath(srcPath);
+							if (!(af instanceof TFile)) continue;
+							const srcFile: TFile = af;
 
-						// Compare core text (without directives / source link) with source
-						const mobileText = stripMeta(m[2]); // text from mobile, stripped of directives+link
-						const srcContent = await this.app.vault.read(srcFile);
-						const srcLines = srcContent.split("\n");
-						if (srcLineNum >= srcLines.length) continue;
-						const srcText = stripMeta(srcLines[srcLineNum].replace(/^[-*+]\s+\[[ xX-]\]\s*/, ""));
+							// Compare core text (without directives / source link) with source
+							const mobileText = stripMeta(m[2]); // text from mobile, stripped of directives+link
+							const srcContent = await this.app.vault.read(srcFile);
+							const srcLines = srcContent.split("\n");
+							if (srcLineNum >= srcLines.length) continue;
+							const srcText = stripMeta(srcLines[srcLineNum].replace(/^[-*+]\s+\[[ xX-]\]\s*/, ""));
 
-						if (mobileText !== srcText) {
-							editedLines.push({ index: i, status: m[1], text: m[2].trim(), srcPath, srcLine: srcLineNum });
+							if (mobileText !== srcText) {
+								editedLines.push({ index: i, status: m[1], text: m[2].trim(), srcPath, srcLine: srcLineNum });
+							}
 						}
 					}
-				}
 
-				const hasNative = nativeLines.length > 0;
-				const hasEdits = editedLines.length > 0;
-				if (!hasNative && !hasEdits) return;
+					const hasNative = nativeLines.length > 0;
+					const hasEdits = editedLines.length > 0;
+					if (!hasNative && !hasEdits) return;
 
-				// Determine target for new tasks
-				const today = new Date().toISOString().split("T")[0];
-				let dnPath = today + ".md";
-				try {
-					const cfgPath = this.app.vault.configDir + "/daily-notes.json";
-					const adapter = this.app.vault.adapter;
-					if (await adapter.exists(cfgPath)) {
-						const cfg = JSON.parse(await adapter.read(cfgPath)) as { folder?: string };
-						if (cfg.folder) dnPath = cfg.folder + "/" + today + ".md";
+					// Determine target for new tasks
+					const today = new Date().toISOString().split("T")[0];
+					let dnPath = today + ".md";
+					try {
+						const cfgPath = this.app.vault.configDir + "/daily-notes.json";
+						const adapter = this.app.vault.adapter;
+						if (await adapter.exists(cfgPath)) {
+							const cfg = JSON.parse(await adapter.read(cfgPath)) as { folder?: string };
+							if (cfg.folder) dnPath = cfg.folder + "/" + today + ".md";
+						}
+					} catch (_) { /* use default */ }
+
+					const _targetAf = this.app.vault.getAbstractFileByPath(dnPath);
+					const targetFile = _targetAf instanceof TFile ? _targetAf : null;
+					const inboxPath = this.settings.inboxPath || "Inbox.md";
+					const _inboxAf = this.app.vault.getAbstractFileByPath(inboxPath);
+					const inboxFile = _inboxAf instanceof TFile ? _inboxAf : null;
+
+					this._redirectingMobile = true;
+					try {
+						// ── Redirect new native lines ──
+						for (const nl of nativeLines) {
+							const cb = nl.status.toLowerCase() === "x" ? "[x]" : "[ ]";
+							const newLine = cb + " " + nl.text;
+							const hasDate = nl.text.match(/@(\d{4}-\d{2}-\d{2})/);
+							const dest = hasDate && hasDate[1] === today && targetFile ? targetFile : inboxFile;
+							if (!dest) continue;
+							const destContent = await this.app.vault.read(dest);
+							await this.app.vault.modify(dest, destContent.trimEnd() + "\n" + newLine);
+						}
+
+						// ── Sync edits back to source files ──
+						for (const el of editedLines) {
+							const af = this.app.vault.getAbstractFileByPath(el.srcPath);
+							if (!(af instanceof TFile)) continue;
+							const srcFile: TFile = af;
+							const cb = el.status.toLowerCase() === "x" ? "[x]" : "[ ]";
+							// Build new source line: preserve original structure, replace text
+							const srcContent = await this.app.vault.read(srcFile);
+							const srcLines = srcContent.split("\n");
+							const origLine = srcLines[el.srcLine];
+							// Replace the task description in the source, keeping time prefix + directives
+							const coreText = stripMeta(el.text); // user's new text without directives/link
+							const newSrcLine = rebuildSourceLine(origLine, cb + " " + coreText);
+							srcLines[el.srcLine] = newSrcLine;
+							await this.app.vault.modify(srcFile, srcLines.join("\n"));
+						}
+
+						// ── Remove native lines, then re-aggregate ──
+						const kept = lines.filter((_, i) => !nativeLines.some(nl => nl.index === i));
+						if (hasNative) {
+							await this.app.vault.modify(file, kept.join("\n"));
+						}
+
+						const { refreshAll } = await import("./task-aggregator");
+						await refreshAll(this.app, file, this, file.path);
+					} finally {
+						this._redirectingMobile = false;
 					}
-				} catch (_) { /* use default */ }
-
-				const _targetAf = this.app.vault.getAbstractFileByPath(dnPath);
-				const targetFile = _targetAf instanceof TFile ? _targetAf : null;
-				const inboxPath = this.settings.inboxPath || "Inbox.md";
-				const _inboxAf = this.app.vault.getAbstractFileByPath(inboxPath);
-				const inboxFile = _inboxAf instanceof TFile ? _inboxAf : null;
-
-				this._redirectingMobile = true;
-				try {
-					// ── Redirect new native lines ──
-					for (const nl of nativeLines) {
-						const cb = nl.status.toLowerCase() === "x" ? "[x]" : "[ ]";
-						const newLine = cb + " " + nl.text;
-						const hasDate = nl.text.match(/@(\d{4}-\d{2}-\d{2})/);
-						const dest = hasDate && hasDate[1] === today && targetFile ? targetFile : inboxFile;
-						if (!dest) continue;
-						const destContent = await this.app.vault.read(dest);
-						await this.app.vault.modify(dest, destContent.trimEnd() + "\n" + newLine);
-					}
-
-					// ── Sync edits back to source files ──
-					for (const el of editedLines) {
-						const af = this.app.vault.getAbstractFileByPath(el.srcPath);
-						if (!(af instanceof TFile)) continue;
-						const srcFile: TFile = af;
-						const cb = el.status.toLowerCase() === "x" ? "[x]" : "[ ]";
-						// Build new source line: preserve original structure, replace text
-						const srcContent = await this.app.vault.read(srcFile);
-						const srcLines = srcContent.split("\n");
-						const origLine = srcLines[el.srcLine];
-						// Replace the task description in the source, keeping time prefix + directives
-						const coreText = stripMeta(el.text); // user's new text without directives/link
-						const newSrcLine = rebuildSourceLine(origLine, cb + " " + coreText);
-						srcLines[el.srcLine] = newSrcLine;
-						await this.app.vault.modify(srcFile, srcLines.join("\n"));
-					}
-
-					// ── Remove native lines, then re-aggregate ──
-					const kept = lines.filter((_, i) => !nativeLines.some(nl => nl.index === i));
-					if (hasNative) {
-						await this.app.vault.modify(file, kept.join("\n"));
-					}
-
-					const { refreshAll } = await import("./task-aggregator");
-					await refreshAll(this.app, file, this, file.path);
-				} finally {
-					this._redirectingMobile = false;
-				}
+				})();
 			}),
 		);
 
@@ -442,13 +446,15 @@ export default class FlowtimePlugin extends Plugin {
 					!file.path.endsWith(".generated.json")
 				) {
 				if (this._routineWatchTimer) window.clearTimeout(this._routineWatchTimer);
-				this._routineWatchTimer = window.setTimeout(async () => {
-					this._routineWatchTimer = null;
-					try {
-						await this.routineEngine.generateAllDue();
-					} catch (e) {
-						console.warn("Flowtime: Routine auto-gen error:", (e as Error).message);
-					}
+				this._routineWatchTimer = window.setTimeout(() => {
+					void (async () => {
+						this._routineWatchTimer = null;
+						try {
+							await this.routineEngine.generateAllDue();
+						} catch (e) {
+							console.warn("Flowtime: Routine auto-gen error:", (e as Error).message);
+						}
+					})();
 				}, 5000);
 				}
 			}),
@@ -550,51 +556,53 @@ export default class FlowtimePlugin extends Plugin {
 						});
 
 						cancelBtn.addEventListener("click", () => this.close());
-						submitBtn.addEventListener("click", async () => {
-							const text = textarea.value.trim();
-							if (!text) {
-								this.plugin.notify("Nothing to append", true);
-								return;
-							}
-							const path = this.plugin.settings.inboxPath || "Inbox.md";
-							try {
-								let content = "";
-								if (await this.plugin.app.vault.adapter.exists(path)) {
-									const af = this.plugin.app.vault.getAbstractFileByPath(path);
-									if (!(af instanceof TFile)) {
-										this.plugin.notify("Inbox path is not a regular file", true);
-										this.close();
-										return;
-									}
-									content = await this.plugin.app.vault.read(af);
+						submitBtn.addEventListener("click", () => {
+							void (async () => {
+								const text = textarea.value.trim();
+								if (!text) {
+									this.plugin.notify("Nothing to append", true);
+									return;
 								}
-								// Split into lines, add the new text, write back
-								const lines = text.split("\n").filter((l) => l.trim());
-								const newContent =
-									content.trimEnd() + "\n" + lines.join("\n") + "\n";
-								if (await this.plugin.app.vault.adapter.exists(path)) {
-									const af = this.plugin.app.vault.getAbstractFileByPath(path);
-									if (af instanceof TFile) {
-										await this.plugin.app.vault.modify(
-											af,
-											newContent,
-										);
+								const path = this.plugin.settings.inboxPath || "Inbox.md";
+								try {
+									let content = "";
+									if (await this.plugin.app.vault.adapter.exists(path)) {
+										const af = this.plugin.app.vault.getAbstractFileByPath(path);
+										if (!(af instanceof TFile)) {
+											this.plugin.notify("Inbox path is not a regular file", true);
+											this.close();
+											return;
+										}
+										content = await this.plugin.app.vault.read(af);
+									}
+									// Split into lines, add the new text, write back
+									const lines = text.split("\n").filter((l) => l.trim());
+									const newContent =
+										content.trimEnd() + "\n" + lines.join("\n") + "\n";
+									if (await this.plugin.app.vault.adapter.exists(path)) {
+										const af = this.plugin.app.vault.getAbstractFileByPath(path);
+										if (af instanceof TFile) {
+											await this.plugin.app.vault.modify(
+												af,
+												newContent,
+											);
+										} else {
+											await this.plugin.app.vault.create(path, newContent);
+										}
 									} else {
 										await this.plugin.app.vault.create(path, newContent);
 									}
-								} else {
-									await this.plugin.app.vault.create(path, newContent);
+									this.plugin.notify(
+										`\u{1F4E5} ${lines.length} line(s) added to inbox`,
+									);
+									this.close();
+								} catch (e) {
+									this.plugin.notify(
+										"Failed to append: " + (e as Error).message,
+										true,
+									);
 								}
-								this.plugin.notify(
-									`\u{1F4E5} ${lines.length} line(s) added to inbox`,
-								);
-								this.close();
-							} catch (e) {
-								this.plugin.notify(
-									"Failed to append: " + (e as Error).message,
-									true,
-								);
-							}
+							})();
 						});
 
 						// Ctrl+Enter or Cmd+Enter to submit
@@ -906,7 +914,7 @@ export default class FlowtimePlugin extends Plugin {
 						createBtn.addEventListener("click", () => {
 							const name = input.value.trim();
 							if (name) {
-								this.onSubmit(name, {
+								void this.onSubmit(name, {
 									scaffoldTasks: this.scaffoldTasks,
 									scaffoldWiki: this.scaffoldWiki,
 								});
@@ -917,7 +925,7 @@ export default class FlowtimePlugin extends Plugin {
 							if (e.key === "Enter") {
 								const name = input.value.trim();
 								if (name) {
-									this.onSubmit(name, {
+									void this.onSubmit(name, {
 										scaffoldTasks: this.scaffoldTasks,
 										scaffoldWiki: this.scaffoldWiki,
 									});
@@ -1029,35 +1037,37 @@ export default class FlowtimePlugin extends Plugin {
 						});
 
 						cancelBtn.addEventListener("click", () => this.close());
-						createBtn.addEventListener("click", async () => {
-							const name = nameInput.value.trim();
-							if (!name) {
-								this.plugin.notify("Name is required", true);
-								return;
-							}
-							const color = colorInput.value;
-							const limit = parseInt(limitInput.value, 10);
-							if (!limit || limit <= 0) {
-								this.plugin.notify("Limit must be > 0", true);
-								return;
-							}
+						createBtn.addEventListener("click", () => {
+							void (async () => {
+								const name = nameInput.value.trim();
+								if (!name) {
+									this.plugin.notify("Name is required", true);
+									return;
+								}
+								const color = colorInput.value;
+								const limit = parseInt(limitInput.value, 10);
+								if (!limit || limit <= 0) {
+									this.plugin.notify("Limit must be > 0", true);
+									return;
+								}
 
-							const buckets = this.plugin.settings.buckets || [];
-							const id = name
-								.toLowerCase()
-								.replace(/\s+/g, "-")
-								.replace(/[^a-z0-9-]/g, "");
-							buckets.push({
-								id,
-								name,
-								color,
-								weeklyLimit: limit,
-								sortOrder: buckets.length,
-							});
-							this.plugin.settings.buckets = buckets;
-							await this.plugin.saveData(this.plugin.settings);
-							this.plugin.notify("\u2705 Bucket created: " + name);
-							this.close();
+								const buckets = this.plugin.settings.buckets || [];
+								const id = name
+									.toLowerCase()
+									.replace(/\s+/g, "-")
+									.replace(/[^a-z0-9-]/g, "");
+								buckets.push({
+									id,
+									name,
+									color,
+									weeklyLimit: limit,
+									sortOrder: buckets.length,
+								});
+								this.plugin.settings.buckets = buckets;
+								await this.plugin.saveData(this.plugin.settings);
+								this.plugin.notify("\u2705 Bucket created: " + name);
+								this.close();
+							})();
 						});
 					}
 					override onClose(): void {
@@ -1260,7 +1270,7 @@ export default class FlowtimePlugin extends Plugin {
 						confirmBtn.addClass("ft-bg-error");
 						cancelBtn.addEventListener("click", () => this.close());
 						confirmBtn.addEventListener("click", () => {
-							this.onConfirm();
+							void this.onConfirm();
 							this.close();
 						});
 					}
@@ -1292,7 +1302,7 @@ export default class FlowtimePlugin extends Plugin {
 		this.addCommand({
 			id: "rebuild-cache",
 			name: "Rebuild Task Cache",
-			callback: async () => {
+			callback: () => {
 				this.taskCache.clear();
 				this.notify(
 					"\u{1F504} Cache cleared. It will rebuild on next render.",
@@ -1310,19 +1320,21 @@ export default class FlowtimePlugin extends Plugin {
 			}
 			if (this._cacheSaveTimer) return;
 			this._cacheSaveTimer = window.setTimeout(
-				async () => {
-					this._cacheSaveTimer = null;
-					try {
-						await this._saveTaskCache();
-						// Also strip legacy _taskCache from data.json if present
-						const data = (await this.loadData()) || {};
-						if (data._taskCache) {
-							delete (data as Record<string, unknown>)._taskCache;
-							await this.saveData(data);
+				() => {
+					void (async () => {
+						this._cacheSaveTimer = null;
+						try {
+							await this._saveTaskCache();
+							// Also strip legacy _taskCache from data.json if present
+							const data = (await this.loadData()) || {};
+							if (data._taskCache) {
+								delete (data as Record<string, unknown>)._taskCache;
+								await this.saveData(data);
+							}
+						} catch (_) {
+							/* ignore */
 						}
-					} catch (_) {
-						/* ignore */
-					}
+					})();
 				},
 				force ? 0 : 2000,
 			);
@@ -1421,12 +1433,14 @@ export default class FlowtimePlugin extends Plugin {
 
 		// v1.5.0: Mobile markdown view — auto-aggregate tasks on file open
 		this.registerEvent(
-			this.app.workspace.on("file-open", async (file) => {
-				if (!file || !this._isMobileAggregateFile(file)) return;
-				const { refreshAll } = await import("./task-aggregator");
-				await refreshAll(this.app, file, this, file.path);
-				// Re-enhance after aggregation writes to file
-				window.setTimeout(() => this.listEnhancer.check(), 300);
+			this.app.workspace.on("file-open", (file) => {
+				void (async () => {
+					if (!file || !this._isMobileAggregateFile(file)) return;
+					const { refreshAll } = await import("./task-aggregator");
+					await refreshAll(this.app, file, this, file.path);
+					// Re-enhance after aggregation writes to file
+					window.setTimeout(() => this.listEnhancer.check(), 300);
+				})();
 			}),
 		);
 	}
@@ -1570,23 +1584,25 @@ export default class FlowtimePlugin extends Plugin {
 
 		const delay = Math.max(0, target.getTime() - now.getTime());
 
-		this._dailyGenTimer = window.setTimeout(async () => {
-			this._dailyGenTimer = null;
-			try {
-				const count = await this.routineEngine.generateAllDue();
-				if (count > 0 && !this.settings.quietMode) {
-					this.notify(
-						"\u{1F501} Generated " +
-							count +
-							" routine task" +
-							(count === 1 ? "" : "s"),
-					);
+		this._dailyGenTimer = window.setTimeout(() => {
+			void (async () => {
+				this._dailyGenTimer = null;
+				try {
+					const count = await this.routineEngine.generateAllDue();
+					if (count > 0 && !this.settings.quietMode) {
+						this.notify(
+							"\u{1F501} Generated " +
+								count +
+								" routine task" +
+								(count === 1 ? "" : "s"),
+						);
+					}
+				} catch (e) {
+					console.warn("Flowtime: Daily gen error:", (e as Error).message);
 				}
-			} catch (e) {
-				console.warn("Flowtime: Daily gen error:", (e as Error).message);
-			}
-			// Re-schedule for the next 6 AM or 6 PM
-			this._scheduleDailyGenerations();
+				// Re-schedule for the next 6 AM or 6 PM
+				this._scheduleDailyGenerations();
+			})();
 		}, delay);
 	}
 

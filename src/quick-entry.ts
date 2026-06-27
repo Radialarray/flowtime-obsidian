@@ -321,7 +321,7 @@ export class QuickEntryModal extends Modal {
       }
     };
 
-    submitBtn.addEventListener("click", doSubmit);
+    submitBtn.addEventListener("click", () => { void doSubmit(); });
     taskInput.addEventListener("keydown", (e: KeyboardEvent) => {
       if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void doSubmit(); }
     });

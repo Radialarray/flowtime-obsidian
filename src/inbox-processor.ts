@@ -556,12 +556,14 @@ export class ProcessInboxModal extends Modal {
             text: "Create Inbox",
             cls: "flowtime-btn-submit",
           })
-          .addEventListener("click", async () => {
-            await this.plugin._ensureInbox();
-            this.plugin.notify(
-              "\u{1F4E5} Inbox created. Add some items and try again.",
-            );
-            this.close();
+          .addEventListener("click", () => {
+            void (async () => {
+              await this.plugin._ensureInbox();
+              this.plugin.notify(
+                "\u{1F4E5} Inbox created. Add some items and try again.",
+              );
+              this.close();
+            })();
           });
         return;
       }
@@ -712,47 +714,49 @@ export class ProcessInboxModal extends Modal {
       }
     });
 
-    processBtn.addEventListener("click", async () => {
-      const description = textInput.value.trim();
-      if (!description) {
-        this.plugin.notify("Description cannot be empty", true);
-        return;
-      }
+    processBtn.addEventListener("click", () => {
+      void (async () => {
+        const description = textInput.value.trim();
+        if (!description) {
+          this.plugin.notify("Description cannot be empty", true);
+          return;
+        }
 
-      const action = actionSelect.value;
-      // Capture original text BEFORE editing — used for write-back matching
-      const originalText = item.text;
-      item.setText(description);
+        const action = actionSelect.value;
+        // Capture original text BEFORE editing — used for write-back matching
+        const originalText = item.text;
+        item.setText(description);
 
-      try {
-        const result = await this._processItem(
-          item,
-          action,
-          fieldsContainer,
-        );
+        try {
+          const result = await this._processItem(
+            item,
+            action,
+            fieldsContainer,
+          );
 
-        if (result && result.keepInFile) {
-          // Snoozed — update in allItems, remove from display, don't mark processed
-          const idx = this.allItems.findIndex((a) => a.index === item.index);
-          if (idx >= 0) {
-            this.allItems[idx] = item; // updated item with @snooze tag
+          if (result && result.keepInFile) {
+            // Snoozed — update in allItems, remove from display, don't mark processed
+            const idx = this.allItems.findIndex((a) => a.index === item.index);
+            if (idx >= 0) {
+              this.allItems[idx] = item; // updated item with @snooze tag
+            }
+            this.items.splice(this.currentIndex, 1);
+          } else {
+            this.processedCount++;
+            // Mark original text as processed (removed from file)
+            this._processedIds.add(item.index + ":" + originalText);
+            this.items.splice(this.currentIndex, 1); // remove processed item
           }
-          this.items.splice(this.currentIndex, 1);
-        } else {
-          this.processedCount++;
-          // Mark original text as processed (removed from file)
-          this._processedIds.add(item.index + ":" + originalText);
-          this.items.splice(this.currentIndex, 1); // remove processed item
+          // Don't increment currentIndex — next item slides into place
+          if (this.currentIndex >= this.items.length) {
+            void this._finish();
+          } else {
+            this._renderItem();
+          }
+        } catch (e) {
+          this.plugin.notify("Error: " + (e as Error).message, true);
         }
-        // Don't increment currentIndex — next item slides into place
-        if (this.currentIndex >= this.items.length) {
-          void this._finish();
-        } else {
-          this._renderItem();
-        }
-      } catch (e) {
-        this.plugin.notify("Error: " + (e as Error).message, true);
-      }
+      })();
     });
 
     doneBtn.addEventListener("click", () => {

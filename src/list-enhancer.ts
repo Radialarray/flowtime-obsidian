@@ -68,55 +68,59 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
       : '.cm-formatting-task') as HTMLElement | null;
 
     if (checkboxEl && _currentFile) {
-      el.addEventListener("click", async (e: MouseEvent) => {
-        const target = e.target as HTMLElement;
-        const isCheckClick = isPreview
-          ? target.tagName === "INPUT" && (target as HTMLInputElement).type === "checkbox"
-          : target.classList.contains("cm-formatting-task");
+      el.addEventListener("click", (e: MouseEvent) => {
+        void (async () => {
+          const target = e.target as HTMLElement;
+          const isCheckClick = isPreview
+            ? target.tagName === "INPUT" && (target as HTMLInputElement).type === "checkbox"
+            : target.classList.contains("cm-formatting-task");
 
-        if (!isCheckClick) return;
+          if (!isCheckClick) return;
 
-        // Extract source file + line from the rendered markdown link
-        const linkEl = el.querySelector("a.external-link, a.internal-link");
-        const href = linkEl?.getAttribute("href") || "";
-        const srcMatch = href.match(/file=([^&]+).*?line=(\d+)/);
-        if (!srcMatch) return;
+          // Extract source file + line from the rendered markdown link
+          const linkEl = el.querySelector("a.external-link, a.internal-link");
+          const href = linkEl?.getAttribute("href") || "";
+          const srcMatch = href.match(/file=([^&]+).*?line=(\d+)/);
+          if (!srcMatch) return;
 
-        const srcPath = decodeURIComponent(srcMatch[1]);
-        const srcLine = parseInt(srcMatch[2], 10) - 1; // back to 0-indexed
+          const srcPath = decodeURIComponent(srcMatch[1]);
+          const srcLine = parseInt(srcMatch[2], 10) - 1; // back to 0-indexed
 
-        const af = app.vault.getAbstractFileByPath(srcPath);
-        if (!(af instanceof TFile)) return;
-        const srcFile: TFile = af;
+          const af = app.vault.getAbstractFileByPath(srcPath);
+          if (!(af instanceof TFile)) return;
+          const srcFile: TFile = af;
 
-        try {
-          const content = await app.vault.read(srcFile);
-          const lines = content.split("\n");
-          const line = lines[srcLine];
-          if (!line) return;
+          try {
+            const content = await app.vault.read(srcFile);
+            const lines = content.split("\n");
+            const line = lines[srcLine];
+            if (!line) return;
 
-          const isChecked = line.match(/\[x\]/i);
-          const newLine = isChecked
-            ? line.replace(/\[x\]/i, "[ ]")
-            : line.replace(/\[ \]/, "[x]");
+            const isChecked = line.match(/\[x\]/i);
+            const newLine = isChecked
+              ? line.replace(/\[x\]/i, "[ ]")
+              : line.replace(/\[ \]/, "[x]");
 
-          lines[srcLine] = newLine;
-          await app.vault.modify(srcFile, lines.join("\n"));
+            lines[srcLine] = newLine;
+            await app.vault.modify(srcFile, lines.join("\n"));
 
-          if (!isChecked) {
-            await _handleRecurrence(srcLine, line, srcFile);
+            if (!isChecked) {
+              await _handleRecurrence(srcLine, line, srcFile);
+            }
+
+            // Trigger re-aggregation so mobile view reflects the change
+            if (plugin.onHeadingDrop) {
+              window.setTimeout(() => {
+                void (async () => {
+                  await plugin.onHeadingDrop?.();
+                  window.setTimeout(() => _enhance(), 400);
+                })();
+              }, 300);
+            }
+          } catch (e) {
+            console.warn("Flowtime ListEnhancer: toggle error:", (e as Error).message);
           }
-
-          // Trigger re-aggregation so mobile view reflects the change
-          if (plugin.onHeadingDrop) {
-            window.setTimeout(async () => {
-              await plugin.onHeadingDrop?.();
-              window.setTimeout(() => _enhance(), 400);
-            }, 300);
-          }
-        } catch (e) {
-          console.warn("Flowtime ListEnhancer: toggle error:", (e as Error).message);
-        }
+        })();
       });
     }
 

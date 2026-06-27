@@ -643,9 +643,11 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       emptyEl.createEl("p", { text: msgs[this.mode] || msgs.today, cls: "flowtime-empty ft-empty-text" });
       const btnRow = emptyEl.createEl("div", { cls: "ft-empty-actions" });
       const addBtn = btnRow.createEl("button", { text: "\u2795 Add a task", cls: "ft-empty-btn" });
-      addBtn.addEventListener("click", async () => {
-        const mod = await import("./quick-entry");
-        new mod.QuickEntryModal(this.app, this.plugin as any).open();
+      addBtn.addEventListener("click", () => {
+        void (async () => {
+          const mod = await import("./quick-entry");
+          new mod.QuickEntryModal(this.app, this.plugin as any).open();
+        })();
       });
       return;
     }
@@ -669,7 +671,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
     if (isCompact) {
       const mkBtn = (text: string, cls: string, fn: () => void | Promise<void>): HTMLButtonElement => {
-        const b = toolbar.createEl("button", { text, cls }); b.addEventListener("click", fn); return b;
+        const b = toolbar.createEl("button", { text, cls }); b.addEventListener("click", () => { void fn(); }); return b;
       };
       mkBtn("\ud83d\udcc5 Assign All to Today", "ft-bulk-btn", async () => {
         for (const t of this.tasks) await this.updateDate(t, tdy);
@@ -757,17 +759,19 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       if (this._activeFilter) {
         filterPanel.createEl("div", { text: "Active filter: " + JSON.stringify(this._activeFilter), cls: "ft-filter-active" });
       }
-      applyBtn.addEventListener("click", async () => {
-        const field = fieldSel.value; const op = opSel.value as FilterOp; const val = valInput.value.trim();
-        if (op === "exists" || op === "not_exists") { this._activeFilter = { field, op } as FilterConfig; }
-        else if (val) {
-          const numericFields = ["duration"];
-          const parsedVal = numericFields.includes(field) ? (isNaN(Number(val)) ? val : Number(val)) : val;
-          this._activeFilter = { field, op, value: op === "contains" ? val : parsedVal } as FilterConfig;
-        } else { return; }
-        await this.loadTasks(); this.renderTable(); closePanel();
+      applyBtn.addEventListener("click", () => {
+        void (async () => {
+          const field = fieldSel.value; const op = opSel.value as FilterOp; const val = valInput.value.trim();
+          if (op === "exists" || op === "not_exists") { this._activeFilter = { field, op } as FilterConfig; }
+          else if (val) {
+            const numericFields = ["duration"];
+            const parsedVal = numericFields.includes(field) ? (isNaN(Number(val)) ? val : Number(val)) : val;
+            this._activeFilter = { field, op, value: op === "contains" ? val : parsedVal } as FilterConfig;
+          } else { return; }
+          await this.loadTasks(); this.renderTable(); closePanel();
+        })();
       });
-      clearBtn.addEventListener("click", async () => { this._activeFilter = null; await this.loadTasks(); this.renderTable(); closePanel(); });
+      clearBtn.addEventListener("click", () => { void (async () => { this._activeFilter = null; await this.loadTasks(); this.renderTable(); closePanel(); })(); });
     };
 
     const toggleFilterPanel = (): void => {
@@ -964,9 +968,11 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     const checkCell = row.createEl("span", { cls: "ft-list-check" });
     const cb = checkCell.createEl("input", { type: "checkbox" });
     cb.checked = !!(task.status && task.status.trim());
-    cb.addEventListener("change", async () => {
-      await toggleCheck(this.app.vault, task); task.status = cb.checked ? "x" : " ";
-      this.plugin?.notify?.(cb.checked ? "\u2705 Task completed" : "\u21a9\ufe0f Task reopened");
+    cb.addEventListener("change", () => {
+      void (async () => {
+        await toggleCheck(this.app.vault, task); task.status = cb.checked ? "x" : " ";
+        this.plugin?.notify?.(cb.checked ? "\u2705 Task completed" : "\u21a9\ufe0f Task reopened");
+      })();
     });
     const textSpan = row.createEl("span", { text: task.cleanText || task.rawText || "", cls: "ft-list-text" });
     textSpan.addEventListener("click", (e: MouseEvent) => { e.stopPropagation(); this._showFloatingEditor(task, textSpan); });
@@ -1002,39 +1008,45 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       row.setCssProps({ transform: `translateX(${swipeDeltaX}px)`, transition: "none" });
     }, { passive: true });
 
-    row.addEventListener("touchend", async () => {
-      if (!swiping) return;
-      swiping = false;
-      row.setCssProps({ transition: "transform 200ms ease-out" });
-      if (swipeDeltaX > SWIPE_THRESHOLD) {
-        // Swipe right → complete
-        row.setCssProps({ transform: "translateX(100%)" });
-        row.addClass("ft-op-0");
-        window.setTimeout(async () => {
-          await toggleCheck(this.app.vault, task);
-          task.status = "x";
-          this.plugin?.notify?.("\u2705 Task completed");
-          await this.loadTasks();
-          this.renderTable();
-        }, 200);
-        return;
-      } else if (swipeDeltaX < -SWIPE_THRESHOLD) {
-        // Swipe left → reschedule to tomorrow
-        row.setCssProps({ transform: "translateX(-100%)" });
-        row.addClass("ft-op-0");
-        window.setTimeout(async () => {
-          const tomorrow = new Date();
-          tomorrow.setDate(tomorrow.getDate() + 1);
-          const tomorrowStr = tomorrow.toISOString().split("T")[0];
-          await this.updateDate(task, tomorrowStr);
-          this.plugin?.notify?.("\u{1F4C5} Rescheduled to tomorrow");
-          await this.loadTasks();
-          this.renderTable();
-        }, 200);
-        return;
-      }
-      // Reset position
-      row.setCssProps({ transform: "" });
+    row.addEventListener("touchend", () => {
+      void (async () => {
+        if (!swiping) return;
+        swiping = false;
+        row.setCssProps({ transition: "transform 200ms ease-out" });
+        if (swipeDeltaX > SWIPE_THRESHOLD) {
+          // Swipe right → complete
+          row.setCssProps({ transform: "translateX(100%)" });
+          row.addClass("ft-op-0");
+          window.setTimeout(() => {
+            void (async () => {
+              await toggleCheck(this.app.vault, task);
+              task.status = "x";
+              this.plugin?.notify?.("\u2705 Task completed");
+              await this.loadTasks();
+              this.renderTable();
+            })();
+          }, 200);
+          return;
+        } else if (swipeDeltaX < -SWIPE_THRESHOLD) {
+          // Swipe left → reschedule to tomorrow
+          row.setCssProps({ transform: "translateX(-100%)" });
+          row.addClass("ft-op-0");
+          window.setTimeout(() => {
+            void (async () => {
+              const tomorrow = new Date();
+              tomorrow.setDate(tomorrow.getDate() + 1);
+              const tomorrowStr = tomorrow.toISOString().split("T")[0];
+              await this.updateDate(task, tomorrowStr);
+              this.plugin?.notify?.("\u{1F4C5} Rescheduled to tomorrow");
+              await this.loadTasks();
+              this.renderTable();
+            })();
+          }, 200);
+          return;
+        }
+        // Reset position
+        row.setCssProps({ transform: "" });
+      })();
     });
 
     return row;
@@ -1214,7 +1226,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       popup.remove();
     };
 
-    saveBtn.addEventListener("click", doSave);
+    saveBtn.addEventListener("click", () => { void doSave(); });
     textInput.addEventListener("keydown", (e: KeyboardEvent) => {
       if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); doSave(); }
     });
@@ -1290,12 +1302,13 @@ class FlowtimeRenderer extends MarkdownRenderChild {
         if (heading && !heading.closest(".ft-list-wrap")) { heading.classList.add("ft-list-heading-active"); }
       });
     });
-    this._doc.addEventListener("mouseup", async (e: MouseEvent) => {
-      if (!dragState) return;
-      const el = this._doc.elementFromPoint(e.clientX, e.clientY); clearIndicators();
-      const srcIdx = rowToIndex?.get(dragState.row) ?? -1;
-      if (srcIdx < 0) { dragState = null; return; }
-      const targetRow = (el as HTMLElement | null)?.closest(".ft-list-row") as HTMLDivElement | null;
+    this._doc.addEventListener("mouseup", (e: MouseEvent) => {
+      void (async () => {
+        if (!dragState) return;
+        const el = this._doc.elementFromPoint(e.clientX, e.clientY); clearIndicators();
+        const srcIdx = rowToIndex?.get(dragState.row) ?? -1;
+        if (srcIdx < 0) { dragState = null; return; }
+        const targetRow = (el as HTMLElement | null)?.closest(".ft-list-row") as HTMLDivElement | null;
       if (targetRow && targetRow !== dragState.row) {
         const tgtIdx = rowToIndex?.get(targetRow) ?? -1;
         if (tgtIdx >= 0 && tgtIdx !== srcIdx) {
@@ -1331,6 +1344,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
         }
       }
       dragState = null;
+      })();
     });
   }
 
@@ -1512,15 +1526,15 @@ class FlowtimeRenderer extends MarkdownRenderChild {
           else { row.remove(); this.tasks = this.tasks.filter((t) => t !== task); this.rowData = this.rowData.filter((r) => r.task !== task); if (!this.tasks.length) this.renderTable(); if (nd && nd !== tdy) await this._refreshSiblings(); }
         } catch (e) { this.plugin?.notify?.("\u274c " + (e as Error).message, true); }
       };
-      dpi.addEventListener("change", () => ap(dpi.value)); bTdy.addEventListener("click", () => ap(fmt(new Date()))); bTmw.addEventListener("click", () => ap(fmt(new Date(Date.now() + 864e5)))); bNw.addEventListener("click", () => ap(fmt(new Date(Date.now() + 7 * 864e5)))); bBkl.addEventListener("click", () => ap(""));
+      dpi.addEventListener("change", () => { void ap(dpi.value); }); bTdy.addEventListener("click", () => { void ap(fmt(new Date())); }); bTmw.addEventListener("click", () => { void ap(fmt(new Date(Date.now() + 864e5))); }); bNw.addEventListener("click", () => { void ap(fmt(new Date(Date.now() + 7 * 864e5))); }); bBkl.addEventListener("click", () => { void ap(""); });
     }
 
 
     if (isCompact && this._columnVisibility!.actions !== false) {
       const ac = row.createEl("td", { cls: "ft-actions-cell" }); const aw = ac.createEl("div", { cls: "ft-actions-wrap" });
       const abTdy = aw.createEl("button", { text: "\ud83d\udcc5 Today", cls: "ft-act-btn" });
-      abTdy.addEventListener("click", async () => { await this.updateDate(task, tdy); await this._refreshSiblings(); row.remove(); this.tasks = this.tasks.filter((t) => t !== task); if (!this.tasks.length) this.renderTable(); });
-      if (od) { const abBkl = aw.createEl("button", { text: "\u21a9\ufe0f Backlog", cls: "ft-act-btn" }); abBkl.addEventListener("click", async () => { await this.updateDate(task, ""); await this._refreshSiblings(); row.remove(); this.tasks = this.tasks.filter((t) => t !== task); if (!this.tasks.length) this.renderTable(); }); }
+      abTdy.addEventListener("click", () => { void (async () => { await this.updateDate(task, tdy); await this._refreshSiblings(); row.remove(); this.tasks = this.tasks.filter((t) => t !== task); if (!this.tasks.length) this.renderTable(); })(); });
+      if (od) { const abBkl = aw.createEl("button", { text: "\u21a9\ufe0f Backlog", cls: "ft-act-btn" }); abBkl.addEventListener("click", () => { void (async () => { await this.updateDate(task, ""); await this._refreshSiblings(); row.remove(); this.tasks = this.tasks.filter((t) => t !== task); if (!this.tasks.length) this.renderTable(); })(); }); }
     } else if (!isCompact && this._columnVisibility!.timer !== false) {
       const tmr = row.createEl("td", { cls: "ft-timer-cell" });
       const { update } = this._buildInlineTimer(tmr, task, dur, false);
@@ -1669,7 +1683,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
   _buildCheckCell(row: HTMLTableRowElement, task: TaskRow): void {
     const cc = row.createEl("td", { cls: "ft-check-cell" }); const done = task.status === "x" || task.status === "X";
     const chk = cc.createEl("span", { cls: "ft-checkbox" + (done ? " ft-checked" : "") });
-    chk.addEventListener("click", async (e: MouseEvent) => { e.stopPropagation(); chk.classList.toggle("ft-checked"); await this.toggleTaskComplete(task); });
+    chk.addEventListener("click", (e: MouseEvent) => { e.stopPropagation(); void (async () => { chk.classList.toggle("ft-checked"); await this.toggleTaskComplete(task); })(); });
   }
 
   async _autoSaveTime(task: TaskRow, si: HTMLInputElement, ds: HTMLInputElement): Promise<void> {
@@ -1774,7 +1788,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
         row.createEl("td", { text: (rec as Record<string, string>).task_text || (rec as Record<string, string>).notes || "\u2014", cls: "ft-sesh-task" });
       }
     };
-    bucketFilter.addEventListener("change", loadResults); typeFilter.addEventListener("change", loadResults); limitFilter.addEventListener("change", loadResults);
+    bucketFilter.addEventListener("change", () => { void loadResults(); }); typeFilter.addEventListener("change", () => { void loadResults(); }); limitFilter.addEventListener("change", () => { void loadResults(); });
     await loadResults();
   }
 

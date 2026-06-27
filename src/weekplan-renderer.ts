@@ -440,17 +440,19 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			text: "🔄 Regenerate Routines",
 			cls: "ft-wp-btn",
 		});
-		genBtn.addEventListener("click", async () => {
-			if (this.plugin?.routineEngine) {
-				const count = await this.plugin.routineEngine.generateAllDue({
-					force: true,
-				});
-				this.plugin.notify?.(
-					"🔁 Generated " + count + " routine task" + (count === 1 ? "" : "s"),
-				);
-				await this.loadWeek();
-				this.renderView();
-			}
+		genBtn.addEventListener("click", () => {
+			void (async () => {
+				if (this.plugin?.routineEngine) {
+					const count = await this.plugin.routineEngine.generateAllDue({
+						force: true,
+					});
+					this.plugin.notify?.(
+						"🔁 Generated " + count + " routine task" + (count === 1 ? "" : "s"),
+					);
+					await this.loadWeek();
+					this.renderView();
+				}
+			})();
 		});
 
 		const vacBtn = toolbar.createEl("button", {
@@ -461,17 +463,19 @@ class WeekplanRenderer extends MarkdownRenderChild {
 				"ft-wp-btn" +
 				(this.plugin?.settings?.vacationMode ? " ft-wp-vacation-on" : ""),
 		});
-		vacBtn.addEventListener("click", async () => {
-			if (this.plugin) {
-				this.plugin.settings.vacationMode = !this.plugin.settings.vacationMode;
-				await this.plugin.saveData?.(this.plugin.settings);
-				this.renderView();
-				this.plugin.notify?.(
-					this.plugin.settings.vacationMode
-						? "⏸ Routine generation paused"
-						: "▶ Routine generation resumed",
-				);
-			}
+		vacBtn.addEventListener("click", () => {
+			void (async () => {
+				if (this.plugin) {
+					this.plugin.settings.vacationMode = !this.plugin.settings.vacationMode;
+					await this.plugin.saveData?.(this.plugin.settings);
+					this.renderView();
+					this.plugin.notify?.(
+						this.plugin.settings.vacationMode
+							? "⏸ Routine generation paused"
+							: "▶ Routine generation resumed",
+					);
+				}
+			})();
 		});
 
 		// ── Small screen check (grid requires min 760px) ──
@@ -483,7 +487,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 				text: this.gridMode ? "📋 List View" : "📅 Grid View",
 				cls: "ft-wp-btn ft-wp-btn-toggle",
 			});
-			toggleBtn.addEventListener("click", async () => {
+			toggleBtn.addEventListener("click", () => {
 				this.gridMode = !this.gridMode;
 				this.renderView();
 			});
@@ -961,41 +965,45 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			cls: "ft-tg-popup-btn ft-tg-popup-del",
 		});
 
-		saveBtn.addEventListener("click", async () => {
-			// Update time
-			task.time = startInput.value.trim()
-				? (() => {
-						const s = startInput.value.trim();
-						const d = this._parseDurStr(durInput.value.trim());
-						return d > 0 ? s + "—" + this._calcEnd(s, d) : s;
-					})()
-				: "";
-			task.durationMinutes = this._parseDurStr(durInput.value.trim());
+		saveBtn.addEventListener("click", () => {
+			void (async () => {
+				// Update time
+				task.time = startInput.value.trim()
+					? (() => {
+							const s = startInput.value.trim();
+							const d = this._parseDurStr(durInput.value.trim());
+							return d > 0 ? s + "—" + this._calcEnd(s, d) : s;
+						})()
+					: "";
+				task.durationMinutes = this._parseDurStr(durInput.value.trim());
 
-			// Persist to vault
-			await this._saveTaskInline(
-				task,
-				startInput.value.trim(),
-				durInput.value.trim(),
-			);
+				// Persist to vault
+				await this._saveTaskInline(
+					task,
+					startInput.value.trim(),
+					durInput.value.trim(),
+				);
 
-			// Toggle check
-			if (cb.checked !== (task.status === "x")) {
-				await this._toggleCheck(task);
-			}
+				// Toggle check
+				if (cb.checked !== (task.status === "x")) {
+					await this._toggleCheck(task);
+				}
 
-			popup.remove();
-			this._tgEditPopup = null;
-			await this.loadWeek();
-			this.renderView();
+				popup.remove();
+				this._tgEditPopup = null;
+				await this.loadWeek();
+				this.renderView();
+			})();
 		});
 
-		delBtn.addEventListener("click", async () => {
-			await this._removeTask(task);
-			popup.remove();
-			this._tgEditPopup = null;
-			await this.loadWeek();
-			this.renderView();
+		delBtn.addEventListener("click", () => {
+			void (async () => {
+				await this._removeTask(task);
+				popup.remove();
+				this._tgEditPopup = null;
+				await this.loadWeek();
+				this.renderView();
+			})();
 		});
 
 		// Close on outside click
@@ -1183,14 +1191,16 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		const cb = checkCol.createEl("span", {
 			cls: "ft-checkbox" + (task.status === "x" ? " ft-checked" : ""),
 		});
-		cb.addEventListener("click", async () => {
-			try {
-				await this._toggleCheck(task);
-				cb.toggleClass("ft-checked", task.status === "x");
-				row.toggleClass("ft-wp-task-done", task.status === "x");
-			} catch (e) {
-				this.plugin.notify("❌ " + (e as Error).message, true);
-			}
+		cb.addEventListener("click", () => {
+			void (async () => {
+				try {
+					await this._toggleCheck(task);
+					cb.toggleClass("ft-checked", task.status === "x");
+					row.toggleClass("ft-wp-task-done", task.status === "x");
+				} catch (e) {
+					this.plugin.notify("❌ " + (e as Error).message, true);
+				}
+			})();
 		});
 
 		// ── Task text ──
@@ -1272,12 +1282,14 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			cls: "ft-wp-del-btn",
 			attr: { title: "Remove from this day" },
 		});
-		delBtn.addEventListener("click", async () => {
-			await this._removeTask(task);
-			row.remove();
-			// Re-render to update totals
-			await this.loadWeek();
-			this.renderView();
+		delBtn.addEventListener("click", () => {
+			void (async () => {
+				await this._removeTask(task);
+				row.remove();
+				// Re-render to update totals
+				await this.loadWeek();
+				this.renderView();
+			})();
 		});
 	}
 

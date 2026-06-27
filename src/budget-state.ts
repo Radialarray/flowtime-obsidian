@@ -38,13 +38,13 @@ export function renderProgressBar(used: number, total: number, label?: string, c
   const { ratio, state } = getBudgetState(used, total);
   const pct = Math.min(Math.round(ratio * 100), 100);
 
-  const doc = contextEl?.ownerDocument ?? document;
+  const doc = contextEl?.ownerDocument ?? activeDocument;
   const bar = doc.createElement("div");
   bar.className = `ft-progress-bar ft-state-${state}`;
 
   const fill = doc.createElement("div");
   fill.className = "ft-progress-fill";
-  fill.style.width = pct + "%";
+  fill.setCssProps({ width: pct + "%" });
   bar.appendChild(fill);
 
   const text = doc.createElement("span");

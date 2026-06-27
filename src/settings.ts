@@ -83,7 +83,7 @@ export class FlowtimeSettingsTab extends PluginSettingTab {
   }
 
   private _applyWidthPreset(preset: string): void {
-    const body = this.containerEl?.ownerDocument?.body ?? document.body;
+    const body = this.containerEl?.ownerDocument?.body ?? activeDocument.body;
     body.classList.remove("ft-wide-s", "ft-wide-m", "ft-wide-l", "ft-wide-xl");
     if (preset && ["s", "m", "l", "xl"].includes(preset)) {
       body.classList.add("ft-wide-" + preset);

@@ -12,7 +12,7 @@ import { parseTaskLine } from "./task-parser";
 
 /** Get active document for popout window compatibility */
 export function activeDoc(app: App): Document {
-  return app.workspace.activeLeaf?.view?.containerEl?.ownerDocument ?? document;
+  return app.workspace.activeLeaf?.view?.containerEl?.ownerDocument ?? activeDocument;
 }
 
 /* ─── Constants ─── */

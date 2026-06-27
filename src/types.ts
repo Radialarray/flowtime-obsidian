@@ -4,6 +4,10 @@
 
 import type { TFile } from "obsidian";
 
+// Obsidian exposes activeDocument for popout window compatibility
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+declare const activeDocument: Document;
+
 // ── Task shapes ──
 
 /** Output of parseTaskLine — raw parsed data from a markdown task line */

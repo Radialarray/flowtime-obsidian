@@ -25,9 +25,11 @@ export default tseslint.config(
       globals: {
         console: "readonly",
         window: "readonly",
+        audioContext: "readonly",
         AudioContext: "readonly",
         process: "readonly",
         document: "readonly",
+        activeDocument: "readonly",
         Blob: "readonly",
         // NOT declaring setTimeout/clearTimeout/setInterval/clearInterval
         // as globals — this forces code to use window.setTimeout etc.

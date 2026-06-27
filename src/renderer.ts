@@ -184,7 +184,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
   /** Get active document for popout window compatibility */
   private get _doc(): Document {
-    return this.containerEl?.ownerDocument ?? document;
+    return this.containerEl?.ownerDocument ?? activeDocument;
   }
 
   override async onload(): Promise<void> {
@@ -701,8 +701,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
     const toggleDD = (): void => {
       const r = colBtn.getBoundingClientRect();
-      colDD.style.left = Math.max(4, Math.min(r.left, window.innerWidth - colDD.offsetWidth - 8)) + "px";
-      colDD.style.top = Math.min(r.bottom + 4, window.innerHeight - colDD.offsetHeight - 8) + "px";
+      colDD.setCssStyles({
+        left: Math.max(4, Math.min(r.left, window.innerWidth - colDD.offsetWidth - 8)) + "px",
+        top: Math.min(r.bottom + 4, window.innerHeight - colDD.offsetHeight - 8) + "px",
+      });
       colDD.classList.toggle("ft-col-dd-open"); this._doc.body.appendChild(colDD);
     };
     colBtn.addEventListener("click", (e: MouseEvent) => { e.stopPropagation(); toggleDD(); });
@@ -770,8 +772,10 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       if (filterPanel.classList.contains("ft-filter-open")) { closePanel(); }
       else {
         const r = filterBtn.getBoundingClientRect();
-        filterPanel.style.left = Math.max(4, Math.min(r.left, window.innerWidth - 300)) + "px";
-        filterPanel.style.top = Math.min(r.bottom + 4, window.innerHeight - 200) + "px";
+        filterPanel.setCssStyles({
+          left: Math.max(4, Math.min(r.left, window.innerWidth - 300)) + "px",
+          top: Math.min(r.bottom + 4, window.innerHeight - 200) + "px",
+        });
         buildFilterUI(); filterPanel.classList.add("ft-filter-open"); this._doc.body.appendChild(filterPanel);
       }
     };
@@ -889,7 +893,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       const def = task._bucketDef; if (!def) continue;
       const row = section.createEl("div", { cls: "ft-budget-row" });
       const info = row.createEl("div", { cls: "ft-budget-info" });
-      const swatch = info.createEl("span", { cls: "ft-bucket-swatch" }); swatch.style.backgroundColor = def.color;
+      const swatch = info.createEl("span", { cls: "ft-bucket-swatch" }); swatch.setCssProps({ "background-color": def.color });
       info.createEl("span", { text: def.name, cls: "ft-budget-name" });
       const usedHours = task.durationMinutes / 60;
       const bar = renderProgressBar(usedHours, def.weeklyLimit, undefined, row);
@@ -1466,7 +1470,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       if (task.sprint) {
         const badge = spc.createEl("span", { text: this._sprintName(task.sprint), cls: "ft-sprint-badge" });
         const sprints = this.plugin?.settings?.sprints || []; const def = sprints.find((s) => s.id === task.sprint);
-        if (def?.color) { badge.style.borderLeftColor = def.color; }
+        if (def?.color) { badge.setCssProps({ "border-left-color": def.color }); }
       } else { spc.createEl("span", { text: "\u2014", cls: "ft-bucket-none" }); }
     }
 
@@ -1495,7 +1499,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
         this._doc.addEventListener("click", this._closePopups, true);
       }
       (dp as HTMLDivElement & { _badge?: HTMLElement })._badge = ds2;
-      const op = (): void => { const r = dw.getBoundingClientRect(); dp.style.left = Math.max(4, Math.min(r.left, window.innerWidth - 190)) + "px"; dp.style.top = Math.min(r.bottom + 4, window.innerHeight - 250) + "px"; this._doc.body.appendChild(dp); window.requestAnimationFrame(() => { if (dp.parentNode) dp.classList.add("ft-dp-open"); }); };
+      const op = (): void => { const r = dw.getBoundingClientRect(); dp.setCssStyles({ left: Math.max(4, Math.min(r.left, window.innerWidth - 190)) + "px", top: Math.min(r.bottom + 4, window.innerHeight - 250) + "px" }); this._doc.body.appendChild(dp); window.requestAnimationFrame(() => { if (dp.parentNode) dp.classList.add("ft-dp-open"); }); };
       const cp = (): void => { dp.classList.remove("ft-dp-open"); window.setTimeout(() => { if (dp.parentNode) dp.parentNode.removeChild(dp); }, 150); };
       ds2.addEventListener("click", (e: MouseEvent) => { e.stopPropagation(); dp.classList.contains("ft-dp-open") ? cp() : op(); });
       const ap = async (nd: string): Promise<void> => {
@@ -1556,7 +1560,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       disp.setText(formatTimer(ts.remaining));
       disp.toggleClass("ft-timer-expired", ts.remaining <= 0);
       const pct = ts.total > 0 ? ((ts.total - ts.remaining) / ts.total) * 100 : 0;
-      tmrFill.style.width = Math.min(pct, 100) + "%";
+      tmrFill.setCssProps({ width: Math.min(pct, 100) + "%" });
       tmrBar.className =
         "ft-timer-progress ft-state-" +
         (pct >= 100 ? "over" : pct >= 80 ? "warning" : "normal");
@@ -1645,7 +1649,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
   _buildTaskCell(row: HTMLTableRowElement, task: TaskRow, depth: number, hasChildren: boolean, collapsed: boolean, tid: string, childrenTasks: TaskRow[]): void {
     const tc = row.createEl("td", { cls: "ft-task-cell" });
-    if (depth > 0) { tc.style.paddingLeft = depth * 18 + 8 + "px"; }
+    if (depth > 0) { tc.setCssProps({ "padding-left": depth * 18 + 8 + "px" }); }
     if (hasChildren) {
       const toggle = tc.createEl("span", { text: collapsed ? "\u25b6" : "\u25bc", cls: "ft-tree-toggle" });
       toggle.addEventListener("click", (e: MouseEvent) => { e.stopPropagation(); if (this._collapsed.has(tid)) this._collapsed.delete(tid); else this._collapsed.add(tid); this.renderTable(); });
@@ -1711,7 +1715,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       for (const t of todayTotals) {
         const row = section.createEl("div", { cls: "ft-sesh-analytics-row" });
         const bDef = buckets.find((b) => b.id === (t as Record<string, string>).bucket);
-        if (bDef) { const swatch = row.createEl("span", { cls: "ft-bucket-swatch" }); swatch.style.backgroundColor = bDef.color; row.createEl("span", { text: bDef.name, cls: "ft-sesh-analytics-name" }); }
+        if (bDef) { const swatch = row.createEl("span", { cls: "ft-bucket-swatch" }); swatch.setCssProps({ "background-color": bDef.color }); row.createEl("span", { text: bDef.name, cls: "ft-sesh-analytics-name" }); }
         else { row.createEl("span", { text: (t as Record<string, string>).bucket || "unassigned", cls: "ft-sesh-analytics-name" }); }
         row.createEl("span", { text: `${Math.round((t as Record<string, number>).total_minutes)}m (${((t as Record<string, number>).total_minutes / 60).toFixed(1)}h)`, cls: "ft-sesh-analytics-value" });
       }
@@ -1726,7 +1730,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
           const row = section.createEl("div", { cls: "ft-sesh-analytics-row" });
           const bDef = buckets.find((b) => b.id === (w as Record<string, string>).bucket);
           if (bDef) {
-            const swatch = row.createEl("span", { cls: "ft-bucket-swatch" }); swatch.style.backgroundColor = bDef.color; row.createEl("span", { text: bDef.name, cls: "ft-sesh-analytics-name" });
+            const swatch = row.createEl("span", { cls: "ft-bucket-swatch" }); swatch.setCssProps({ "background-color": bDef.color }); row.createEl("span", { text: bDef.name, cls: "ft-sesh-analytics-name" });
             const usedHours = (w as Record<string, number>).total_minutes / 60;
             row.createEl("span", { text: bDef.weeklyLimit > 0 ? `${usedHours.toFixed(1)}h / ${bDef.weeklyLimit}h` : `${usedHours.toFixed(1)}h`, cls: "ft-sesh-analytics-value" });
           } else { row.createEl("span", { text: (w as Record<string, string>).bucket || "unassigned", cls: "ft-sesh-analytics-name" }); row.createEl("span", { text: `${((w as Record<string, number>).total_minutes / 60).toFixed(1)}h`, cls: "ft-sesh-analytics-value" }); }
@@ -1762,7 +1766,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
         const bucketCell = row.createEl("td", { cls: "ft-sesh-bucket" });
         if ((rec as Record<string, string>).bucket) {
           const bDef = buckets.find((b) => b.id === (rec as Record<string, string>).bucket);
-          if (bDef) { const badge = bucketCell.createEl("span", { text: bDef.name, cls: "ft-sesh-badge" }); badge.style.borderLeftColor = bDef.color; }
+          if (bDef) { const badge = bucketCell.createEl("span", { text: bDef.name, cls: "ft-sesh-badge" }); badge.setCssProps({ "border-left-color": bDef.color }); }
           else { bucketCell.createEl("span", { text: (rec as Record<string, string>).bucket, cls: "ft-sesh-badge-unknown" }); }
         } else { bucketCell.createEl("span", { text: "\u2014", cls: "ft-sesh-faint" }); }
         row.createEl("td", { text: (rec as Record<string, string>).task_text || (rec as Record<string, string>).notes || "\u2014", cls: "ft-sesh-task" });

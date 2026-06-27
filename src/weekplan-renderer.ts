@@ -124,7 +124,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 
 	/** Get active document for popout window compatibility */
 	private get _doc(): Document {
-		return this.containerEl?.ownerDocument ?? document;
+		return this.containerEl?.ownerDocument ?? activeDocument;
 	}
 
 	override async onload(): Promise<void> {
@@ -607,8 +607,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			// Background cells for each day at this time
 			for (let di = 0; di < days.length; di++) {
 				const cell = grid.createEl("div", { cls: "ft-tg-cell" });
-				cell.style.gridRow = String(rowNum);
-				cell.style.gridColumn = String(di + 2);
+				cell.setCssProps({ gridRow: String(rowNum), gridColumn: String(di + 2) });
 				// Highlight current time slot on today
 				if (days[di] === today) {
 					const now = new Date();
@@ -628,8 +627,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			const rowNum = (h - START_H) * 2 + 2;
 			for (let di = 0; di < days.length; di++) {
 				const sep = grid.createEl("div", { cls: "ft-tg-hsep" });
-				sep.style.gridRow = String(rowNum);
-				sep.style.gridColumn = String(di + 2);
+				sep.setCssProps({ gridRow: String(rowNum), gridColumn: String(di + 2) });
 			}
 		}
 
@@ -658,8 +656,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			}
 			// Untimed section label
 			const utLabel = grid.createEl("div", { cls: "ft-tg-ut-label" });
-			utLabel.style.gridRow = String(bottomRow + 1);
-			utLabel.style.gridColumn = String(col);
+			utLabel.setCssProps({ gridRow: String(bottomRow + 1), gridColumn: String(col) });
 			utLabel.setText("⋯");
 		}
 	}
@@ -692,14 +689,14 @@ class WeekplanRenderer extends MarkdownRenderChild {
 					(task.isRoutine ? " ft-tg-routine" : "") +
 					(stackLevel > 0 ? " ft-tg-stacked" : ""),
 			});
-			card.style.gridRow = `${rowStart} / ${rowEnd}`;
-			card.style.gridColumn = String(col);
-			card.style.marginLeft =
-				stackLevel > 0 ? `${stackLevel * 20 + 1}px` : "1px";
-			card.style.width =
-				stackLevel > 0
+			card.setCssStyles({
+				gridRow: `${rowStart} / ${rowEnd}`,
+				gridColumn: String(col),
+				marginLeft: stackLevel > 0 ? `${stackLevel * 20 + 1}px` : "1px",
+				width: stackLevel > 0
 					? `calc(100% - ${stackLevel * 20 + 2}px)`
-					: "calc(100% - 2px)";
+					: "calc(100% - 2px)",
+			});
 			card._tgRowStart = rowStart;
 			card._tgRowEnd = rowEnd;
 			card._tgTask = task;
@@ -758,8 +755,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 					(task.status === "x" ? " ft-tg-done" : "") +
 					(task.isRoutine ? " ft-tg-routine" : ""),
 			});
-			card.style.gridColumn = String(col);
-			card.style.gridRow = `${utRow} / ${utRow + 1}`;
+			card.setCssProps({ gridColumn: String(col), gridRow: `${utRow} / ${utRow + 1}` });
 
 			card.createEl("span", { cls: "ft-tg-ut-dot" });
 			card.createEl("span", { text: task.cleanText, cls: "ft-tg-text" });
@@ -812,7 +808,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 
 		const updateDrag = (_clientX: number, clientY: number): void => {
 			const newRowEnd = yToRow(clientY);
-			card.style.gridRow = `${rowStart} / ${newRowEnd}`;
+			card.setCssProps({ gridRow: `${rowStart} / ${newRowEnd}` });
 			card._tgRowEnd = newRowEnd;
 
 			// Position indicator at the new bottom edge
@@ -922,8 +918,10 @@ class WeekplanRenderer extends MarkdownRenderChild {
 
 		// Position near the card (clamped to viewport)
 		const rect = card.getBoundingClientRect();
-		popup.style.left = Math.max(4, Math.min(rect.left, window.innerWidth - 210)) + "px";
-		popup.style.top = Math.min(rect.bottom + 4, window.innerHeight - 220) + "px";
+		popup.setCssStyles({
+			left: Math.max(4, Math.min(rect.left, window.innerWidth - 210)) + "px",
+			top: Math.min(rect.bottom + 4, window.innerHeight - 220) + "px",
+		});
 
 		// ── Time input ──
 		const timeRow = popup.createEl("div", { cls: "ft-tg-popup-row" });

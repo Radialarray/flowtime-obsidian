@@ -5,6 +5,7 @@
  */
 
 import type { App, TFile, Vault } from "obsidian";
+import { MarkdownView } from "obsidian";
 import type { ParsedTask, TaskRow } from "./types";
 import { parseTaskLine } from "./task-parser";
 
@@ -12,7 +13,7 @@ import { parseTaskLine } from "./task-parser";
 
 /** Get active document for popout window compatibility */
 export function activeDoc(app: App): Document {
-  return app.workspace.activeLeaf?.view?.containerEl?.ownerDocument ?? activeDocument;
+  return app.workspace.getActiveViewOfType(MarkdownView)?.containerEl?.ownerDocument ?? activeDocument;
 }
 
 /* ─── Constants ─── */

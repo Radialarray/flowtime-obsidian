@@ -857,13 +857,13 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       if (!s) return ""; return s.direction === "asc" ? "\u25b2" : "\u25bc";
     };
 
-    const makeSortableHeader = (label: string, field: string | null, cls: string, width: string): HTMLTableHeaderCellElement => {
+    const makeSortableHeader = (label: string, field: string | null, cls: string, width: string): HTMLTableCellElement => {
       const th = hr.createEl("th", { cls }); th.classList.add("ft-sortable");
       if (width) th.setCssProps({ "--ft-col-width": width }); th.createEl("span", { text: label });
       if (field) { th.createEl("span", { cls: "ft-sort-indicator", text: sortIndicator(field) }); th.addEventListener("click", (e: MouseEvent) => { void sortByColumn(field)(e); }); }
       return th;
     };
-    const makeHeader = (cls: string, width: string): HTMLTableHeaderCellElement => {
+    const makeHeader = (cls: string, width: string): HTMLTableCellElement => {
       const th = hr.createEl("th", { cls }); if (width) th.setCssProps({ "--ft-col-width": width }); return th;
     };
 
@@ -1451,11 +1451,11 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
     if (this._columnVisibility!.check !== false) this._buildCheckCell(row, task);
     if (this._columnVisibility!.priority !== false && this._columnVisibility!.priority) {
-      const pc = row.createEl("td", { cls: "ft-priority-cell", attr: { style: "text-align:center" } });
+      const pc = row.createEl("td", { cls: "ft-priority-cell ft-text-center" });
       if (task.priority) { pc.createEl("span", { text: task.priority, cls: "ft-priority-badge" }); }
     }
     if (this._columnVisibility!.soon !== false && this._columnVisibility!.soon) {
-      const sc = row.createEl("td", { cls: "ft-soon-cell", attr: { style: "text-align:center" } });
+      const sc = row.createEl("td", { cls: "ft-soon-cell ft-text-center" });
       if (task.isSoon) { sc.createEl("span", { text: "\u25cc", cls: "ft-soon-badge" }); }
     }
     if (this._columnVisibility!.task !== false) this._buildTaskCell(row, task, depth, hasChildren, collapsed, tid, childrenTasks);
@@ -1816,7 +1816,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       case "month": next.setMonth(next.getMonth() + interval); break;
     }
     const nextDate = next.toISOString().split("T")[0];
-    const newTaskLine = completedLine.replace(/\[x\]/i, "[ ]").replace(/[@\u23f3\ud83d\udcc5]\s*\d{4}-\d{2}-\d{2}/u, "@" + nextDate);
+    const newTaskLine = completedLine.replace(/\[x\]/i, "[ ]").replace(/[@\u23f3\u{1F4C5}]\s*\d{4}-\d{2}-\d{2}/u, "@" + nextDate);
     const content = await this.app.vault.read(task.file!); const lines = content.split("\n");
     lines.splice(task.line + 1, 0, newTaskLine); await this.app.vault.modify(task.file!, lines.join("\n"));
   }

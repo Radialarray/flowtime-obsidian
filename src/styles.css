@@ -808,6 +808,8 @@
 
 /* --- Project dropdown --- */
 
+.ft-dd-open { display: block; }
+
 .flowtime-proj-dd {
 	display: none;
 	position: fixed;
@@ -2777,3 +2779,17 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-v
 .ft-op-0 { opacity: 0; }
 .ft-bg-error { background: var(--text-error); }
 .ft-pl-8 { padding-left: 8px; }
+.ft-text-center { text-align: center; }
+
+/* Onboard preview box */
+.ft-preview-box {
+	background: var(--background-secondary);
+	padding: 8px;
+	border-radius: var(--radius-s);
+	margin-top: 8px;
+	max-height: 160px;
+	overflow-y: auto;
+	font-size: var(--font-ui-smaller);
+	white-space: pre;
+	font-family: var(--font-monospace);
+}

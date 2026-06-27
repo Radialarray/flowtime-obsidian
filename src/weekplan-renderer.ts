@@ -577,8 +577,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 		}
 
 		// Total grid rows = 1 header + slots length
-		grid.style.setProperty("--tg-rows", String(1 + slots.length));
-		grid.style.setProperty("--tg-cols", String(1 + days.length));
+		grid.setCssProps({ "--tg-rows": String(1 + slots.length), "--tg-cols": String(1 + days.length) });
 		grid._tgSlots = slots;
 
 		// ── Header row ──
@@ -826,8 +825,8 @@ class WeekplanRenderer extends MarkdownRenderChild {
 				top: yPos + "px",
 				left: "60px",
 				width: "calc(100% - 60px)",
-				display: "block",
 			});
+			dragIndicator.addClass("ft-dd-open");
 
 			// Show time label on indicator
 			const newEndTime = this._rowToTime(newRowEnd);

@@ -74,14 +74,14 @@ export class QuickEntryModal extends Modal {
         left: Math.max(4, Math.min(r.left, window.innerWidth - r.width - 8)) + "px",
         top: Math.min(r.bottom + 4, window.innerHeight - 220) + "px",
         width: r.width + "px",
-        display: "block",
       });
+      projDD.addClass("ft-dd-open");
       activeDoc(this.app).body.appendChild(projDD);
       populateDD(projInput.value);
     };
 
     const closeDD = (): void => {
-      projDD.setCssProps({ display: "none" });
+      projDD.removeClass("ft-dd-open");
       if (projDD.parentNode) projDD.parentNode.removeChild(projDD);
     };
 

@@ -68,7 +68,7 @@ export default class FlowtimePlugin extends Plugin {
 
 	/** Get active document for popout window compatibility */
 	private get _doc(): Document {
-		return this.app.workspace.activeLeaf?.view?.containerEl?.ownerDocument ?? activeDocument;
+		return this.app.workspace.getActiveViewOfType(MarkdownView)?.containerEl?.ownerDocument ?? activeDocument;
 	}
 
 	_activeRowTimer: unknown = null;

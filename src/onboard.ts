@@ -483,19 +483,14 @@ class TodayNoteStepModal extends Modal {
 
     contentEl
       .createEl("div", {
-        cls: "flowtime-preview",
-        attr: {
-          style:
-            "background: var(--background-secondary); padding: 8px; border-radius: var(--radius-s); margin-top: 8px; max-height: 160px; overflow-y: auto; font-size: var(--font-ui-smaller); white-space: pre; font-family: var(--font-monospace);",
-        },
+        cls: "flowtime-preview ft-preview-box",
       })
       .setText(
         "# 📅 Today\n\n## 🎯 Today\n```flowtime-today\n```\n\n## 🔄 Carry Over\n```flowtime-overdue\n```\n\n## ◌ Up Next\n```flowtime-soon\n```\n\n## 📝 Notes",
       );
 
     const createCb = contentEl.createEl("label", {
-      cls: "flowtime-label",
-      attr: { style: "margin-top: 12px;" },
+      cls: "flowtime-label ft-mt-12",
     });
     const createCheck = createCb.createEl("input", { type: "checkbox" });
     createCheck.checked = true;
@@ -707,8 +702,7 @@ class RoutineStepModal extends Modal {
     preview.setText(ROUTINE_DAILY_TEMPLATE.replace(/\t/g, "  "));
 
     const createCb = contentEl.createEl("label", {
-      cls: "flowtime-label",
-      attr: { style: "margin-top: 12px;" },
+      cls: "flowtime-label ft-mt-12",
     });
     const createCheck = createCb.createEl("input", { type: "checkbox" });
     createCheck.checked = true;
@@ -769,8 +763,7 @@ class ProjectStepModal extends Modal {
     nameInput.focus();
 
     const tasksCb = contentEl.createEl("label", {
-      cls: "flowtime-label",
-      attr: { style: "margin-top: 12px;" },
+      cls: "flowtime-label ft-mt-12",
     });
     const tasksCheck = tasksCb.createEl("input", { type: "checkbox" });
     tasksCheck.checked = true;

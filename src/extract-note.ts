@@ -2,6 +2,8 @@
  * extract-note — Extract selected text to a new note.
  * Command: Ctrl+G (Mod+G)
  * First selected line → new note title, remaining lines → content, [[wikilink]] replaces selection.
+ * If first line already contains a [[wikilink]] to an existing page, appends remaining
+ * lines to that page instead of creating a new note.
  */
 
 import { Notice } from "obsidian";
@@ -71,6 +73,16 @@ async function ensureUniquePath(
   return { path, name: finalName };
 }
 
+/* ─── Wikilink helpers ─── */
+
+/** Extract the first `[[wikilink]]` page name from a line, or null. */
+function extractWikilink(line: string): string | null {
+  const match = line.match(/\[\[([^\]]+)\]\]/);
+  if (!match) return null;
+  // Strip display text: [[Page|display]] → Page
+  return match[1].split("|")[0].trim();
+}
+
 /* ─── Main handler ─── */
 
 export async function extractNote(
@@ -105,6 +117,30 @@ export async function extractNote(
   if (!currentFile) {
     new Notice("No active file to extract from");
     return;
+  }
+
+  // ── If first line already links to an existing page, append there instead ──
+  const wikiPage = extractWikilink(firstLine);
+  if (wikiPage) {
+    const targetFile = app.metadataCache.getFirstLinkpathDest(wikiPage, currentFile.path);
+    if (targetFile) {
+      const appendContent = lines.slice(1).join("\n");
+      if (appendContent) {
+        const existing = await app.vault.read(targetFile);
+        const sep = existing.endsWith("\n") ? "" : "\n";
+        await app.vault.modify(targetFile, existing + sep + appendContent);
+      }
+      // Replace selection with just the [[wikilink]]
+      const wikiText = firstLine.match(/\[\[[^\]]+\]\]/)![0];
+      editor.replaceRange(
+        wikiText,
+        { line: startLine, ch: 0 },
+        { line: endLine, ch: editor.getLine(endLine).length },
+      );
+      plugin.notify(`\u2705 Appended to "${wikiPage}"`);
+      return;
+    }
+    // Page doesn't exist – fall through to normal creation flow
   }
 
   const title = cleanTitle(firstLine);

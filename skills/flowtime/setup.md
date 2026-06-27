@@ -31,9 +31,27 @@ vault/
 | Entity | Storage | Format |
 |--------|---------|--------|
 | **Project** | Folder + folder note + management doc + wiki | `ProjectName/` with `type: project` frontmatter |
-| **Bucket** | Plugin settings (JSON) | `data.json` via `app.vault.readJson`/`app.vault.writeJson` |
+| **Bucket** | `Flowtime/Buckets.md` (canonical) | YAML frontmatter with `buckets:` array |
 | **Task** | Inline markdown lines | `- [ ] description @date @1.5h @b:bucket-id #project/Name` |
 | **Session** | NDJSON files (plugin folder) | `.obsidian/plugins/flowtime/sessions/YYYY-MM-DD.ndjson` |
+
+### Vault Architecture (v1.7.0)
+
+```
+vault/
+├── Flowtime/              ← User data as markdown (syncs, readable without plugin)
+│   ├── Buckets.md         ← Bucket definitions (YAML frontmatter)
+│   ├── Routines/          ← Routine template .md files (default: Flowtime/Routines/)
+│   └── Sprints.md         ← Sprint definitions (future)
+├── .obsidian/
+│   └── plugins/flowtime/
+│       ├── data.json      ← Plugin mechanics (timerSound, dailyCap, etc.)
+│       ├── sessions/      ← Session tracking
+│       ├── task-cache.json
+│       └── task-index.json
+```
+
+The `Flowtime/` folder separates **user data** (markdown, syncs, agent-accessible) from **plugin mechanics** (JSON, cache, sessions). Agents only need to read/write markdown files in `Flowtime/` — no `.obsidian/` traversal required.
 
 ## Task Line Format
 
@@ -50,6 +68,8 @@ vault/
 | Date | `@YYYY-MM-DD` | `@2026-06-24` | Also `@today`, `@tomorrow`, `@next-monday` |
 | Duration | `@1.5h` or `@30m` | `@1.5h` | Hours or minutes |
 | Bucket | `@b:name` / `@bucket:name` | `@b:deep-work` | Links to bucket definition |
+| Milestone | `@ms:name` | `@ms:mvp` | Groups tasks under a milestone |
+| Milestone heading | `## Name @ms` | `## MVP @ms` | Marks a heading as a milestone section in project notes |
 | Project tag | `#project/Name` | `#project/website` | Configurable prefix |
 | Priority | Emoji | `🔺⏫🔼🔽⏬` | 🔺=highest, ⏬=lowest |
 | Recurrence | `🔁 every <period>` | `🔁 every day` | Auto-reschedules on completion |
@@ -57,14 +77,14 @@ vault/
 ### Full Example
 
 ```markdown
-- [ ] 09:00—11:30 Code review @2026-06-24 🔼 @1.5h @b:deep-work #project/backend
+- [ ] 09:00—11:30 Code review @2026-06-24 🔼 @1.5h @b:deep-work @ms:mvp #project/backend
 ```
 
 ### Parsing (regex)
 
 Checkbox + text: `/^(\s*[-*+]\s*\[([^\]]*)\]\s*)(.*)$/`
 
-Parsed task object fields: `file`, `line`, `rawLine`, `time`, `taskDate`, `durationMinutes`, `rawText`, `cleanText`, `status`, `priority`, `bucket`.
+Parsed task object fields: `file`, `line`, `rawLine`, `time`, `taskDate`, `durationMinutes`, `rawText`, `cleanText`, `status`, `priority`, `bucket`, `milestone`.
 
 ### Clean task text (remove all directives)
 
@@ -72,6 +92,7 @@ Parsed task object fields: `file`, `line`, `rawLine`, `time`, `taskDate`, `durat
 .replace(/[@⏳📅]\s*\d{4}-\d{2}-\d{2}/g, "")
 .replace(/@\d+(?:\.\d+)?[hm]/g, "")
 .replace(/@(?:bucket|b):[^\s]+/g, "")
+.replace(/@ms:[^\s]+/g, "")
 .replace(/🔺|⏫|🔼|🔽|⏬/g, "")
 .replace(/🔁 every \d* (day|days|week|weeks|month|months)/g, "")
 .replace(/#\S+/g, "")
@@ -99,11 +120,11 @@ Parsed task object fields: `file`, `line`, `rawLine`, `time`, `taskDate`, `durat
 
 ## Settings
 
-Stored in `.obsidian/plugins/flowtime/data.json`.
+Plugin mechanics (timers, display, notifications) are stored in `.obsidian/plugins/flowtime/data.json`. User-facing data (buckets, routines) lives in `Flowtime/*.md` at vault root.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `buckets` | array | [...] | Bucket definitions |
+| `buckets` | array | [...] | Overridden by `Flowtime/Buckets.md` on startup |
 | `dailyCap` | number | 12 | Daily hour budget cap |
 | `projectFrontmatterKey` | string | `type` | Frontmatter field marking a project |
 | `projectFrontmatterValue` | string | `project` | Value of that field |
@@ -113,14 +134,45 @@ Stored in `.obsidian/plugins/flowtime/data.json`.
 | `projectsRoot` | string | "" | Root folder for projects |
 | `quickEntryTargetFile` | string | `daily-note` | Default task target |
 
-```javascript
-// Read
-const data = await plugin.loadData()
-// or: await app.vault.readJson(".obsidian/plugins/flowtime/data.json")
+### Agent Access (v1.7.0)
 
-// Write
+Bucket definitions live in `Flowtime/Buckets.md` as YAML frontmatter — readable without the plugin, syncs with your vault, and agents can edit it directly:
+
+```javascript
+// Read buckets (agent context)
+const fs = require("fs")
+const content = fs.readFileSync("Flowtime/Buckets.md", "utf-8")
+// Parse YAML frontmatter for the "buckets" array
+```
+
+**`Flowtime/Buckets.md` format:**
+
+```markdown
+---
+buckets:
+  - id: deep-work
+    name: Deep Work
+    color: "#4a9eff"
+    weeklyLimit: 20
+    sortOrder: 0
+  - id: admin
+    name: Admin
+    color: "#a8a8a8"
+    weeklyLimit: 5
+    sortOrder: 1
+---
+# Buckets
+
+Time budget categories managed by Flowtime.
+```
+
+```javascript
+// Read settings (inside Obsidian plugin API)
+const data = await plugin.loadData()
+
+// Write settings (via plugin)
 plugin.settings.buckets = newBuckets
-await plugin.saveData(plugin.settings)
+await plugin.saveData(plugin.settings)  // also writes Flowtime/Buckets.md
 ```
 
 ---
@@ -140,6 +192,7 @@ Ask user to run via `Cmd+P`:
 | `insert-weekly-dashboard` | Insert weekly dashboard | — | Weekly review blocks |
 | `new-project` | New Project | — | Creates project folder + note |
 | `add-bucket` | Add Bucket | — | Bucket creation modal |
+| `extract-to-new-note` | Extract to new note | `Ctrl+G` / `Cmd+G` | Extracts selection to a new note (or appends to existing [[wikilink]] page) |
 | `onboard` | Onboard / Migrate | — | Migrates old formats |
 
 ---
@@ -190,6 +243,7 @@ const exists = await app.vault.adapter.exists(path)
 - Read vault before making changes
 - Check `status !== "x"` for active tasks
 - Use `@b:<id>` for bucket assignment (short form)
+- Use `@ms:<name>` for milestone assignment
 - Use `#project/<Name>` for cross-folder project references
 - Respect daily budget cap (default 12h)
 - Use natural dates (`@today`, `@tomorrow`) for readability

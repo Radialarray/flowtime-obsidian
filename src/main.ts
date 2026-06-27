@@ -34,7 +34,7 @@ import { ListEnhancer } from "./list-enhancer";
 import { WeekplanRenderer } from "./weekplan-renderer";
 import { AddTaskSuggest, AtCompletionsSuggest } from "./suggests/at-completions";
 import { TaskIndex } from "./task-index";
-import type { FlowtimeSettings, TaskRow } from "./types";
+import type { FlowtimeSettings, TaskRow, BucketDef } from "./types";
 
 /* ─── Inline types ─── */
 
@@ -89,6 +89,10 @@ export default class FlowtimePlugin extends Plugin {
 		if (!this.settings.buckets || this.settings.buckets.length === 0) {
 			this.settings.buckets = DEFAULT_SETTINGS.buckets;
 		}
+
+		// v1.7.0: Flowtime/Buckets.md is the canonical source for bucket definitions.
+		// Agents write YAML frontmatter here — the plugin reads it on startup.
+		await this._loadBucketsMarkdown();
 
 		// v0.7.0: One-time migration of routinesFolder from old default
 		if (
@@ -1638,4 +1642,161 @@ Process them with **Flowtime: Process Inbox**.
 			);
 		}
 	}
+
+	// ═══ v1.7.0: Bucket definitions in Flowtime/Buckets.md ═══
+
+	/**
+	 * v1.7.0: Load bucket definitions from Flowtime/Buckets.md frontmatter.
+	 *
+	 * The markdown file is the canonical source — agents write YAML frontmatter
+	 * here, the plugin reads it on startup. If the file doesn't exist yet,
+	 * it's created from existing settings (bootstrapping).
+	 */
+	async _loadBucketsMarkdown(): Promise<void> {
+		const path = "Flowtime/Buckets.md";
+		try {
+			if (await this.app.vault.adapter.exists(path)) {
+				const raw = await this.app.vault.adapter.read(path);
+				const fm = _parseYamlFrontmatter(raw);
+				if (fm?.buckets && Array.isArray(fm.buckets) && fm.buckets.length > 0) {
+					const valid = (fm.buckets as Record<string, unknown>[]).filter(
+						(b) => b && typeof b.id === "string" && typeof b.name === "string",
+					);
+					if (valid.length > 0) {
+						this.settings.buckets = valid as unknown as BucketDef[];
+						console.log(`Flowtime: Loaded ${valid.length} bucket(s) from ${path}`);
+					}
+				}
+			} else {
+				// Bootstrap: create the markdown file from existing settings
+				if (this.settings.buckets && this.settings.buckets.length > 0) {
+					await this._saveBucketsMarkdown(this.settings.buckets);
+				}
+			}
+		} catch (_) {
+			/* invalid YAML or read error — keep settings buckets */
+		}
+	}
+
+	/**
+	 * v1.7.0: Write bucket definitions to Flowtime/Buckets.md.
+	 *
+	 * Called by saveData() after every settings save to keep the markdown
+	 * file in sync with plugin settings. Also creates the Flowtime/ directory
+	 * if it doesn't exist.
+	 */
+	async _saveBucketsMarkdown(buckets: BucketDef[]): Promise<void> {
+		try {
+			await this._ensureFlowtimeDir();
+			const md = _generateBucketsMarkdown(buckets);
+			await this.app.vault.adapter.write("Flowtime/Buckets.md", md);
+		} catch (_) {
+			/* best-effort — settings are still in data.json */
+		}
+	}
+
+	/**
+	 * v1.7.0: Override saveData to sync buckets to Flowtime/Buckets.md.
+	 *
+	 * Every settings save (from settings UI, onboard, etc.) also writes
+	 * the canonical Buckets.md. The data.json copy is kept for Obsidian Sync.
+	 */
+	async saveData(data: FlowtimeSettings): Promise<void> {
+		await this._saveBucketsMarkdown(data.buckets || []);
+		await super.saveData(data as unknown as Record<string, unknown>);
+	}
+
+	/** Ensure the Flowtime/ directory exists at vault root. */
+	async _ensureFlowtimeDir(): Promise<void> {
+		try {
+			if (!(await this.app.vault.adapter.exists("Flowtime"))) {
+				await this.app.vault.createFolder("Flowtime");
+			}
+		} catch (_) {
+			/* ignore */
+		}
+	}
+}
+
+// ═══ Pure helpers (module-level) ═══
+
+/**
+ * Parse a simple YAML frontmatter block from markdown content.
+ * Handles nested arrays of objects (e.g., bucket definitions).
+ */
+export function _parseYamlFrontmatter(content: string): Record<string, unknown> | null {
+	const m = content.match(/^---\n?([\s\S]*?)\n?---/);
+	if (!m) return null;
+
+	const fm: Record<string, unknown> = {};
+	const lines = m[1].split("\n");
+	let i = 0;
+
+	while (i < lines.length) {
+		const line = lines[i];
+		if (!line.trim() || line.trim().startsWith("#")) { i++; continue; }
+
+		const kv = line.match(/^(\w[\w\s]*):\s*(.*)/);
+		if (!kv) { i++; continue; }
+
+		const key = kv[1].trim();
+		const val = kv[2].trim();
+
+		if (val) {
+			fm[key] = val;
+			i++;
+		} else {
+			// Indented array of objects
+			const items: Record<string, unknown>[] = [];
+			i++;
+			while (i < lines.length) {
+				const itemStart = lines[i].match(/^\s{2}-\s(\w+):\s*(.*)/);
+				if (itemStart) {
+					const item: Record<string, unknown> = {};
+					item[itemStart[1]] = _parseYamlScalar(itemStart[2].trim());
+					i++;
+					while (i < lines.length && /^\s{4}\w+:\s/.test(lines[i])) {
+						const prop = lines[i].match(/^\s{4}(\w+):\s*(.*)/);
+						if (prop) {
+							item[prop[1]] = _parseYamlScalar(prop[2].trim());
+						}
+						i++;
+					}
+					items.push(item);
+				} else {
+					break;
+				}
+			}
+			fm[key] = items;
+		}
+	}
+	return Object.keys(fm).length > 0 ? fm : null;
+}
+
+/** Parse a YAML scalar value (quoted string, number, boolean, plain string). */
+function _parseYamlScalar(val: string): string | number | boolean {
+	if ((val.startsWith("\"") && val.endsWith("\"")) || (val.startsWith("'") && val.endsWith("'"))) {
+		return val.slice(1, -1);
+	}
+	if (val === "true") return true;
+	if (val === "false") return false;
+	const num = Number(val);
+	if (!isNaN(num) && val.trim() !== "") return num;
+	return val;
+}
+
+/**
+ * Generate a Flowtime/Buckets.md file content from bucket definitions.
+ */
+export function _generateBucketsMarkdown(buckets: BucketDef[]): string {
+	let md = "---\nbuckets:\n";
+	for (const b of buckets) {
+		md += `  - id: "${b.id}"\n`;
+		md += `    name: "${b.name}"\n`;
+		md += `    color: "${b.color}"\n`;
+		md += `    weeklyLimit: ${b.weeklyLimit}\n`;
+		md += `    sortOrder: ${b.sortOrder}\n`;
+	}
+	md += "---\n\n# Buckets\n\nTime budget categories managed by Flowtime.\n";
+	return md;
 }

@@ -8,7 +8,7 @@ The workflow: capture freely into your inbox, tag with `@today` or `@b:deep-work
 
 ## What it does
 
-Eight code block types show your tasks in different ways:
+Seven code block types show your tasks in different ways:
 
 | Block | Mode | Scope |
 |-------|------|-------|
@@ -56,11 +56,13 @@ Also: `@inbox` anywhere on a line (captures preceding text to inbox) and `@p:Pro
 
 ## Extract to new note
 
-**Extract to new note (`Ctrl+G` / `Cmd+G`)** — select one or more lines in a note, press the shortcut, and Flowtime creates a new note in the same folder from your selection. The first selected line becomes the title, stripped of list markers, headings, and `@`-directives. All remaining selected lines move to the new note, and the first line is replaced with a `[[wikilink]]` pointing to it. The new note opens in a new tab.
+**Extract to new note (`Ctrl+G` / `Cmd+G`)** — select one or more lines in a note, press the shortcut, and Flowtime creates a new note in the same folder from your selection. The first selected line becomes the title, stripped of list markers, headings, and `@`-directives. All remaining selected lines move to the new note, and the selection is replaced with a `[[wikilink]]` pointing to it. The new note opens in a new tab.
 
 If a file with that title already exists, Flowtime appends ` 2`, ` 3`, etc. to avoid overwrites.
 
 **Undo extract** — run from the command palette to delete the last extracted file. Also attempts `editor.undo()` to revert the source text. Use this within 30 seconds of the extraction.
+
+**Append to existing page** — if the first selected line already contains a `[[wikilink]]` to an existing page (e.g. `[[Meeting Notes]] some context`), Flowtime skips creating a new note. Instead it appends the remaining selected lines to that existing page and replaces the selection with just the `[[wikilink]]`. The target page is opened in a new tab.
 
 Examples:
 
@@ -92,6 +94,23 @@ With a task as the first line, `@`-directives are stripped from the filename and
 # New note Review PR.md
 - [ ] Review PR @today @1h @b:deep-work
 - [ ] Merge branch
+```
+
+With an existing page link as the first line, content appends to that page:
+
+```markdown
+# Before selection (3 lines)
+[[Active Sprint]]
+- [ ] New bug fix @today @30m
+
+# After — content appended to Active Sprint.md, link stays in current note
+[[Active Sprint]]
+
+# Active Sprint.md now has the new task appended
+## Active Sprint
+- [ ] Fix login bug @today @1h @b:deep-work
+- [ ] Review PR @tomorrow
+- [ ] New bug fix @today @30m
 ```
 
 ## Views
@@ -147,7 +166,7 @@ A lightweight alternative to the table — tasks as compact div rows:
 - **⠿ Drag handle** — grab to reorder. Tasks get a sort index (`@i:number` in the source file) that persists the new order. Drop between two timed tasks to assign a midpoint time; drop next to one timed task to share its time.
 - **Time inputs** — tasks without a time show small start/duration fields. Type a value and it auto-saves.
 - **Inline timer** — each row has ▶ play, time display, ↺ reset. Same countdown behavior as the table view.
-- **Hover popover** — hover on task text: a floating card shows project, bucket, sprint, priority, date, and source file.
+- **Hover popover** — hover on task text: a floating card shows project, bucket, milestone, priority, date, and source file.
 - **Table freeze** — when dragging, the list stays in place (no scrolling) so you can reorder without losing your place.
 
 ## Cross-table refresh
@@ -165,11 +184,46 @@ A task belongs to a project if:
 
 Tasks that don't match any project show under "Other".
 
+## Milestones
+
+Milestones are lightweight grouping markers for project tasks. No settings or definitions needed — they emerge naturally from your markdown.
+
+**Tagging tasks:** Add `@ms:milestone-name` to any task line. The milestone appears as a column in table views (toggle it on via the ☰ Columns menu) and you can filter or group by it in any view.
+
+```markdown
+- [ ] Launch landing page @2026-07-01 @ms:mvp @1h @b:deep-work
+- [ ] Set up analytics @2026-07-02 @ms:mvp @30m
+```
+
+**Defining milestones in project notes:** Use `## Name @ms` headings in a project's folder note or Tasks.md. Place tasks underneath the heading — they become part of that milestone in the markdown structure. Add freeform text between tasks to describe goals, scope, or notes for that milestone.
+
+```markdown
+## 🚀 MVP Launch @ms
+
+Core goals for the initial release:
+- Stripe integration for payments
+- Email verification flow
+
+- [ ] Landing page @2026-07-01 @ms:mvp @1h
+- [ ] Payment integration @2026-07-05 @ms:mvp @3h
+
+## 📈 Growth Phase @ms
+
+Post-launch improvements focused on retention and referrals.
+
+- [ ] Referral system @2026-08-01 @ms:growth @2h
+- [ ] A/B testing framework @2026-08-10 @ms:growth @1.5h
+```
+
+Unlike the old sprints feature (removed in v2.0), milestones require no settings, no color pickers, and no start/end dates in the plugin UI. They live entirely in your markdown — the plugin simply exposes them as sortable, filterable, groupable tags.
+
 ## Time budgets (buckets)
 
-Organize tasks into categories with weekly hour limits. Built-in buckets: Deep Work, Admin, Meetings (add your own in settings). Tag a task with `@b:deep-work` or `@bucket:deep-work`.
+Organize tasks into categories with weekly hour limits. Built-in buckets: Deep Work, Admin, Meetings. Define your own in `Flowtime/Buckets.md` (YAML frontmatter) or via settings. Tag a task with `@b:deep-work` or `@bucket:deep-work`.
 
 The `flowtime-buckets` view shows progress bars per bucket — normal (accent), warning (amber >80%), over (red >100%). There's also a configurable daily cap with a progress bar in the today view.
+
+Bucket definitions live in `Flowtime/Buckets.md` at vault root — a plain markdown file that syncs and is readable without the plugin. See [Agent access](#agent-access-v170) below.
 
 ## Session history
 
@@ -192,7 +246,7 @@ Mark tasks with `🔁` to make them repeat:
 | `🔁 every month on 15th` | 15th of every month |
 | `🔁 every 3 days` | Every 3 days from last generation |
 
-Put these lines in `.md` files inside `Routines/` (configurable). The plugin reads the folder, figures out what's due, and writes real task instances into your daily notes. Generation history is tracked in the plugin folder to prevent dupes across synced devices.
+Put these lines in `.md` files inside `Flowtime/Routines/` (configurable). The plugin reads the folder, figures out what's due, and writes real task instances into your daily notes. Generation history is tracked in the plugin folder to prevent dupes across synced devices.
 
 Delete an instance and it stays gone — the engine won't recreate it. Vacation mode (toggle in settings or the weekplan toolbar) pauses all generation.
 
@@ -348,7 +402,7 @@ In Settings → Flowtime.
 | **Buckets** | | |
 | Bucket tag prefix | `budget/` | Prefix for bucket inline tags |
 | Daily budget cap | 12h | Maximum scheduled hours before warning |
-| Bucket definitions | Deep Work/Admin/Meetings | Each has name, color, weekly limit |
+| Bucket definitions | `Flowtime/Buckets.md` | Canonical source (YAML frontmatter). Also editable in settings. |
 | **Notifications** | | |
 | Timer sound | on | Beep when a countdown timer reaches zero |
 | Notice duration | 4000ms | Notification display time |
@@ -360,7 +414,7 @@ In Settings → Flowtime.
 | Show timer in status bar | on | Show/hide the persistent countdown |
 | Content width | 0 | Slider (0–1920px). 0 = use Obsidian default width |
 | **Routines** | | |
-| Routines folder | `Routines/` | Folder for routine template `.md` files |
+| Routines folder | `Flowtime/Routines/` | Folder for routine template `.md` files |
 | Vacation mode | off | Pause all routine generation |
 | Auto-generate on startup | on | Run routine engine when plugin loads |
 | Auto-generate on open daily note | on | Generate when today's daily note is opened |
@@ -371,6 +425,41 @@ In Settings → Flowtime.
 | Daily template | (built-in) | Template for the daily dashboard command |
 | Weekly template | (built-in) | Template for the weekly dashboard command |
 | Project template | (built-in) | Template for new project notes |
+
+## Agent access (v1.7.0)
+
+Flowtime stores user-facing data as plain markdown in the `Flowtime/` directory at your vault root. This means AI coding agents can read and write bucket definitions, routine templates, and sprint plans without needing access to Obsidian plugin internals.
+
+```
+vault/
+├── Flowtime/              ← Agent-accessible markdown (syncs with your vault)
+│   ├── Buckets.md         ← Bucket definitions (YAML frontmatter)
+│   └── Routines/          ← Routine template .md files
+├── .obsidian/
+│   └── plugins/flowtime/
+│       ├── data.json      ← Plugin mechanics (timerSound, dailyCap, etc.)
+│       └── sessions/      ← Time-tracking session data
+```
+
+**`Flowtime/Buckets.md` format:**
+
+```markdown
+---
+buckets:
+  - id: deep-work
+    name: Deep Work
+    color: "#4a9eff"
+    weeklyLimit: 20
+    sortOrder: 0
+  - id: admin
+    name: Admin
+    color: "#a8a8a8"
+    weeklyLimit: 5
+    sortOrder: 1
+---
+```
+
+The plugin reads this file on startup and writes changes back on every settings save. Agents edit the YAML frontmatter directly — reload Obsidian to pick up changes.
 
 ## Requirements
 

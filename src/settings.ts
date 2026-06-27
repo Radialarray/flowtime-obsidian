@@ -57,7 +57,7 @@ export const DEFAULT_SETTINGS: FlowtimeSettings = {
     },
   ],
 
-  routinesFolder: "Routines/",
+  routinesFolder: "Flowtime/Routines/",
   vacationMode: false,
   autoGenerateOnStartup: true,
   autoGenerateOnOpenDaily: true,
@@ -187,6 +187,10 @@ export class FlowtimeSettingsTab extends PluginSettingTab {
     // ═══ Buckets & Budget ═══
     _g = containerEl.createEl("div", { cls: "ft-settings-group" });
     _g.createEl("h2", { text: "Buckets & Budget" });
+    _g.createEl("p", {
+      text: "Buckets are stored in Flowtime/Buckets.md (canonical). Edits here sync to both the markdown file and plugin settings.",
+      cls: "setting-item-description",
+    }).style.opacity = "0.7";
 
     new Setting(_g)
       .setName("Bucket tag prefix")
@@ -558,10 +562,10 @@ export class FlowtimeSettingsTab extends PluginSettingTab {
 
     new Setting(_g)
       .setName("Routines folder")
-      .setDesc("Folder where routine template markdown files live. Each task line with 🔁 becomes a routine.")
+      .setDesc("Folder inside Flowtime/ where routine template markdown files live.")
       .addText((text) =>
         text
-          .setPlaceholder("Routines/")
+          .setPlaceholder("Flowtime/Routines/")
           .setValue(this.plugin.settings.routinesFolder)
           .onChange(async (value) => {
             this.plugin.settings.routinesFolder = value;

@@ -1,5 +1,7 @@
 # Flowtime Subtasks & Sprints — Plan
 
+> **Sprints removed in v2.0** — replaced by Milestones (`@ms:name` tag, no settings definitions). See `README.md#milestones` for current usage. Subtasks remain via markdown indentation.
+
 > Tree-based task hierarchy via markdown indentation, surfaced in the table view with collapse/expand, per-subtask dates and timers, plus future sprint support as a tag-based grouping layer.
 
 ---

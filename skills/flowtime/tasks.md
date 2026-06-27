@@ -92,7 +92,7 @@ Date helpers:
 1. Determine target file (daily note, active file, or project note)
 2. Build task line:
    ```
-   - [ ] Task description @2026-06-24 @1.5h @b:deep-work #project/ProjectName
+   - [ ] Task description @2026-06-24 @1.5h @b:deep-work @ms:milestone-name #project/ProjectName
    ```
 3. Append:
    ```javascript
@@ -128,6 +128,12 @@ line = line.replace(/[@⏳📅]\s*\d{4}-\d{2}-\d{2}/g, "").trimEnd()
 ```javascript
 line = line.replace(/@(?:bucket|b):[^\s]+/g, "").trimEnd()
 if (bucketId) line = line + ` @b:${bucketId}`
+```
+
+**Change milestone:**
+```javascript
+line = line.replace(/@ms:[^\s]+/g, "").trimEnd()
+if (milestoneName) line = line + ` @ms:${milestoneName}`
 ```
 
 **Change duration:**
@@ -168,6 +174,38 @@ Pattern: `🔁 every <period>`. When completing a recurring task:
 
 **Supported periods:** `every day`, `every week`, `every month`, `every 2 weeks`, etc.
 
+### Milestones
+
+Milestones group tasks within a project. Two mechanisms:
+
+**Tag tasks directly:** `@ms:milestone-name` on any task line. Used for filtering, grouping, and the Milestone column in table views.
+
+```
+- [ ] Landing page @today @ms:mvp @2h
+```
+
+**Define in project notes:** Use `## Name @ms` headings in a project's folder note or Tasks.md. Tasks listed under the heading are naturally part of that milestone. Freeform text between tasks describes goals.
+
+```markdown
+## 🚀 MVP Launch @ms
+
+Key goals: payment integration, email verification.
+
+- [ ] Landing page @2026-07-01 @ms:mvp @1h
+- [ ] Payment integration @2026-07-05 @ms:mvp @3h
+```
+
+**Change milestone on a task:**
+```javascript
+line = line.replace(/@ms:[^\s]+/g, "").trimEnd()
+if (milestoneName) line = line + ` @ms:${milestoneName}`
+```
+
+**Remove milestone:**
+```javascript
+line = line.replace(/@ms:[^\s]+/g, "").trimEnd()
+```
+
 ---
 
 ## 3. CODE BLOCKS
@@ -188,7 +226,7 @@ Add these to any markdown note:
 
 ## 4. SESSIONS (Time Tracking)
 
-Stored as NDJSON in `.obsidian/plugins/flowtime/sessions/YYYY-MM-DD.ndjson`.
+Stored as NDJSON in `.flowtime/sessions/YYYY-MM-DD.ndjson`.
 
 ### Format
 
@@ -204,7 +242,7 @@ Completion records:
 ### READ Sessions
 
 ```javascript
-const sessionDir = app.vault.configDir + "/plugins/flowtime/sessions"
+const sessionDir = ".flowtime/sessions"
 const listing = await app.vault.adapter.list(sessionDir)
 const files = listing.files.filter(f => f.endsWith(".ndjson"))
 
@@ -280,5 +318,11 @@ Design mockup @p:Website @today @2h         ← auto-processed, routes to Websit
 
 ### "I want a new bucket called Design"
 
+**Inside Obsidian:**
 1. Create: `id=design`, `name=Design`, `color=#ff6b6b`, `weeklyLimit=15`, `sortOrder=3`
 2. Add to `plugin.settings.buckets`, save
+
+**Headless / agent context (v1.7.0+):**
+1. Edit YAML frontmatter in `Flowtime/Buckets.md`
+2. Add the new bucket entry to the `buckets:` array
+3. Notify user: "Reload Obsidian to pick up changes"

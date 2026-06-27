@@ -89,7 +89,7 @@ After creating the project, scaffold two more files:
 ````markdown
 # ProjectName — Tasks
 
-## 🎯 Active Sprint
+   ## 🎯 Milestones @ms
 
 ```flowtime-project
 ```
@@ -136,7 +136,7 @@ After creating the project, scaffold two more files:
 
 ## 2. BUCKETS (Time Budgets)
 
-Time-budget categories with weekly limits. Stored in plugin settings.
+Time-budget categories with weekly limits. Canonical source is `Flowtime/Buckets.md` (v1.7.0+) — a markdown file with YAML frontmatter that agents can read and write directly.
 
 ### Default Buckets
 
@@ -146,19 +146,48 @@ Time-budget categories with weekly limits. Stored in plugin settings.
 | admin | Admin | #a8a8a8 | 5h |
 | meetings | Meetings | #e6a700 | 5h |
 
+### Canonical File: Flowtime/Buckets.md (v1.7.0+)
+
+Bucket definitions live in a markdown file at vault root:
+
+```markdown
+---
+buckets:
+  - id: deep-work
+    name: Deep Work
+    color: "#4a9eff"
+    weeklyLimit: 20
+    sortOrder: 0
+  - id: admin
+    name: Admin
+    color: "#a8a8a8"
+    weeklyLimit: 5
+    sortOrder: 1
+---
+# Buckets
+```
+
+The plugin reads this file on startup and loads the `buckets` array from the YAML frontmatter. Settings UI edits sync back to this file. Agents write YAML frontmatter — no Obsidian API needed.
+
 ### READ Buckets
 
+**Inside Obsidian (plugin API):**
 ```javascript
 plugin.settings.buckets
 // Returns: [{ id, name, color, weeklyLimit, sortOrder }, ...]
+```
 
-// From vault data directly:
-const data = await app.vault.readJson(".obsidian/plugins/flowtime/data.json")
-const buckets = data.buckets
+**Headless / agent context:**
+```javascript
+// Read Flowtime/Buckets.md and parse YAML frontmatter
+const fs = require("fs")
+const content = fs.readFileSync("Flowtime/Buckets.md", "utf-8")
+// Extract between --- markers, parse the buckets: array
 ```
 
 ### CREATE Bucket
 
+**Inside Obsidian:**
 ```javascript
 plugin.settings.buckets.push({
   id: "new-bucket-id",        // lowercase, hyphenated, auto-from-name
@@ -168,14 +197,30 @@ plugin.settings.buckets.push({
   sortOrder: plugin.settings.buckets.length,
 });
 await plugin.saveData(plugin.settings);
+// Also writes Flowtime/Buckets.md automatically
 ```
 
 **Plugin command:** `Cmd+P` → "Flowtime: Add Bucket".
+
+**Headless / agent context:**
+Edit the YAML frontmatter in `Flowtime/Buckets.md`:
+```yaml
+buckets:
+  - id: deep-work
+    ...
+  - id: new-bucket-id
+    name: New Bucket
+    color: "#4a9eff"
+    weeklyLimit: 10
+    sortOrder: 3
+```
+Then notify user: "Reload Obsidian to pick up changes"
 
 **Naming:** `name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")`
 
 ### UPDATE Bucket
 
+**Inside Obsidian:**
 ```javascript
 const bucket = plugin.settings.buckets.find(b => b.id === "deep-work");
 if (bucket) {
@@ -185,12 +230,19 @@ if (bucket) {
 }
 ```
 
+**Headless / agent context:**
+Edit the YAML entry in `Flowtime/Buckets.md` directly.
+
 ### DELETE Bucket
 
+**Inside Obsidian:**
 ```javascript
 plugin.settings.buckets = plugin.settings.buckets.filter(b => b.id !== "deep-work");
 await plugin.saveData(plugin.settings);
 ```
+
+**Headless / agent context:**
+Remove the YAML entry from `Flowtime/Buckets.md`.
 
 ### Assigning Tasks to Buckets
 

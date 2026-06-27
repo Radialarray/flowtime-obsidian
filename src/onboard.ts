@@ -174,20 +174,20 @@ async function detectSetupState(
         }
       }
     }
-  } catch (_: unknown) {}
+  } catch (_: unknown) { /* noop */ }
 
   // Dashboard: check if Dashboard.md exists at vault root
   try {
     setup.dashboardDone =
       !!vault.getAbstractFileByPath("Dashboard.md") ||
       !!vault.getAbstractFileByPath("Dashboard Weekly.md");
-  } catch (_: unknown) {}
+  } catch (_: unknown) { /* noop */ }
 
   // Today note: check if Today.md (or custom path) exists
   try {
     const todayPath = plugin.settings.todayNotePath || "Today.md";
     setup.todayNoteDone = !!vault.getAbstractFileByPath(todayPath);
-  } catch (_: unknown) {}
+  } catch (_: unknown) { /* noop */ }
 
   // Buckets: check if buckets have been customized from defaults
   try {
@@ -203,7 +203,7 @@ async function detectSetupState(
     );
     setup.bucketsDone =
       buckets.length > 0 && (hasCustom || hasExtra || buckets.length !== 3);
-  } catch (_: unknown) {}
+  } catch (_: unknown) { /* noop */ }
 
   // Daily notes: check if daily notes folder exists with files
   try {
@@ -222,7 +222,7 @@ async function detectSetupState(
         }
       }
     }
-  } catch (_: unknown) {}
+  } catch (_: unknown) { /* noop */ }
 
   // Routines: check if flowtime/routines/ has .md files
   try {
@@ -238,7 +238,7 @@ async function detectSetupState(
       );
       setup.routinesDone = hasRoutineFiles;
     }
-  } catch (_: unknown) {}
+  } catch (_: unknown) { /* noop */ }
 
   return setup;
 }
@@ -849,7 +849,7 @@ async function applySettings(
         const raw = await plugin.app.vault.adapter.read(dailyNotesPath);
         Object.assign(existingConfig, JSON.parse(raw));
       }
-    } catch (_: unknown) {}
+    } catch (_: unknown) { /* noop */ }
     existingConfig.folder = folder;
     if (!existingConfig.format) existingConfig.format = "YYYY-MM-DD";
     await plugin.app.vault.adapter.write(

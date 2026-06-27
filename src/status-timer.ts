@@ -1,17 +1,36 @@
-import type { FlowtimeSettings } from "./types";
+/**
+ * StatusTimer — status bar display for the global timer.
+ *
+ * v2.0 Refactored to subscribe to TimerManager (global state) instead of
+ * managing its own interval. Provides backward-compatible API for
+ * command-modal ad-hoc timer creation.
+ */
+
+import type { FlowtimeSettings, GlobalTimerState } from "./types";
+
+/* ─── TimerManager interface (subset used by StatusTimer) ─── */
+
+interface TimerManagerRef {
+  start(
+    taskRef: { filePath: string; line: number; taskText: string; bucket?: string },
+    durationSeconds: number,
+    pomodoro?: { enabled: boolean; sessionMinutes: number; breakMinutes: number; longBreakMinutes: number; sessionsBeforeLongBreak: number },
+  ): void;
+  pause(): void;
+  resume(): void;
+  stop(): void;
+  getState(): GlobalTimerState;
+  subscribe(fn: (state: GlobalTimerState) => void): () => void;
+  isActive(): boolean;
+}
+
+/* ─── Public API types ─── */
 
 interface TimerData {
   taskName: string;
   remaining: number;
   total: number;
   interval: ReturnType<typeof setInterval> | null;
-}
-
-interface SessionData {
-  taskText: string;
-  startTime: string;
-  endTime: string;
-  durationMinutes: number;
 }
 
 interface TimerState {
@@ -25,11 +44,13 @@ interface StatusTimerOpts {
   statusBarItem: HTMLElement;
   settings: FlowtimeSettings;
   notify: (msg: string, isError?: boolean) => void;
-  onSessionEnd: (data: SessionData) => Promise<void>;
-  onTimerStop: () => void;
+  timerManager: TimerManagerRef;
 }
 
+/* ─── Factory ─── */
+
 export function createStatusTimer(opts: StatusTimerOpts): {
+  /** Start an ad-hoc timer (no file reference) — for command-modal backward compat */
   start(taskName: string, totalSeconds: number): void;
   stop(): void;
   pause(): void;
@@ -37,108 +58,87 @@ export function createStatusTimer(opts: StatusTimerOpts): {
   getState(): TimerState | null;
   updateDisplay(): void;
   statusBarItem: HTMLElement;
+  /** Current timer data for backward compat (check if timer is active) */
   currentTimer: TimerData | null;
   settings: FlowtimeSettings;
   notify: (msg: string, isError?: boolean) => void;
-  onSessionEnd: (data: SessionData) => Promise<void>;
-  onTimerStop: () => void;
+  destroy(): void;
 } {
-  const { statusBarItem, settings, notify, onSessionEnd, onTimerStop } = opts;
+  const { statusBarItem, settings, notify, timerManager } = opts;
 
-  let currentTimer: TimerData | null = null;
-  let _currentTaskName: string = "";
-  let _startTime: Date | null = null;
-  let _sessionRecorded: boolean = false;
+  let _cached: TimerData | null = null;
+  let _unsubscribe: (() => void) | null = null;
 
-  statusBarItem.addClass("flowtime-status-timer");
-  updateDisplay();
+  /* ── Helpers ── */
+
+  function _fmt(sec: number): string {
+    if (sec <= 0) return "00:00";
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    if (h > 0)
+      return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  }
+
+  /* ── Display update (called by subscription) ── */
+
+  function _onState(s: GlobalTimerState): void {
+    if (!s.taskRef || s.total <= 0) {
+      _cached = null;
+    } else {
+      _cached = {
+        taskName: s.taskRef.taskText,
+        remaining: s.remaining,
+        total: s.total,
+        interval: s.isRunning ? (1 as unknown as ReturnType<typeof setInterval>) : null,
+      };
+    }
+    updateDisplay();
+  }
+
+  /* ── Public methods ── */
 
   function start(taskName: string, totalSeconds: number): void {
-    stop();
-    _currentTaskName = taskName;
-    _startTime = new Date();
-    _sessionRecorded = false;
-
-    currentTimer = {
-      taskName,
-      remaining: totalSeconds,
-      total: totalSeconds,
-      interval: null,
-    };
-
-    currentTimer.interval = window.setInterval(() => {
-      currentTimer!.remaining--;
-      updateDisplay();
-
-      if (currentTimer!.remaining <= 0) {
-        stop();
-        notify("\u23F0 Time\u2019s up! " + taskName);
-      }
-    }, 1000);
-
-    updateDisplay();
+    timerManager.start(
+      { filePath: "", line: -1, taskText: taskName },
+      totalSeconds,
+    );
   }
 
   function stop(): void {
-    if (currentTimer?.interval) {
-      window.clearInterval(currentTimer.interval);
+    const state = timerManager.getState();
+    const taskText = state.taskRef?.taskText || "unknown";
+    const elapsed = Math.round((state.total - state.remaining) / 60) || 0;
+    timerManager.stop();
+    if (elapsed > 0) {
+      notify(`\u23F1 Timer stopped: ${taskText} (${elapsed}m)`);
+    } else {
+      notify(`\u23F1 Timer stopped: ${taskText}`);
     }
-    const hadTimer = !!currentTimer;
-    if (currentTimer && !_sessionRecorded) {
-      _sessionRecorded = true;
-      if (onSessionEnd && _startTime) {
-        const now = new Date();
-        onSessionEnd({
-          taskText: _currentTaskName,
-          startTime: _startTime.toISOString(),
-          endTime: now.toISOString(),
-          durationMinutes: Math.round((now.getTime() - _startTime.getTime()) / 60000),
-        });
-      }
-    }
-    if (hadTimer && onTimerStop) {
-      onTimerStop();
-    }
-    currentTimer = null;
-    updateDisplay();
   }
 
   function pause(): void {
-    if (currentTimer?.interval) {
-      window.clearInterval(currentTimer.interval);
-      currentTimer.interval = null;
-    }
-    updateDisplay();
+    timerManager.pause();
   }
 
   function toggle(): void {
-    if (!currentTimer) return;
-
-    if (currentTimer.interval) {
-      window.clearInterval(currentTimer.interval);
-      currentTimer.interval = null;
-    } else if (currentTimer.remaining > 0) {
-    currentTimer.interval = window.setInterval(() => {
-        currentTimer!.remaining--;
-        updateDisplay();
-
-        if (currentTimer!.remaining <= 0) {
-          stop();
-          notify("\u23F0 Time\u2019s up! " + currentTimer!.taskName);
-        }
-      }, 1000);
+    const state = timerManager.getState();
+    if (!state.taskRef) return;
+    if (state.isRunning) {
+      timerManager.pause();
+    } else {
+      timerManager.resume();
     }
-
-    updateDisplay();
   }
 
   function getState(): TimerState | null {
-    if (!currentTimer) return null;
+    if (!_cached) return null;
     return {
-      taskName: currentTimer.taskName,
-      remaining: currentTimer.remaining,
-      total: currentTimer.total,
-      isRunning: !!currentTimer.interval,
+      taskName: _cached.taskName,
+      remaining: _cached.remaining,
+      total: _cached.total,
+      isRunning: !!_cached.interval,
     };
   }
 
@@ -148,29 +148,34 @@ export function createStatusTimer(opts: StatusTimerOpts): {
       return;
     }
 
-    if (!currentTimer) {
+    if (!_cached) {
       statusBarItem.setText("\u23F1 --");
       return;
     }
 
-    const fmt = (sec: number): string => {
-      if (sec <= 0) return "00:00";
-      const h = Math.floor(sec / 3600);
-      const m = Math.floor((sec % 3600) / 60);
-      const s = sec % 60;
-      if (h > 0)
-        return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-      return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-    };
-
-    const icon = currentTimer.interval ? "\u23F8" : "\u25B6";
+    const icon = _cached.interval ? "\u23F8" : "\u25B6";
     const name =
-      currentTimer.taskName.length > 30
-        ? currentTimer.taskName.slice(0, 27) + "\u2026"
-        : currentTimer.taskName;
+      _cached.taskName.length > 30
+        ? _cached.taskName.slice(0, 27) + "\u2026"
+        : _cached.taskName;
 
-    statusBarItem.setText(`\u23F1 ${fmt(currentTimer.remaining)} \u2014 ${name}  ${icon}`);
+    statusBarItem.setText(
+      `\u23F1 ${_fmt(_cached.remaining)} \u2014 ${name}  ${icon}`,
+    );
   }
+
+  function destroy(): void {
+    if (_unsubscribe) {
+      _unsubscribe();
+      _unsubscribe = null;
+    }
+  }
+
+  /* ── Initialize ── */
+
+  statusBarItem.addClass("flowtime-status-timer");
+  _unsubscribe = timerManager.subscribe(_onState);
+  updateDisplay();
 
   return {
     start,
@@ -180,28 +185,26 @@ export function createStatusTimer(opts: StatusTimerOpts): {
     getState,
     updateDisplay,
     statusBarItem,
-    currentTimer,
+    get currentTimer(): TimerData | null { return _cached; },
     settings,
     notify,
-    onSessionEnd,
-    onTimerStop,
+    destroy,
   };
 }
 
 // Backward-compatible class wrapper
 export class StatusTimer {
-  declare start: ReturnType<typeof createStatusTimer>['start'];
-  declare stop: ReturnType<typeof createStatusTimer>['stop'];
-  declare pause: ReturnType<typeof createStatusTimer>['pause'];
-  declare toggle: ReturnType<typeof createStatusTimer>['toggle'];
-  declare getState: ReturnType<typeof createStatusTimer>['getState'];
-  declare updateDisplay: ReturnType<typeof createStatusTimer>['updateDisplay'];
-  declare statusBarItem: ReturnType<typeof createStatusTimer>['statusBarItem'];
-  declare currentTimer: ReturnType<typeof createStatusTimer>['currentTimer'];
-  declare settings: ReturnType<typeof createStatusTimer>['settings'];
-  declare notify: ReturnType<typeof createStatusTimer>['notify'];
-  declare onSessionEnd: ReturnType<typeof createStatusTimer>['onSessionEnd'];
-  declare onTimerStop: ReturnType<typeof createStatusTimer>['onTimerStop'];
+  declare start: ReturnType<typeof createStatusTimer>["start"];
+  declare stop: ReturnType<typeof createStatusTimer>["stop"];
+  declare pause: ReturnType<typeof createStatusTimer>["pause"];
+  declare toggle: ReturnType<typeof createStatusTimer>["toggle"];
+  declare getState: ReturnType<typeof createStatusTimer>["getState"];
+  declare updateDisplay: ReturnType<typeof createStatusTimer>["updateDisplay"];
+  declare statusBarItem: ReturnType<typeof createStatusTimer>["statusBarItem"];
+  declare currentTimer: ReturnType<typeof createStatusTimer>["currentTimer"];
+  declare settings: ReturnType<typeof createStatusTimer>["settings"];
+  declare notify: ReturnType<typeof createStatusTimer>["notify"];
+  declare destroy: ReturnType<typeof createStatusTimer>["destroy"];
 
   constructor(opts: StatusTimerOpts) {
     const impl = createStatusTimer(opts);
@@ -212,10 +215,13 @@ export class StatusTimer {
     this.getState = impl.getState;
     this.updateDisplay = impl.updateDisplay;
     this.statusBarItem = impl.statusBarItem;
-    this.currentTimer = impl.currentTimer;
+    Object.defineProperty(this, "currentTimer", {
+      get: () => impl.currentTimer,
+      enumerable: true,
+      configurable: true,
+    });
     this.settings = impl.settings;
     this.notify = impl.notify;
-    this.onSessionEnd = impl.onSessionEnd;
-    this.onTimerStop = impl.onTimerStop;
+    this.destroy = impl.destroy;
   }
 }

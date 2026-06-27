@@ -27,6 +27,8 @@ import { QuickEntryModal } from "./quick-entry";
 import { runOnboard } from "./onboard";
 import { StatusTimer } from "./status-timer";
 import { SessionStore } from "./session-store";
+import { createTimerManager } from "./timer-manager";
+import { TimerBlock } from "./timer-block";
 import { createTaskCache } from "./cache";
 import type { TaskCacheInstance } from "./cache";
 import { RoutineEngine } from "./routine-engine";
@@ -59,6 +61,7 @@ export default class FlowtimePlugin extends Plugin {
 	taskIndex!: TaskIndex;
 	routineEngine!: RoutineEngine;
 	statusTimer!: StatusTimer;
+	timerManager!: ReturnType<typeof createTimerManager>;
 	listEnhancer!: ListEnhancer;
 	renderers: (FlowtimeRenderer | WeekplanRenderer)[] = [];
 	isMobile: boolean = false;
@@ -643,33 +646,30 @@ export default class FlowtimePlugin extends Plugin {
 			},
 		});
 
+		// ── Global TimerManager ──
+		this.timerManager = createTimerManager({
+			vault: this.app.vault,
+			onSessionComplete: async (data) => {
+				await this.sessionStore.writeSession({
+					startTime: data.startTime,
+					endTime: data.endTime,
+					durationMinutes: data.durationMinutes,
+					bucket: data.bucket || "",
+					taskText: data.taskText,
+					notes: "",
+				});
+			},
+		});
+
+		// Load persisted timer state from previous session
+		await this.timerManager.loadState();
+
 		// ── Status bar timer ──
 		this.statusTimer = new StatusTimer({
 			statusBarItem: this.addStatusBarItem(),
 			settings: this.settings,
 			notify: this.notify,
-			onSessionEnd: async (data: {
-				startTime: string;
-				endTime: string;
-				durationMinutes: number;
-				taskText: string;
-			}): Promise<void> => {
-				await this.sessionStore.writeSession({
-					startTime: data.startTime,
-					endTime: data.endTime,
-					durationMinutes: data.durationMinutes,
-					bucket: "",
-					taskText: data.taskText,
-					notes: "",
-				});
-			},
-			// Status bar right-click stop → stop active per-row timer
-			onTimerStop: () => {
-				if (this._activeRowTimerStop) {
-					this._activeRowTimerStop();
-					this._activeRowTimerStop = null;
-				}
-			},
+			timerManager: this.timerManager,
 		});
 
 		this.registerDomEvent(this.statusTimer.statusBarItem, "click", () => {
@@ -725,6 +725,21 @@ export default class FlowtimePlugin extends Plugin {
 					ctx.sourcePath,
 				);
 				this.renderers.push(r);
+				ctx.addChild(r);
+			},
+		);
+
+		// v1.8.0: Visual timer block
+		this.registerMarkdownCodeBlockProcessor(
+			"flowtime-timer",
+			(_src: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+				const r = new TimerBlock(
+					this.app,
+					el,
+					this as any,
+					ctx.sourcePath,
+				);
+				this.renderers.push(r as any);
 				ctx.addChild(r);
 			},
 		);
@@ -1324,6 +1339,11 @@ export default class FlowtimePlugin extends Plugin {
 			if (this._dailyGenTimer) {
 				window.clearTimeout(this._dailyGenTimer);
 				this._dailyGenTimer = null;
+			}
+			// Save timer state and clean up
+			if (this.timerManager) {
+				void this.timerManager.saveState();
+				this.timerManager.destroy();
 			}
 			// Clean up content width preset classes
 			this._doc.body.classList.remove(

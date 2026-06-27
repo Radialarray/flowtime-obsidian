@@ -39,6 +39,7 @@ import type {
   DisplayItem,
   TreeNode,
   TimerState,
+  GlobalTimerState,
   FilterConfig,
   FilterOp,
   FlowtimeSettings,
@@ -77,6 +78,19 @@ interface FlowtimePluginRef {
       total: number;
       interval: ReturnType<typeof setInterval> | null;
     };
+  };
+  timerManager?: {
+    start(
+      taskRef: { filePath: string; line: number; taskText: string; bucket?: string },
+      durationSeconds: number,
+      pomodoro?: { enabled: boolean; sessionMinutes: number; breakMinutes: number; longBreakMinutes: number; sessionsBeforeLongBreak: number },
+    ): void;
+    pause(): void;
+    resume(): void;
+    stop(): void;
+    getState(): GlobalTimerState;
+    subscribe(fn: (state: GlobalTimerState) => void): () => void;
+    isActive(): boolean;
   };
   _activeRowTimer?: TimerState & { taskName?: string } | null;
   _activeRowTimerStop?: (() => void) | null;
@@ -1529,7 +1543,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
   }
 
   /**
-   * Shared inline timer — same DOM + logic for table and list views.
+   * Shared inline timer — uses global TimerManager for state.
    * Returns an { update(durMinutes): void } handle so callers can rebind
    * duration when the input changes.
    */
@@ -1551,6 +1565,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     const rb = row.createEl("button", { text: "\u21ba", cls: "ft-timer-reset" });
 
     const ts: TimerState = { remaining: dur * 60, total: dur * 60, interval: null, running: false };
+    let _unsub: (() => void) | null = null;
 
     const ud = (): void => {
       disp.setText(formatTimer(ts.remaining));
@@ -1562,70 +1577,93 @@ class FlowtimeRenderer extends MarkdownRenderChild {
         (pct >= 100 ? "over" : pct >= 80 ? "warning" : "normal");
     };
 
-    const stp = (): void => {
-      if (this.plugin) this.plugin._activeRowTimerStop = null;
-      if (ts.interval) { window.clearInterval(ts.interval); ts.interval = null; }
-      ts.running = false;
-      pb.setText("\u25b6");
-      if (this.plugin?.statusTimer?.stop) this.plugin.statusTimer.stop();
-    };
+    const _syncFromGlobal = (gs: GlobalTimerState): void => {
+      // Check if this row's task is the active global timer task
+      const isThisTask =
+        gs.taskRef &&
+        gs.taskRef.filePath === task.file?.path &&
+        gs.taskRef.line === task.line;
 
-    const startTimer = (): void => {
-      if (ts.remaining <= 0) return;
-      ts.running = true;
-      pb.setText("\u23f8");
-      ts.interval = window.setInterval(() => {
-        ts.remaining--;
-        ud();
-        if (ts.remaining <= 0) {
-          stp();
-          ts.remaining = 0;
-          ud();
-          disp.addClass("ft-timer-expired");
-          this.plugin?.notify?.("\u23f0 Time's up! " + taskName);
-          if (this.plugin?.settings?.timerSound !== false) this._beep?.();
-          if (this.plugin?.statusTimer?.stop) this.plugin.statusTimer.stop();
-          if (this.plugin?.sessionStore) {
-            const now = new Date();
-            this.plugin.sessionStore.writeSession({
-              startTime: new Date(now.getTime() - ts.total * 1000).toISOString(),
-              endTime: now.toISOString(),
-              durationMinutes: Math.round(ts.total / 60),
-              bucket: task.bucket || "",
-              taskText: taskName,
-              notes: "",
-            });
-          }
-        }
-      }, 1000);
-      if (this.plugin?.statusTimer?.start) {
-        this.plugin.statusTimer.start(taskName, ts.remaining);
+      if (isThisTask && gs.remaining > 0) {
+        ts.remaining = gs.remaining;
+        ts.total = gs.total;
+        ts.running = gs.isRunning;
+        ts.interval = gs.isRunning ? (1 as unknown as ReturnType<typeof setInterval>) : null;
+        pb.setText(gs.isRunning ? "\u23f8" : "\u25b6");
+      } else if (!isThisTask && ts.running) {
+        // Global timer is for a different task — reset and show play
+        ts.running = false;
+        ts.interval = null;
+        ts.remaining = ts.total;
+        pb.setText("\u25b6");
       }
-      if (this.plugin) this.plugin._activeRowTimerStop = stp;
+      ud();
     };
 
-    const pauseTimer = (): void => {
-      if (ts.interval) { window.clearInterval(ts.interval); ts.interval = null; }
+    // Subscribe to global timer manager
+    if (this.plugin?.timerManager) {
+      _unsub = this.plugin.timerManager.subscribe(_syncFromGlobal);
+    }
+
+    const stpLocal = (): void => {
       ts.running = false;
+      if (ts.interval) { ts.interval = null; }
       pb.setText("\u25b6");
-      if (this.plugin?.statusTimer?.pause) this.plugin.statusTimer.pause();
     };
 
     pb.addEventListener("click", (e: MouseEvent) => {
       e.stopPropagation();
       const dm = ts.total / 60;
       if (!dm || dm <= 0) return;
-      if (ts.running) {
-        pauseTimer();
+
+      const tm = this.plugin?.timerManager;
+      if (!tm) return;
+
+      const gs = tm.getState();
+      const isThisTask =
+        gs.taskRef &&
+        gs.taskRef.filePath === task.file?.path &&
+        gs.taskRef.line === task.line;
+
+      if (isThisTask && ts.running) {
+        // Pause this task
+        tm.pause();
+      } else if (isThisTask && !ts.running && ts.remaining > 0) {
+        // Resume this task
+        tm.resume();
       } else {
-        if (ts.remaining <= 0) { ts.remaining = dm * 60; ts.total = dm * 60; ud(); }
-        startTimer();
+        // Start this task (stops any other active timer)
+        if (ts.remaining <= 0) {
+          ts.remaining = dm * 60;
+          ts.total = dm * 60;
+          ud();
+        }
+        tm.start(
+          {
+            filePath: task.file?.path || "",
+            line: task.line,
+            taskText: taskName,
+            bucket: task.bucket || undefined,
+          },
+          ts.remaining,
+        );
       }
     });
 
     rb.addEventListener("click", (e: MouseEvent) => {
       e.stopPropagation();
-      stp();
+      const tm = this.plugin?.timerManager;
+      if (tm) {
+        const gs = tm.getState();
+        const isThisTask =
+          gs.taskRef &&
+          gs.taskRef.filePath === task.file?.path &&
+          gs.taskRef.line === task.line;
+        if (isThisTask) {
+          tm.stop();
+        }
+      }
+      stpLocal();
       const dm = ts.total / 60;
       ts.remaining = dm && dm > 0 ? dm * 60 : 0;
       ts.total = ts.remaining;
@@ -1633,12 +1671,33 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     });
 
     const update = (newDurMin: number): void => {
-      const isActive = ts.running || this.plugin?.statusTimer?.currentTimer?.taskName === taskName;
-      if (isActive) stp();
+      const tm = this.plugin?.timerManager;
+      const gs = tm?.getState();
+      const isActiveGlobal =
+        tm &&
+        gs?.taskRef &&
+        gs.taskRef.filePath === task.file?.path &&
+        gs.taskRef.line === task.line;
+
+      if (isActiveGlobal) {
+        tm.stop();
+      }
+      stpLocal();
       ts.remaining = newDurMin > 0 ? newDurMin * 60 : 0;
       ts.total = ts.remaining;
       ud();
     };
+
+    // Cleanup subscription when row is removed from DOM
+    const _cleanupObserver = new MutationObserver(() => {
+      if (!row.isConnected) {
+        if (_unsub) { _unsub(); _unsub = null; }
+        _cleanupObserver.disconnect();
+      }
+    });
+    if (row.parentElement) {
+      _cleanupObserver.observe(row.parentElement, { childList: true });
+    }
 
     return { update };
   }

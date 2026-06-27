@@ -2765,3 +2765,263 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-v
 .ft-op-0 { opacity: 0; }
 .ft-bg-error { background: var(--text-error); }
 .ft-pl-8 { padding-left: 8px; }
+
+/* ═══ Timer Block (flowtime-timer) ═══ */
+
+.ft-timer-block {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 12px;
+	padding: 20px 16px;
+	margin: 1em 0;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-l);
+	background: var(--background-primary);
+	max-width: 340px;
+}
+
+.ft-timer-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+}
+
+.ft-timer-title {
+	font-size: var(--font-ui-medium);
+	font-weight: var(--font-semibold);
+	color: var(--text-normal);
+}
+
+/* ── Task selector ── */
+
+.ft-timer-selector {
+	width: 100%;
+}
+
+.ft-timer-label {
+	display: block;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	margin-bottom: 4px;
+}
+
+.ft-timer-task-select {
+	width: 100%;
+	padding: 6px 8px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+}
+
+.ft-timer-task-select:focus {
+	border-color: var(--interactive-accent);
+	outline: none;
+}
+
+.ft-timer-hint {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	text-align: center;
+	font-style: italic;
+}
+
+/* ── Circle timer ── */
+
+.ft-timer-circle-wrap {
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.ft-timer-svg-wrap {
+	position: relative;
+	width: 200px;
+	height: 200px;
+}
+
+.ft-timer-svg {
+	width: 100%;
+	height: 100%;
+}
+
+.ft-timer-progress-circle {
+	transition: stroke-dashoffset 0.35s ease, stroke 0.35s ease;
+}
+
+.ft-timer-running .ft-timer-progress-circle {
+	transition: stroke-dashoffset 0.9s linear, stroke 0.35s ease;
+}
+
+/* ── Time display (overlay on circle) ── */
+
+.ft-timer-time {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+	text-align: center;
+}
+
+.ft-timer-time-val {
+	font-size: 36px;
+	font-weight: var(--font-bold);
+	font-variant-numeric: tabular-nums;
+	color: var(--text-normal);
+	line-height: 1;
+}
+
+.ft-timer-time-val.ft-timer-expired {
+	color: var(--text-error);
+}
+
+.ft-timer-paused .ft-timer-time-val {
+	opacity: 0.6;
+}
+
+.ft-timer-session-indicator {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.ft-timer-session-indicator.ft-timer-break {
+	color: var(--color-green);
+}
+
+/* ── Pomodoro info ── */
+
+.ft-timer-pomodoro-info {
+	width: 100%;
+	text-align: center;
+	padding: 4px 8px;
+	border-radius: var(--radius-s);
+	background: var(--background-primary-alt);
+	font-size: var(--font-ui-smaller);
+}
+
+.ft-timer-pomodoro-session {
+	color: var(--text-accent);
+}
+
+.ft-timer-pomodoro-break {
+	color: var(--color-green);
+}
+
+/* ── Controls ── */
+
+.ft-timer-controls {
+	display: flex;
+	gap: 8px;
+	justify-content: center;
+	flex-wrap: wrap;
+	width: 100%;
+}
+
+.ft-timer-btn {
+	padding: 6px 14px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-primary);
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	cursor: pointer;
+	transition: background 0.15s, border-color 0.15s;
+}
+
+.ft-timer-btn:hover {
+	background: var(--background-modifier-hover);
+}
+
+.ft-timer-btn:active {
+	background: var(--background-modifier-active);
+}
+
+.ft-timer-btn-start {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border-color: var(--interactive-accent);
+}
+
+.ft-timer-btn-start:hover {
+	opacity: 0.85;
+}
+
+.ft-timer-btn-pause {
+	background: var(--text-warning);
+	color: var(--background-primary);
+	border-color: var(--text-warning);
+}
+
+.ft-timer-btn-resume {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border-color: var(--interactive-accent);
+}
+
+.ft-timer-btn-skip {
+	background: var(--background-primary-alt);
+	color: var(--text-muted);
+}
+
+.ft-timer-btn-stop {
+	background: var(--text-error);
+	color: var(--background-primary);
+	border-color: var(--text-error);
+}
+
+.ft-timer-btn-disabled {
+	opacity: 0.4;
+	cursor: not-allowed;
+}
+
+/* ── Task name display ── */
+
+.ft-timer-task-name {
+	width: 100%;
+	text-align: center;
+	padding: 6px 0;
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.ft-timer-task-text {
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+	color: var(--text-normal);
+}
+
+/* ── Empty state ── */
+
+.ft-timer-empty {
+	width: 100%;
+	text-align: center;
+	padding: 12px 0;
+}
+
+.ft-timer-empty-text {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	font-style: italic;
+}
+
+/* ── Responsive: smaller on narrow containers ── */
+
+@media (max-width: 400px) {
+	.ft-timer-svg-wrap {
+		width: 160px;
+		height: 160px;
+	}
+	.ft-timer-time-val {
+		font-size: 28px;
+	}
+	.ft-timer-block {
+		padding: 12px 10px;
+	}
+}

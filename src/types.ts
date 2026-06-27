@@ -123,6 +123,13 @@ export interface FlowtimeSettings {
   // Sprints
   sprints: SprintDef[];
 
+  // Pomodoro
+  pomodoroEnabled: boolean;
+  pomodoroSessionMinutes: number;
+  pomodoroBreakMinutes: number;
+  pomodoroLongBreakMinutes: number;
+  pomodoroSessionsBeforeLongBreak: number;
+
   // Routines
   routinesFolder: string;
   vacationMode: boolean;
@@ -240,6 +247,46 @@ export interface TimerState {
   total: number;
   interval: ReturnType<typeof setInterval> | null;
   running: boolean;
+}
+
+/** Reference to a specific task in the vault */
+export interface TimerTaskRef {
+  filePath: string;
+  line: number;
+  taskText: string;
+  bucket?: string;
+}
+
+/** Pomodoro configuration */
+export interface PomodoroConfig {
+  enabled: boolean;
+  sessionMinutes: number;
+  breakMinutes: number;
+  longBreakMinutes: number;
+  sessionsBeforeLongBreak: number;
+}
+
+/** Pomodoro runtime state (tracked per active timer) */
+export interface PomodoroRuntime {
+  totalSessions: number;
+  completedSessions: number;
+  sessionMinutes: number;
+  breakMinutes: number;
+  longBreakMinutes: number;
+  sessionsBeforeLongBreak: number;
+  onBreak: boolean;
+  breakRemaining: number;
+}
+
+/** Full global timer state — the single source of truth */
+export interface GlobalTimerState {
+  taskRef: TimerTaskRef | null;
+  bucket: string | null;
+  remaining: number;
+  total: number;
+  isRunning: boolean;
+  startedAt: string | null;
+  pomodoro: PomodoroRuntime | null;
 }
 
 // ── Session ──

@@ -57,6 +57,12 @@ export const DEFAULT_SETTINGS: FlowtimeSettings = {
     },
   ],
 
+  pomodoroEnabled: false,
+  pomodoroSessionMinutes: 25,
+  pomodoroBreakMinutes: 5,
+  pomodoroLongBreakMinutes: 15,
+  pomodoroSessionsBeforeLongBreak: 4,
+
   routinesFolder: "Flowtime/Routines/",
   vacationMode: false,
   autoGenerateOnStartup: true,
@@ -712,6 +718,86 @@ export class FlowtimeSettingsTab extends PluginSettingTab {
           .onChange(async (value) => {
             this.plugin.settings.statusBarTimer = value;
             await this.plugin.saveData(this.plugin.settings);
+          }),
+      );
+
+    // ═══ Pomodoro ═══
+    const _h = containerEl.createEl("div", { cls: "ft-settings-group" });
+    new Setting(_h).setName("Pomodoro Timer").setHeading();
+
+    new Setting(_h)
+      .setName("Enable pomodoro mode by default")
+      .setDesc("When starting a task timer, automatically split into pomodoro sessions")
+      .addToggle((toggle) =>
+        toggle
+          .setValue(this.plugin.settings.pomodoroEnabled)
+          .onChange(async (value) => {
+            this.plugin.settings.pomodoroEnabled = value;
+            await this.plugin.saveData(this.plugin.settings);
+          }),
+      );
+
+    new Setting(_h)
+      .setName("Session length (minutes)")
+      .setDesc("Duration of each focus session")
+      .addText((text) =>
+        text
+          .setPlaceholder("25")
+          .setValue(String(this.plugin.settings.pomodoroSessionMinutes))
+          .onChange(async (value) => {
+            const num = parseInt(value, 10);
+            if (!isNaN(num) && num > 0) {
+              this.plugin.settings.pomodoroSessionMinutes = num;
+              await this.plugin.saveData(this.plugin.settings);
+            }
+          }),
+      );
+
+    new Setting(_h)
+      .setName("Short break (minutes)")
+      .setDesc("Duration of breaks between sessions")
+      .addText((text) =>
+        text
+          .setPlaceholder("5")
+          .setValue(String(this.plugin.settings.pomodoroBreakMinutes))
+          .onChange(async (value) => {
+            const num = parseInt(value, 10);
+            if (!isNaN(num) && num > 0) {
+              this.plugin.settings.pomodoroBreakMinutes = num;
+              await this.plugin.saveData(this.plugin.settings);
+            }
+          }),
+      );
+
+    new Setting(_h)
+      .setName("Long break (minutes)")
+      .setDesc("Duration of extended breaks after multiple sessions")
+      .addText((text) =>
+        text
+          .setPlaceholder("15")
+          .setValue(String(this.plugin.settings.pomodoroLongBreakMinutes))
+          .onChange(async (value) => {
+            const num = parseInt(value, 10);
+            if (!isNaN(num) && num > 0) {
+              this.plugin.settings.pomodoroLongBreakMinutes = num;
+              await this.plugin.saveData(this.plugin.settings);
+            }
+          }),
+      );
+
+    new Setting(_h)
+      .setName("Sessions before long break")
+      .setDesc("Number of focus sessions before triggering a long break")
+      .addText((text) =>
+        text
+          .setPlaceholder("4")
+          .setValue(String(this.plugin.settings.pomodoroSessionsBeforeLongBreak))
+          .onChange(async (value) => {
+            const num = parseInt(value, 10);
+            if (!isNaN(num) && num > 0) {
+              this.plugin.settings.pomodoroSessionsBeforeLongBreak = num;
+              await this.plugin.saveData(this.plugin.settings);
+            }
           }),
       );
 

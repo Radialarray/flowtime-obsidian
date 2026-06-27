@@ -37,6 +37,21 @@ Durations: `10m`, `30m`, `1h`, `1.5h` — typed inline or picked from the modal.
 
 **Inbox capture** — `Inbox.md` lives at vault root. Dump raw thoughts there, one per line. No syntax required. Process them through the **Process Inbox** command — a modal walks each line and lets you promote it to a task, project, wiki entry, or snooze it.
 
+**Auto-Process Inbox** — a faster path: run `Cmd+P` → "Flowtime: Auto-Process Inbox". It scans every line in your inbox and auto-converts items that already have a date (`@today`, `@2026-06-27`, etc.) into proper task lines, routing them to the target file (daily note, project file if `@p:` present, or active file). Items without a date stay in the inbox for manual processing. Snoozed items are left untouched.
+
+Examples of auto-parseable lines:
+```
+Review PR @today @1h @b:deep-work
+Design mockup @tomorrow @p:Website @2h
+Fix login bug @2026-06-27 @30m
+```
+
+Lines that stay in the inbox (no date → not enough info):
+```
+Buy groceries
+Research authentication libraries
+```
+
 Also: `@inbox` anywhere on a line (captures preceding text to inbox) and `@p:ProjectName` (captures to that project's Tasks.md).
 
 ## Extract to new note

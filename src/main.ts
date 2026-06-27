@@ -13,7 +13,7 @@ import {
 } from "obsidian";
 import { FlowtimeRenderer } from "./renderer";
 import { FlowtimeSettingsTab, DEFAULT_SETTINGS } from "./settings";
-import { ProcessInboxModal } from "./inbox-processor";
+import { ProcessInboxModal, autoParseInbox } from "./inbox-processor";
 import { ProjectEngine } from "./project-engine";
 import {
   insertDaily,
@@ -74,6 +74,7 @@ export default class FlowtimePlugin extends Plugin {
 	_dailyGenTimer: ReturnType<typeof setTimeout> | null = null;
 	_routineWatchTimer: ReturnType<typeof setTimeout> | null = null;
 	_previousProjectsRoot: string = "";
+	_redirectingMobile: boolean = false;
 	_tabHistory: string[] = [];
 	_tabHistoryMax: number = 20;
 
@@ -242,8 +243,11 @@ export default class FlowtimePlugin extends Plugin {
 		// v0.5.0: Ensure routines folder exists
 		await this.routineEngine.ensureRoutinesFolder();
 
-		// v0.5.0: Auto-generate routine instances
-		if (this.settings.autoGenerateOnStartup !== false) {
+		// v0.5.0: Auto-generate routine instances.
+		// Delayed 3s so Obsidian finishes opening its startup file first.
+		// (vault.create on mobile can otherwise steal focus to the daily note.)
+		setTimeout(async () => {
+			if (this.settings.autoGenerateOnStartup === false) return;
 			try {
 				const count = await this.routineEngine.generateAllDue();
 				if (count > 0 && !this.settings.quietMode) {
@@ -257,7 +261,7 @@ export default class FlowtimePlugin extends Plugin {
 			} catch (e) {
 				console.warn("Flowtime: Routine generation error:", (e as Error).message);
 			}
-		}
+		}, 3000);
 
 		// v0.8.0: Schedule twice-daily generation (morning 6 AM + evening 6 PM)
 		// so long-running Obsidian sessions still get new routine tasks each day.
@@ -283,6 +287,136 @@ export default class FlowtimePlugin extends Plugin {
 		this.registerEvent(this.app.vault.on("modify", onFileModified));
 		this.registerEvent(this.app.vault.on("delete", onFileDeleted));
 		this.registerEvent(this.app.vault.on("create", onFileModified));
+
+		/** Strip directives, time ranges, and source links to get just the task description */
+		const stripMeta = (text: string): string => {
+			return text
+				.replace(/\d{1,2}:\d{2}\s*[\u2014\-\u2013]\s*\d{1,2}/g, "")
+				.replace(/@[^\s]+/g, "")
+				.replace(/\[📄[^\]]*\]\([^)]*\)/g, "")
+				.replace(/\s+/g, " ")
+				.trim()
+				.toLowerCase();
+		};
+
+		/** Rebuild a source line: keep time prefix and original directives, replace task text */
+		const rebuildSourceLine = (origLine: string, newCore: string): string => {
+			const m = origLine.match(/^([-*+]\s+\[[ xX\-]\]\s*)(\d{1,2}:\d{2}(\s*[\u2014\-\u2013]\s*\d{1,2}:\d{2})?\s*)?(.*)$/);
+			if (!m) return origLine;
+			const prefix = m[1];          // "- [ ] "
+			const timePart = m[2] || "";  // "11:30—13:30 " or ""
+			const rest = m[4];            // everything after time
+			// Preserve @ directives from the original
+			const directives = (rest.match(/@[^\s]+/g) || []).join(" ");
+			return prefix + timePart + newCore + (directives ? " " + directives : "");
+		};
+
+		// v1.6.0: Handle user edits in mobile markdown files.
+		// - New lines without source links → redirect to daily note / inbox
+		// - Edited sourced lines → sync text changes back to source file
+		// Re-aggregation then normalises everything.
+		this.registerEvent(
+			this.app.vault.on("modify", async (file) => {
+				if (this._redirectingMobile) return;
+				if (!(file instanceof TFile) || !this._isMobileAggregateFile(file)) return;
+
+				const content = await this.app.vault.read(file);
+				const lines = content.split("\n");
+				const taskRe = /^[-*+]\s+\[([ xX\-])\]\s+(.+)/;
+				const srcLinkRe = /\[📄[^\]]*\]\([^)]*\)/;
+				const srcExtractRe = /📄\s*(.+?):(\d+)/;
+				const nativeLines: { index: number; status: string; text: string }[] = [];
+				const editedLines: { index: number; status: string; text: string; srcPath: string; srcLine: number }[] = [];
+
+				for (let i = 0; i < lines.length; i++) {
+					const m = lines[i].match(taskRe);
+					if (!m) continue;
+					if (!srcLinkRe.test(lines[i])) {
+						nativeLines.push({ index: i, status: m[1], text: m[2].trim() });
+					} else {
+						// Sourced line — check if text was edited
+						const srcMatch = lines[i].match(srcExtractRe);
+						if (!srcMatch) continue;
+						const srcPath = srcMatch[1];
+						const srcLineNum = parseInt(srcMatch[2], 10) - 1;
+						const srcFile = this.app.vault.getAbstractFileByPath(srcPath) as TFile | null;
+						if (!srcFile) continue;
+
+						// Compare core text (without directives / source link) with source
+						const mobileText = stripMeta(m[2]); // text from mobile, stripped of directives+link
+						const srcContent = await this.app.vault.read(srcFile);
+						const srcLines = srcContent.split("\n");
+						if (srcLineNum >= srcLines.length) continue;
+						const srcText = stripMeta(srcLines[srcLineNum].replace(/^[-*+]\s+\[[ xX\-]\]\s*/, ""));
+
+						if (mobileText !== srcText) {
+							editedLines.push({ index: i, status: m[1], text: m[2].trim(), srcPath, srcLine: srcLineNum });
+						}
+					}
+				}
+
+				const hasNative = nativeLines.length > 0;
+				const hasEdits = editedLines.length > 0;
+				if (!hasNative && !hasEdits) return;
+
+				// Determine target for new tasks
+				const today = new Date().toISOString().split("T")[0];
+				let dnPath = today + ".md";
+				try {
+					const cfgPath = this.app.vault.configDir + "/daily-notes.json";
+					const adapter = this.app.vault.adapter;
+					if (await adapter.exists(cfgPath)) {
+						const cfg = JSON.parse(await adapter.read(cfgPath)) as { folder?: string };
+						if (cfg.folder) dnPath = cfg.folder + "/" + today + ".md";
+					}
+				} catch (_) { /* use default */ }
+
+				const targetFile = this.app.vault.getAbstractFileByPath(dnPath) as TFile | null;
+				const inboxPath = this.settings.inboxPath || "Inbox.md";
+				const inboxFile = this.app.vault.getAbstractFileByPath(inboxPath) as TFile | null;
+
+				this._redirectingMobile = true;
+				try {
+					// ── Redirect new native lines ──
+					for (const nl of nativeLines) {
+						const cb = nl.status.toLowerCase() === "x" ? "[x]" : "[ ]";
+						const newLine = cb + " " + nl.text;
+						const hasDate = nl.text.match(/@(\d{4}-\d{2}-\d{2})/);
+						const dest = hasDate && hasDate[1] === today && targetFile ? targetFile : inboxFile;
+						if (!dest) continue;
+						const destContent = await this.app.vault.read(dest);
+						await this.app.vault.modify(dest, destContent.trimEnd() + "\n" + newLine);
+					}
+
+					// ── Sync edits back to source files ──
+					for (const el of editedLines) {
+						const srcFile = this.app.vault.getAbstractFileByPath(el.srcPath) as TFile | null;
+						if (!srcFile) continue;
+						const cb = el.status.toLowerCase() === "x" ? "[x]" : "[ ]";
+						// Build new source line: preserve original structure, replace text
+						const srcContent = await this.app.vault.read(srcFile);
+						const srcLines = srcContent.split("\n");
+						const origLine = srcLines[el.srcLine];
+						// Replace the task description in the source, keeping time prefix + directives
+						const coreText = stripMeta(el.text); // user's new text without directives/link
+						const newSrcLine = rebuildSourceLine(origLine, cb + " " + coreText);
+						srcLines[el.srcLine] = newSrcLine;
+						await this.app.vault.modify(srcFile, srcLines.join("\n"));
+					}
+
+					// ── Remove native lines, then re-aggregate ──
+					const kept = lines.filter((_, i) => !nativeLines.some(nl => nl.index === i));
+					if (hasNative) {
+						await this.app.vault.modify(file, kept.join("\n"));
+					}
+
+					const { refreshAll } = await import("./task-aggregator");
+					await refreshAll(this.app, file, this, file.path);
+				} finally {
+					this._redirectingMobile = false;
+				}
+			}),
+		);
 
 		// v0.5.0: Watch routines folder for changes → re-generate (debounced)
 		const routinesFolder = this.settings.routinesFolder || "Routines/";
@@ -474,6 +608,32 @@ export default class FlowtimePlugin extends Plugin {
 			name: "Process Inbox",
 			callback: () => {
 				new ProcessInboxModal(this.app, this).open();
+			},
+		});
+
+		// ── Auto-Process Inbox command ──
+		this.addCommand({
+			id: "auto-process-inbox",
+			name: "Auto-Process Inbox",
+			callback: async () => {
+				try {
+					const result = await autoParseInbox(this.app, this);
+					const parts: string[] = [];
+					if (result.processed > 0)
+						parts.push(`${result.processed} processed`);
+					if (result.skipped > 0)
+						parts.push(`${result.skipped} skipped (missing date)`);
+					if (result.snoozed > 0)
+						parts.push(`${result.snoozed} snoozed`);
+					this.notify(
+						`\u{1F4E5} Auto-processed inbox — ${parts.join(", ") || "nothing to do"}`,
+					);
+				} catch (e) {
+					this.notify(
+						`\u{274C} Auto-process failed: ${(e as Error).message}`,
+						true,
+					);
+				}
 			},
 		});
 

@@ -133,6 +133,9 @@ Ask user to run via `Cmd+P`:
 |-----------|------|----------|------|
 | `add-task` | Add Task | `Cmd+Shift+I` | Quick Entry modal |
 | `add-task-inline` | Add Task at Cursor | — | Inserts `- [ ] @today ` |
+| `auto-process-inbox` | Auto-Process Inbox | — | Batch-process inbox items that have `@date` tags — routes to daily note or `@p:` project file |
+| `process-inbox` | Process Inbox | — | Interactive one-by-one inbox processing modal |
+| `append-to-inbox` | Append to Inbox | — | Quick textarea → inbox dump |
 | `insert-daily-dashboard` | Insert daily dashboard | — | today/overdue/due-week blocks |
 | `insert-weekly-dashboard` | Insert weekly dashboard | — | Weekly review blocks |
 | `new-project` | New Project | — | Creates project folder + note |

@@ -312,6 +312,172 @@ export function isSnoozed(text: string): boolean {
   return snoozeDate > today;
 }
 
+// ── Standalone append target ──
+
+/**
+ * Append a task line to the configured target file (daily note, active file,
+ * project file, or fall back to the inbox itself).
+ * Extracted from ProcessInboxModal._appendToTarget for reuse by auto-parser.
+ */
+export async function appendTaskToTarget(
+  app: App,
+  plugin: FlowtimePluginRef,
+  line: string,
+  inboxFile: TFile,
+): Promise<void> {
+  const target = plugin.settings.quickEntryTargetFile;
+  let targetFile: TFile | null = null;
+
+  // If the task line has a resolvable @p:ProjectName tag, route it to that
+  // project's file regardless of the configured target. This makes
+  // auto-processing smarter: items tagged with a project go directly there.
+  const projectMatch = line.match(/@p:([^\s]+)/);
+  if (projectMatch) {
+    const projects = await plugin.projectEngine.getAllProjects();
+    const match = projects.find(
+      (p) => p.name.toLowerCase() === projectMatch[1].toLowerCase(),
+    );
+    if (match && match.path) {
+      targetFile = app.vault.getAbstractFileByPath(
+        match.path,
+      ) as TFile | null;
+    }
+  }
+
+  // Fall through to configured target when no project tag or project not found
+  if (!targetFile) {
+    if (target === "daily-note") {
+      const today = new Date().toISOString().split("T")[0];
+      const dnConfigPath = app.vault.configDir + "/daily-notes.json";
+      try {
+        const adapter = app.vault.adapter;
+        let folder = "";
+        if (await adapter.exists(dnConfigPath)) {
+          const config = JSON.parse(await adapter.read(dnConfigPath)) as {
+            folder?: string;
+          };
+          folder = config.folder || "";
+        }
+        const dailyPath = folder
+          ? folder + "/" + today + ".md"
+          : today + ".md";
+        targetFile = app.vault.getAbstractFileByPath(
+          dailyPath,
+        ) as TFile | null;
+        if (!targetFile) {
+          targetFile = (await app.vault.create(
+            dailyPath,
+            "# " + today + "\n\n",
+          )) as unknown as TFile;
+        }
+      } catch (_) {
+        /* ignore */
+      }
+    } else if (target === "active-file") {
+      targetFile = app.workspace.getActiveFile();
+    }
+  }
+
+  if (!targetFile) {
+    targetFile = inboxFile; // fallback
+  }
+
+  const content = await app.vault.read(targetFile);
+  await app.vault.modify(targetFile, content.trimEnd() + "\n" + line);
+}
+
+// ── Auto-parse inbox ──
+
+/**
+ * Auto-process inbox items that have enough information to be converted
+ * into tasks without user interaction.
+ *
+ * An item is considered "parseable" if it has a @date tag (YYYY-MM-DD or
+ * a natural date keyword like @today). Items with @snooze are left in the
+ * file. Items without a date are left for the user to handle manually via
+ * the interactive Process Inbox modal.
+ *
+ * Processed items are removed from the inbox. Returns counts for the
+ * notification summary.
+ */
+export async function autoParseInbox(
+  app: App,
+  plugin: FlowtimePluginRef,
+): Promise<{ processed: number; skipped: number; snoozed: number }> {
+  const path = plugin.settings.inboxPath || "Inbox.md";
+
+  if (!(await app.vault.adapter.exists(path))) {
+    throw new Error("Inbox not found at " + path);
+  }
+
+  const file = app.vault.getAbstractFileByPath(path) as TFile;
+  const content = await app.vault.read(file);
+  const { items, headings } = parseInbox(content);
+
+  const processedItems: InboxItem[] = [];
+  const skippedItems: InboxItem[] = [];
+  const snoozedItems: InboxItem[] = [];
+
+  for (const item of items) {
+    if (isSnoozed(item.text)) {
+      snoozedItems.push(item);
+      continue;
+    }
+
+    const tags = detectTags(item.text);
+
+    if (tags.date) {
+      // Has a date — enough info to auto-process
+      let taskLine: string;
+
+      if (tags.isTaskLine) {
+        // Already a proper task line — keep as-is (preserves status, indents, etc.)
+        taskLine = item.text.endsWith("\n")
+          ? item.text
+          : item.text + "\n";
+      } else {
+        // Build a clean task line from detected tags + defaults
+        const description =
+          cleanDescription(item.text) || item.text;
+        taskLine = buildTaskLine(description, {
+          date: tags.date,
+          durationMinutes:
+            tags.duration ||
+            plugin.settings.inboxDefaultDuration ||
+            0,
+          bucket:
+            tags.bucket ||
+            plugin.settings.inboxDefaultBucket ||
+            "",
+          project:
+            tags.project ||
+            plugin.settings.inboxDefaultProject ||
+            "",
+          priority: tags.priority || "",
+          recurrence: tags.recurrence || "",
+        });
+      }
+
+      await appendTaskToTarget(app, plugin, taskLine, file);
+      processedItems.push(item);
+    } else {
+      // No date — not enough info, leave for manual processing
+      skippedItems.push(item);
+    }
+  }
+
+  // Reconstruct inbox with the items that were NOT processed
+  const remaining = [...skippedItems, ...snoozedItems];
+  const newContent = reconstructInbox(remaining, headings);
+  await app.vault.modify(file, newContent);
+
+  return {
+    processed: processedItems.length,
+    skipped: skippedItems.length,
+    snoozed: snoozedItems.length,
+  };
+}
+
 // ── Ref types for dynamic form field containers ──
 
 interface TaskFieldRefs {

@@ -259,6 +259,25 @@ For each overdue task, replace date with today's date.
 2. For each bucket, sum `durationMinutes` of tasks with that bucket + date in range
 3. Present: name, used hours, limit, remaining
 
+### "Auto-process my inbox"
+
+1. Run `Cmd+P` → "Flowtime: Auto-Process Inbox" (id: `auto-process-inbox`)
+2. The plugin scans every inbox line. Items with a `@date` tag (`@today`, `@2026-06-27`, `@tomorrow`, etc.) are:
+   - Converted to proper task lines
+   - Routed to the target file (daily note, or project file if `@p:Name` is present)
+   - Removed from the inbox
+3. Items without a date stay in the inbox for manual handling
+4. Snoozed items (`@snooze YYYY-MM-DD`) are left untouched
+5. Task lines that already have checkbox syntax (`- [ ] task @today`) are kept as-is
+
+**Example inbox:**
+```
+Review PR @today @1h @b:deep-work          ← auto-processed (has date)
+Buy groceries                               ← stays in inbox (no date)
+@tomorrow this needs doing                  ← auto-processed (has date keyword)
+Design mockup @p:Website @today @2h         ← auto-processed, routes to Website project folder note
+```
+
 ### "I want a new bucket called Design"
 
 1. Create: `id=design`, `name=Design`, `color=#ff6b6b`, `weeklyLimit=15`, `sortOrder=3`

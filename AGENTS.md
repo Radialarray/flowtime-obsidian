@@ -19,6 +19,8 @@ cp -r dist/ /path/to/vault/.obsidian/plugins/flowtime/
 
 `dist/` contains: `main.js`, `manifest.json`, `styles.css`, `README.md`, `skills/flowtime/`
 
+**Tag naming:** Tags must NOT have a `v` prefix. Use `1.7.0`, not `v1.7.0`. This applies to both local tags and GitHub releases.
+
 ## Architecture
 
 | Path | Purpose |

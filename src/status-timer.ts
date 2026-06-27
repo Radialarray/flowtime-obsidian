@@ -88,7 +88,7 @@ export function createStatusTimer(opts: StatusTimerOpts): {
       _sessionRecorded = true;
       if (onSessionEnd && _startTime) {
         const now = new Date();
-        onSessionEnd({
+        void onSessionEnd({
           taskText: _currentTaskName,
           startTime: _startTime.toISOString(),
           endTime: now.toISOString(),

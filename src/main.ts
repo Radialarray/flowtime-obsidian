@@ -488,7 +488,7 @@ export default class FlowtimePlugin extends Plugin {
 			id: "extract-to-new-note",
 			name: "Extract to new note",
 			editorCallback: async (editor: Editor, view: MarkdownView | MarkdownFileInfo) => {
-				extractNote(this.app, editor, view as MarkdownView, this);
+				void extractNote(this.app, editor, view as MarkdownView, this);
 			},
 		});
 
@@ -617,7 +617,7 @@ export default class FlowtimePlugin extends Plugin {
 			id: "create-inbox",
 			name: "Create Inbox",
 			callback: () => {
-				this._ensureInbox();
+				void this._ensureInbox();
 			},
 		});
 
@@ -772,7 +772,7 @@ export default class FlowtimePlugin extends Plugin {
 			id: "open-today-note",
 			name: "Open Today Note",
 			callback: () => {
-				this._openTodayNote();
+				void this._openTodayNote();
 			},
 		});
 

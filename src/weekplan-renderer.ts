@@ -878,8 +878,8 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			);
 		};
 
-		const onUp = (): void => { cleanup(); };
-		const onTouchUp = (): void => { cleanup(); };
+		const onUp = (): void => { void cleanup(); };
+		const onTouchUp = (): void => { void cleanup(); };
 
 		this._doc.addEventListener("mousemove", onMove as EventListener, true);
 		this._doc.addEventListener("mouseup", onUp as EventListener, true);
@@ -1217,7 +1217,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 				attr: { title: task.file.basename + ":" + (task.line + 1) },
 			});
 			srcLink.addEventListener("click", () =>
-				this.app.workspace.openLinkText(task.file!.path, "", false, {
+				void this.app.workspace.openLinkText(task.file!.path, "", false, {
 					line: task.line + 1,
 				} as any),
 			);

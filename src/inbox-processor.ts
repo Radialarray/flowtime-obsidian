@@ -529,7 +529,7 @@ export class ProcessInboxModal extends Modal {
   }
 
   onOpen(): void {
-    this._loadInbox();
+    void this._loadInbox();
   }
 
   onClose(): void {
@@ -706,7 +706,7 @@ export class ProcessInboxModal extends Modal {
       this.skippedCount++;
       this.currentIndex++;
       if (this.currentIndex >= this.items.length) {
-        this._finish();
+        void this._finish();
       } else {
         this._renderItem();
       }
@@ -746,7 +746,7 @@ export class ProcessInboxModal extends Modal {
         }
         // Don't increment currentIndex — next item slides into place
         if (this.currentIndex >= this.items.length) {
-          this._finish();
+          void this._finish();
         } else {
           this._renderItem();
         }
@@ -756,7 +756,7 @@ export class ProcessInboxModal extends Modal {
     });
 
     doneBtn.addEventListener("click", () => {
-      this._finish();
+      void this._finish();
     });
 
     // Enter to process, Escape to skip

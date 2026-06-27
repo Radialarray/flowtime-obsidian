@@ -201,7 +201,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       btn.addEventListener("click", () => {
         const mobileFile = this.app.vault.getAbstractFileByPath("today-mobile.md");
         if (mobileFile) {
-          this.app.workspace.openLinkText("today-mobile", "", false);
+          void this.app.workspace.openLinkText("today-mobile", "", false);
         } else {
           this.plugin?.notify?.("today-mobile.md not found. Create it with type: flowtime-mobile frontmatter.", true);
         }
@@ -627,7 +627,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       };
     }
     if (this.mode === "today") { this._columnVisibility.actions = false; }
-    if (this.mode === "sessions") { this._renderSessionHistory(); return; }
+    if (this.mode === "sessions") { void this._renderSessionHistory(); return; }
     if (this.mode === "budget") { this._renderBudgetView(); return; }
     if (this.mode === "sprints") { this._renderSprintOverview(); return; }
     if (this.tasks.length === 0) {
@@ -725,7 +725,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       if (this.plugin?.settings) {
         this.plugin.settings.defaultView = this._viewMode;
       }
-      this._refreshSiblings();
+      void this._refreshSiblings();
       this.renderTable();
     });
 
@@ -1061,7 +1061,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       });
       srcBtn.addEventListener("click", () => {
         popup.remove();
-        this.app.workspace.openLinkText(task.file!.path, "", true, { line: task.line + 1 } as any);
+        void this.app.workspace.openLinkText(task.file!.path, "", true, { line: task.line + 1 } as any);
       });
     }
 
@@ -1114,7 +1114,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     projRow.createEl("label", { text: "Project", cls: "ft-fe-label" });
     if (task.project) {
       const pl = projRow.createEl("a", { text: task.project, cls: "ft-fe-link" });
-      pl.addEventListener("click", () => { popup.remove(); this.app.workspace.openLinkText(task.projectPath || task.project || "", "", true); });
+      pl.addEventListener("click", () => { popup.remove(); void this.app.workspace.openLinkText(task.projectPath || task.project || "", "", true); });
     } else { projRow.createEl("span", { text: "\u2014", cls: "ft-fe-value" }); }
 
     // ── Buttons ──
@@ -1448,7 +1448,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       const pc = row.createEl("td", { cls: "ft-project-cell" });
       if (task.project) {
         const plink = pc.createEl("a", { text: task.project, cls: "ft-project-link" });
-        if (task.projectPath) { plink.addEventListener("click", () => this.app.workspace.openLinkText(task.projectPath!, "", true)); }
+        if (task.projectPath) { plink.addEventListener("click", () => void this.app.workspace.openLinkText(task.projectPath!, "", true)); }
       } else { pc.createEl("span", { text: "\u2014", cls: "ft-project-none" }); }
     }
 
@@ -1479,7 +1479,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     if (this._columnVisibility!.source !== false) {
       const sc = row.createEl("td", { cls: "ft-source" });
       const lnk = sc.createEl("a", { text: task.file?.basename || "\u2014", cls: "ft-source-link" });
-      if (task.file) { lnk.addEventListener("click", () => this.app.workspace.openLinkText(task.file!.path, "", true, { line: task.line + 1 } as any)); }
+      if (task.file) { lnk.addEventListener("click", () => void this.app.workspace.openLinkText(task.file!.path, "", true, { line: task.line + 1 } as any)); }
     }
 
     if (this._columnVisibility!.date !== false) {
@@ -1593,7 +1593,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
           if (this.plugin?.statusTimer?.stop) this.plugin.statusTimer.stop();
           if (this.plugin?.sessionStore) {
             const now = new Date();
-            this.plugin.sessionStore.writeSession({
+            void this.plugin.sessionStore.writeSession({
               startTime: new Date(now.getTime() - ts.total * 1000).toISOString(),
               endTime: now.toISOString(),
               durationMinutes: Math.round(ts.total / 60),

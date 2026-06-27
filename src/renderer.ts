@@ -699,7 +699,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       if (!isCompact && def.id === "actions") continue;
       const item = colDD.createEl("label", { cls: "ft-col-dd-item" });
       const cb = item.createEl("input", { type: "checkbox" });
-      cb.checked = this._columnVisibility![def.id] !== false;
+      cb.checked = this._columnVisibility[def.id] !== false;
       item.createEl("span", { text: " " + def.label });
       cb.addEventListener("change", () => { this._columnVisibility![def.id] = cb.checked; this.renderTable(); });
     }
@@ -804,7 +804,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     subSel.createEl("option", { text: "Project", value: "project" }); subSel.createEl("option", { text: "Sprint", value: "sprint" });
     subSel.createEl("option", { text: "Date", value: "date" }); subSel.createEl("option", { text: "Status", value: "status" });
     if (this._groupConfig.secondary) subSel.value = this._groupConfig.secondary;
-    const applyGroup = (): void => { this._groupConfig!.primary = groupSel.value || null; this._groupConfig!.secondary = subSel.value || null; this.renderTable(); };
+    const applyGroup = (): void => { this._groupConfig.primary = groupSel.value || null; this._groupConfig.secondary = subSel.value || null; this.renderTable(); };
     groupSel.addEventListener("change", applyGroup); subSel.addEventListener("change", applyGroup);
 
     if (this._displayItems.length > 0 || this.tasks.length > 0) {
@@ -860,7 +860,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     const makeSortableHeader = (label: string, field: string | null, cls: string, width: string): HTMLTableHeaderCellElement => {
       const th = hr.createEl("th", { cls }); th.classList.add("ft-sortable");
       if (width) th.setCssProps({ "--ft-col-width": width }); th.createEl("span", { text: label });
-      if (field) { th.createEl("span", { cls: "ft-sort-indicator", text: sortIndicator(field) }); th.addEventListener("click", sortByColumn(field)); }
+      if (field) { th.createEl("span", { cls: "ft-sort-indicator", text: sortIndicator(field) }); th.addEventListener("click", (e: MouseEvent) => { void sortByColumn(field)(e); }); }
       return th;
     };
     const makeHeader = (cls: string, width: string): HTMLTableHeaderCellElement => {
@@ -870,8 +870,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     for (const col of COLUMNS) {
       if (col.compactOnly && !isCompact) continue;
       if (col.compactSkip && isCompact) continue;
-      if (this._columnVisibility![col.id] === false) continue;
-      if (col.defaultHide && !this._columnVisibility![col.id]) continue;
+      if (this._columnVisibility[col.id] === false) continue;
+      if (col.defaultHide && !this._columnVisibility[col.id]) continue;
       const label = (col.id === 'date' && dw) ? 'Due' : col.label;
       if (col.sortField) { makeSortableHeader(label, col.sortField, `col-${col.id}`, col.width); }
       else { makeHeader(`col-${col.id}`, col.width); }
@@ -900,7 +900,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       const def = task._bucketDef; if (!def) continue;
       const row = section.createEl("div", { cls: "ft-budget-row" });
       const info = row.createEl("div", { cls: "ft-budget-info" });
-      const swatch = info.createEl("span", { cls: "ft-bucket-swatch" }); swatch.setCssProps({ "background-color": def.color });
+      const swatch = info.createEl("span", { cls: "ft-bucket-swatch" }); swatch.setCssProps({ "--ft-swatch-color": def.color });
       info.createEl("span", { text: def.name, cls: "ft-budget-name" });
       const usedHours = task.durationMinutes / 60;
       const bar = renderProgressBar(usedHours, def.weeklyLimit, undefined, row);
@@ -920,7 +920,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       const card = this.containerEl.createEl("div", { cls: "ft-budget-section" });
       const header = card.createEl("div", { cls: "ft-budget-section-title ft-sprint-card-header" });
       const nameEl = header.createEl("span", { text: def.name, cls: "ft-sprint-name" });
-      if (def.color) { nameEl.setCssProps({ "border-left": "3px solid " + def.color }); nameEl.addClass("ft-pl-8"); }
+      if (def.color) { nameEl.setCssProps({ "--ft-accent-color": def.color }); nameEl.addClass("ft-pl-8 ft-sprint-accent"); }
       if (def.goal) { card.createEl("div", { text: def.goal, cls: "ft-sprint-goal" }); }
       if (def.start || def.end) { card.createEl("div", { text: `${def.start || "?"} \u2192 ${def.end || "?"}`, cls: "ft-sprint-dates" }); }
       if (tasks.length > 0) {
@@ -1229,7 +1229,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
     saveBtn.addEventListener("click", () => { void doSave(); });
     textInput.addEventListener("keydown", (e: KeyboardEvent) => {
-      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); doSave(); }
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void doSave(); }
     });
 
     const rect = anchorEl.getBoundingClientRect();
@@ -1279,7 +1279,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
     };
     listWrap.addEventListener("mousedown", (e: MouseEvent) => {
       const handle = (e.target as HTMLElement).closest(".ft-list-drag"); if (!handle) return;
-      const row = (handle as HTMLElement).closest(".ft-list-row") as HTMLDivElement | null; if (!row) return;
+      const row = handle.closest(".ft-list-row"); if (!(row instanceof HTMLDivElement)) return;
       e.preventDefault(); buildRowMap(); clearIndicators();
       dragState = { path: row.dataset.sourcePath || "", line: parseInt(row.dataset.line || "0", 10), row, startX: e.clientX, startY: e.clientY };
       row.classList.add("ft-list-dragging");
@@ -1294,12 +1294,12 @@ class FlowtimeRenderer extends MarkdownRenderChild {
         // Then batch all DOM writes together
         clearIndicators(); ds.row.classList.add("ft-list-dragging");
         if (!el) return;
-        const targetRow = (el as HTMLElement).closest(".ft-list-row") as HTMLDivElement | null;
+        const targetRow = el.closest(".ft-list-row");
         if (targetRow && targetRow !== ds.row) {
           const rect = targetRow.getBoundingClientRect();
           targetRow.classList.add(e.clientY < rect.top + rect.height / 2 ? "ft-list-drop-before" : "ft-list-drop-after"); return;
         }
-        const heading = (el as HTMLElement).closest("h1, h2, h3, h4, h5, h6");
+        const heading = el.closest("h1, h2, h3, h4, h5, h6");
         if (heading && !heading.closest(".ft-list-wrap")) { heading.classList.add("ft-list-heading-active"); }
       });
     });
@@ -1309,7 +1309,8 @@ class FlowtimeRenderer extends MarkdownRenderChild {
         const el = this._doc.elementFromPoint(e.clientX, e.clientY); clearIndicators();
         const srcIdx = rowToIndex?.get(dragState.row) ?? -1;
         if (srcIdx < 0) { dragState = null; return; }
-        const targetRow = (el as HTMLElement | null)?.closest(".ft-list-row") as HTMLDivElement | null;
+        const targetEl = el?.closest(".ft-list-row");
+        const targetRow = targetEl instanceof HTMLDivElement ? targetEl : null;
       if (targetRow && targetRow !== dragState.row) {
         const tgtIdx = rowToIndex?.get(targetRow) ?? -1;
         if (tgtIdx >= 0 && tgtIdx !== srcIdx) {
@@ -1331,7 +1332,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
           this.plugin?.notify?.("\u{1F504} Time updated"); dragState = null; return;
         }
       }
-      const heading = (el as HTMLElement | null)?.closest("h1, h2, h3, h4, h5, h6");
+      const heading = el?.closest("h1, h2, h3, h4, h5, h6");
       if (heading) {
         heading.classList.remove("ft-list-heading-active"); const srcTask = this.tasks[srcIdx];
         if (srcTask) {
@@ -1444,7 +1445,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       for (const d of DUR_OPTS) { durList.createEl("option", { attr: { value: formatDuration(d) } }); }
       const ps = timeRow.createEl("span", { text: "", cls: "ft-preview" });
       const up = (): void => { const s = si!.value; const d = parseDurStr(ds!.value); ps.setText(s && d > 0 ? "\u2192 " + this._calcEnd(s, d) : ""); };
-      const debounceSave = (() => { let timer: ReturnType<typeof setTimeout>; return (): void => { if (timer) window.clearTimeout(timer); timer = window.setTimeout(() => this._autoSaveTime(task, si!, ds!), 300); }; })();
+      const debounceSave = (() => { let timer: ReturnType<typeof setTimeout>; return (): void => { if (timer) window.clearTimeout(timer); timer = window.setTimeout(() => { void this._autoSaveTime(task, si!, ds!); }, 300); }; })();
       si.addEventListener("input", () => { up(); debounceSave(); }); ds.addEventListener("input", () => { up(); debounceSave(); }); up();
     }
 
@@ -1487,7 +1488,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       if (task.sprint) {
         const badge = spc.createEl("span", { text: this._sprintName(task.sprint), cls: "ft-sprint-badge" });
         const sprints = this.plugin?.settings?.sprints || []; const def = sprints.find((s) => s.id === task.sprint);
-        if (def?.color) { badge.setCssProps({ "border-left-color": def.color }); }
+        if (def?.color) { badge.setCssProps({ "--ft-accent-color": def.color }); badge.addClass("ft-sprint-accent"); }
       } else { spc.createEl("span", { text: "\u2014", cls: "ft-bucket-none" }); }
     }
 
@@ -1518,7 +1519,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       (dp as HTMLDivElement & { _badge?: HTMLElement })._badge = ds2;
       const op = (): void => { const r = dw.getBoundingClientRect(); dp.setCssStyles({ left: Math.max(4, Math.min(r.left, window.innerWidth - 190)) + "px", top: Math.min(r.bottom + 4, window.innerHeight - 250) + "px" }); this._doc.body.appendChild(dp); window.requestAnimationFrame(() => { if (dp.parentNode) dp.classList.add("ft-dp-open"); }); };
       const cp = (): void => { dp.classList.remove("ft-dp-open"); window.setTimeout(() => { if (dp.parentNode) dp.parentNode.removeChild(dp); }, 150); };
-      ds2.addEventListener("click", (e: MouseEvent) => { e.stopPropagation(); dp.classList.contains("ft-dp-open") ? cp() : op(); });
+      ds2.addEventListener("click", (e: MouseEvent) => { e.stopPropagation(); if (dp.classList.contains("ft-dp-open")) { cp(); } else { op(); } });
       const ap = async (nd: string): Promise<void> => {
         cp();
         try {
@@ -1666,7 +1667,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
 
   _buildTaskCell(row: HTMLTableRowElement, task: TaskRow, depth: number, hasChildren: boolean, collapsed: boolean, tid: string, childrenTasks: TaskRow[]): void {
     const tc = row.createEl("td", { cls: "ft-task-cell" });
-    if (depth > 0) { tc.setCssProps({ "padding-left": depth * 18 + 8 + "px" }); }
+    if (depth > 0) { tc.setCssProps({ "--ft-tree-depth": `${depth * 18 + 8}px` }); tc.addClass("ft-tree-indent"); }
     if (hasChildren) {
       const toggle = tc.createEl("span", { text: collapsed ? "\u25b6" : "\u25bc", cls: "ft-tree-toggle" });
       toggle.addEventListener("click", (e: MouseEvent) => { e.stopPropagation(); if (this._collapsed.has(tid)) this._collapsed.delete(tid); else this._collapsed.add(tid); this.renderTable(); });
@@ -1732,7 +1733,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       for (const t of todayTotals) {
         const row = section.createEl("div", { cls: "ft-sesh-analytics-row" });
         const bDef = buckets.find((b) => b.id === (t as Record<string, string>).bucket);
-        if (bDef) { const swatch = row.createEl("span", { cls: "ft-bucket-swatch" }); swatch.setCssProps({ "background-color": bDef.color }); row.createEl("span", { text: bDef.name, cls: "ft-sesh-analytics-name" }); }
+        if (bDef) { const swatch = row.createEl("span", { cls: "ft-bucket-swatch" }); swatch.setCssProps({ "--ft-swatch-color": bDef.color }); row.createEl("span", { text: bDef.name, cls: "ft-sesh-analytics-name" }); }
         else { row.createEl("span", { text: (t as Record<string, string>).bucket || "unassigned", cls: "ft-sesh-analytics-name" }); }
         row.createEl("span", { text: `${Math.round((t as Record<string, number>).total_minutes)}m (${((t as Record<string, number>).total_minutes / 60).toFixed(1)}h)`, cls: "ft-sesh-analytics-value" });
       }
@@ -1747,7 +1748,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
           const row = section.createEl("div", { cls: "ft-sesh-analytics-row" });
           const bDef = buckets.find((b) => b.id === (w as Record<string, string>).bucket);
           if (bDef) {
-            const swatch = row.createEl("span", { cls: "ft-bucket-swatch" }); swatch.setCssProps({ "background-color": bDef.color }); row.createEl("span", { text: bDef.name, cls: "ft-sesh-analytics-name" });
+            const swatch = row.createEl("span", { cls: "ft-bucket-swatch" }); swatch.setCssProps({ "--ft-swatch-color": bDef.color }); row.createEl("span", { text: bDef.name, cls: "ft-sesh-analytics-name" });
             const usedHours = (w as Record<string, number>).total_minutes / 60;
             row.createEl("span", { text: bDef.weeklyLimit > 0 ? `${usedHours.toFixed(1)}h / ${bDef.weeklyLimit}h` : `${usedHours.toFixed(1)}h`, cls: "ft-sesh-analytics-value" });
           } else { row.createEl("span", { text: (w as Record<string, string>).bucket || "unassigned", cls: "ft-sesh-analytics-name" }); row.createEl("span", { text: `${((w as Record<string, number>).total_minutes / 60).toFixed(1)}h`, cls: "ft-sesh-analytics-value" }); }
@@ -1783,7 +1784,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
         const bucketCell = row.createEl("td", { cls: "ft-sesh-bucket" });
         if ((rec as Record<string, string>).bucket) {
           const bDef = buckets.find((b) => b.id === (rec as Record<string, string>).bucket);
-          if (bDef) { const badge = bucketCell.createEl("span", { text: bDef.name, cls: "ft-sesh-badge" }); badge.setCssProps({ "border-left-color": bDef.color }); }
+          if (bDef) { const badge = bucketCell.createEl("span", { text: bDef.name, cls: "ft-sesh-badge" }); badge.setCssProps({ "--ft-accent-color": bDef.color }); badge.addClass("ft-sesh-badge-accent"); }
           else { bucketCell.createEl("span", { text: (rec as Record<string, string>).bucket, cls: "ft-sesh-badge-unknown" }); }
         } else { bucketCell.createEl("span", { text: "\u2014", cls: "ft-sesh-faint" }); }
         row.createEl("td", { text: (rec as Record<string, string>).task_text || (rec as Record<string, string>).notes || "\u2014", cls: "ft-sesh-task" });
@@ -1800,7 +1801,7 @@ class FlowtimeRenderer extends MarkdownRenderChild {
       await this._handleRecurrence(task, newLine);
       if (this.plugin?.sessionStore) { await this.plugin.sessionStore.writeCompletion({ date: task.taskDate || new Date().toISOString().split("T")[0], bucket: task.bucket || "", taskText: task.cleanText, completedAt: new Date().toISOString() }); }
     }
-    const tbody = this.containerEl.querySelector("tbody"); if (tbody) this.buildRows(tbody as HTMLTableSectionElement);
+    const tbody = this.containerEl.querySelector("tbody"); if (tbody instanceof HTMLTableSectionElement) this.buildRows(tbody);
     await this._refreshSiblings();
   }
 

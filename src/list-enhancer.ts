@@ -25,7 +25,7 @@ interface FlowtimePluginRef {
     pause(): void;
   };
   /** Called after a change to re-aggregate the mobile file */
-  onHeadingDrop?: () => void;
+  onHeadingDrop?: () => Promise<void>;
 }
 
 export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
@@ -39,7 +39,7 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
     _cleanupDOM();
     const view = app.workspace.activeEditor as { previewEl?: HTMLElement } | null;
     const container =
-      view?.previewEl || activeDoc(app).querySelector(".markdown-source-view") as HTMLElement | null;
+      view?.previewEl || activeDoc(app).querySelector(".markdown-source-view");
 
     if (!container) {
       window.setTimeout(() => _enhance(), 300);
@@ -65,7 +65,7 @@ export function createListEnhancer(app: App, plugin: FlowtimePluginRef) {
     // ── Checkbox click handler ──
     const checkboxEl = el.querySelector(isPreview
       ? 'input[type="checkbox"]'
-      : '.cm-formatting-task') as HTMLElement | null;
+      : '.cm-formatting-task');
 
     if (checkboxEl && _currentFile) {
       el.addEventListener("click", (e: MouseEvent) => {

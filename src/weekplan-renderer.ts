@@ -1171,7 +1171,7 @@ class WeekplanRenderer extends MarkdownRenderChild {
 			return (): void => {
 				window.clearTimeout(timer);
 				timer = window.setTimeout(
-					() => this._saveTaskTime(task, si, di),
+					() => { void this._saveTaskTime(task, si, di); },
 					300,
 				);
 			};

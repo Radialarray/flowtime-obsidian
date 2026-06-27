@@ -5,7 +5,7 @@
 import type { TFile } from "obsidian";
 
 // Obsidian exposes activeDocument for popout window compatibility
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- global declaration used at runtime
 declare const activeDocument: Document;
 
 // ── Task shapes ──

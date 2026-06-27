@@ -91,7 +91,8 @@ export default class FlowtimePlugin extends Plugin {
 	_saveTaskCache!: () => Promise<void>;
 
 	override async onload(): Promise<void> {
-		const savedData = await this.loadData();
+		const rawData = await this.loadData();
+		const savedData = (rawData && typeof rawData === 'object' ? rawData : {}) as Record<string, unknown>;
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, savedData);
 		// Ensure buckets default is populated if saved data has empty/null buckets
 		if (!this.settings.buckets || this.settings.buckets.length === 0) {
@@ -167,11 +168,12 @@ export default class FlowtimePlugin extends Plugin {
 				const cachePath = this._cacheFilePath();
 				if (await this.app.vault.adapter.exists(cachePath)) {
 					const raw = await this.app.vault.adapter.read(cachePath);
-					const parsed = JSON.parse(raw);
+					const parsed = JSON.parse(raw) as Record<string, unknown>;
 					this.taskCache.fromJSON(parsed);
-				} else if (savedData && savedData._taskCache) {
-					this.taskCache.fromJSON(savedData._taskCache as Record<string, unknown>);
-					delete savedData._taskCache;
+				} else if (savedData && typeof savedData === 'object' && '_taskCache' in savedData) {
+					const tc = (savedData as Record<string, unknown>)._taskCache as Record<string, unknown>;
+					if (tc) this.taskCache.fromJSON(tc);
+					delete (savedData as Record<string, unknown>)._taskCache;
 				}
 			} catch (_) {
 				/* ignore */
@@ -943,10 +945,10 @@ export default class FlowtimePlugin extends Plugin {
 
 				new ProjectNameModal(
 					this.app,
-					async (
+					(
 						name: string,
 						opts: { scaffoldTasks: boolean; scaffoldWiki: boolean },
-					) => {
+					): void => { void (async () => {
 						try {
 							const result = await createProject(
 								this.app,
@@ -970,7 +972,7 @@ export default class FlowtimePlugin extends Plugin {
 								true,
 							);
 						}
-					},
+					})(); },
 				).open();
 			},
 		});
@@ -1233,7 +1235,7 @@ export default class FlowtimePlugin extends Plugin {
 			id: "onboard",
 			name: "Onboard / Migrate",
 			callback: () => {
-				runOnboard(this.app, this);
+				void runOnboard(this.app, this);
 			},
 		});
 
@@ -1280,7 +1282,7 @@ export default class FlowtimePlugin extends Plugin {
 						this.contentEl.empty();
 					}
 				}
-				new ConfirmModal(this.app, async () => {
+				new ConfirmModal(this.app, (): void => { void (async () => {
 					this.settings = Object.assign({}, DEFAULT_SETTINGS);
 					this.taskCache.clear();
 					await this.saveData(this.settings);
@@ -1296,7 +1298,7 @@ export default class FlowtimePlugin extends Plugin {
 					this.notify(
 						"\u2705 Flowtime reset to defaults. Reload for full effect.",
 					);
-				}).open();
+				})(); }).open();
 			},
 		});
 
@@ -1376,7 +1378,7 @@ export default class FlowtimePlugin extends Plugin {
 		let _prevLeafFile: string | null = null;
 		this.registerEvent(
 			this.app.workspace.on("active-leaf-change", (leaf) => {
-				this.listEnhancer.check();
+				void this.listEnhancer.check();
 
 				if (!this.settings.tabHistoryEnabled) return;
 
@@ -1406,7 +1408,7 @@ export default class FlowtimePlugin extends Plugin {
 						if (existingLeaf) {
 								this.app.workspace.setActiveLeaf(existingLeaf);
 							} else if (backFile instanceof TFile) {
-								this.app.workspace.getLeaf().openFile(backFile);
+								void this.app.workspace.getLeaf().openFile(backFile);
 							}
 							}
 						}
@@ -1430,7 +1432,7 @@ export default class FlowtimePlugin extends Plugin {
 			}),
 		);
 		this.app.workspace.onLayoutReady(() => {
-			this.listEnhancer.check();
+			void this.listEnhancer.check();
 		});
 
 		// v1.5.0: Mobile markdown view — auto-aggregate tasks on file open
@@ -1441,7 +1443,7 @@ export default class FlowtimePlugin extends Plugin {
 					const { refreshAll } = await import("./task-aggregator");
 					await refreshAll(this.app, file, this, file.path);
 					// Re-enhance after aggregation writes to file
-					window.setTimeout(() => this.listEnhancer.check(), 300);
+					window.setTimeout(() => { void this.listEnhancer.check(); }, 300);
 				})();
 			}),
 		);
@@ -1619,7 +1621,7 @@ export default class FlowtimePlugin extends Plugin {
 				this.app.vault.configDir + "/daily-notes.json";
 			if (!(await this.app.vault.adapter.exists(dailyNotesPath))) return;
 			const content = await this.app.vault.adapter.read(dailyNotesPath);
-			const config = JSON.parse(content);
+			const config = JSON.parse(content) as { folder?: string; format?: string };
 			const folder = config.folder;
 			if (!folder) return;
 			if (!(await this.app.vault.adapter.exists(folder))) {

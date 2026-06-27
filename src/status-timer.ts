@@ -190,27 +190,27 @@ export function createStatusTimer(opts: StatusTimerOpts): {
 
 // Backward-compatible class wrapper
 export class StatusTimer {
-  declare start: ReturnType<typeof createStatusTimer>['start'];
-  declare stop: ReturnType<typeof createStatusTimer>['stop'];
-  declare pause: ReturnType<typeof createStatusTimer>['pause'];
-  declare toggle: ReturnType<typeof createStatusTimer>['toggle'];
-  declare getState: ReturnType<typeof createStatusTimer>['getState'];
-  declare updateDisplay: ReturnType<typeof createStatusTimer>['updateDisplay'];
-  declare statusBarItem: ReturnType<typeof createStatusTimer>['statusBarItem'];
-  declare currentTimer: ReturnType<typeof createStatusTimer>['currentTimer'];
-  declare settings: ReturnType<typeof createStatusTimer>['settings'];
-  declare notify: ReturnType<typeof createStatusTimer>['notify'];
-  declare onSessionEnd: ReturnType<typeof createStatusTimer>['onSessionEnd'];
-  declare onTimerStop: ReturnType<typeof createStatusTimer>['onTimerStop'];
+  start!: (taskName: string, totalSeconds: number) => void;
+  stop!: () => void;
+  pause!: () => void;
+  toggle!: () => void;
+  getState!: () => TimerState | null;
+  updateDisplay!: () => void;
+  statusBarItem!: HTMLElement;
+  currentTimer!: TimerData | null;
+  settings!: FlowtimeSettings;
+  notify!: (msg: string, isError?: boolean) => void;
+  onSessionEnd!: (data: SessionData) => Promise<void>;
+  onTimerStop!: () => void;
 
   constructor(opts: StatusTimerOpts) {
     const impl = createStatusTimer(opts);
-    this.start = impl.start;
-    this.stop = impl.stop;
-    this.pause = impl.pause;
-    this.toggle = impl.toggle;
-    this.getState = impl.getState;
-    this.updateDisplay = impl.updateDisplay;
+    this.start = (taskName, totalSeconds) => impl.start(taskName, totalSeconds);
+    this.stop = () => impl.stop();
+    this.pause = () => impl.pause();
+    this.toggle = () => impl.toggle();
+    this.getState = () => impl.getState();
+    this.updateDisplay = () => impl.updateDisplay();
     this.statusBarItem = impl.statusBarItem;
     this.currentTimer = impl.currentTimer;
     this.settings = impl.settings;

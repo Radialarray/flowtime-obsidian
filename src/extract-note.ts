@@ -45,7 +45,7 @@ function cleanTitle(line: string): string {
 
 function sanitizeFilename(title: string): string {
   let name = title.replace(/[<>:"/\\|?*]/g, "");
-  // eslint-disable-next-line no-control-regex
+  // eslint-disable-next-line no-control-regex -- strip ASCII control chars from filenames
   name = name.replace(/[\u0000-\u001F]/g, "");
   name = name.replace(/\s+/g, " ").trim();
   if (name.length > 100) name = name.slice(0, 100).trim();

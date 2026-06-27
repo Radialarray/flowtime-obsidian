@@ -947,6 +947,8 @@
 .ft-bucket-swatch {
 	width: 12px;
 	height: 12px;
+	border-radius: 2px;
+	background-color: var(--ft-swatch-color, var(--text-muted));
 	border-radius: 50%;
 	display: inline-block;
 	margin-right: 6px;
@@ -1166,6 +1168,9 @@
 	font-size: var(--font-ui-smaller);
 	background: var(--background-modifier-hover);
 	border-left: 3px solid var(--interactive-accent);
+}
+.ft-sesh-badge-accent {
+	border-left-color: var(--ft-accent-color, var(--interactive-accent));
 }
 .ft-sesh-badge-unknown {
 	color: var(--text-error);
@@ -2148,6 +2153,10 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-v
 
 .ft-tree-toggle {
 	cursor: pointer;
+
+.ft-tree-indent {
+	padding-left: var(--ft-tree-depth, 0px);
+}
 	user-select: none;
 	margin-right: 4px;
 	font-size: 10px;
@@ -2164,6 +2173,9 @@ body.ft-wide-xl .markdown-reading-view .markdown-preview-view.markdown-preview-v
 }
 
 /* ── Sprint Badge ── */
+.ft-sprint-accent {
+	border-left: 3px solid var(--ft-accent-color, var(--background-modifier-border));
+}
 .ft-sprint-badge {
 	display: inline-block;
 	padding: 2px 8px;

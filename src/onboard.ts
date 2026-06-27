@@ -377,8 +377,8 @@ class LayoutStepModal extends Modal {
     nextBtn.addEventListener("click", () => {
       const sel = contentEl.querySelector(
         "input[data-radio-group='layout']:checked",
-      ) as HTMLInputElement | null;
-      this.state.layoutType = sel ? sel.value : "flat";
+      );
+      this.state.layoutType = sel instanceof HTMLInputElement ? sel.value : "flat";
       this.state.projectsRoot =
         this.state.layoutType === "nested" ? "Projects" : "";
       this.state.step++;
@@ -595,8 +595,8 @@ class BucketStepModal extends Modal {
     nextBtn.addEventListener("click", () => {
       const sel = contentEl.querySelector(
         "input[type='radio']:checked",
-      ) as HTMLInputElement | null;
-      this.state.bucketPreset = sel ? sel.value : "keep";
+      );
+      this.state.bucketPreset = sel instanceof HTMLInputElement ? sel.value : "keep";
       this.state.step++;
       this.close();
       this.onDone();
@@ -636,7 +636,7 @@ class DailyNotesStepModal extends Modal {
       cls: "flowtime-input",
     });
     contentEl.createEl("p", {
-      text: "This will update .obsidian/daily-notes.json and create the folder if needed.",
+      text: `This will update ${this.app.vault.configDir}/daily-notes.json and create the folder if needed.`,
       cls: "flowtime-label",
       attr: {
         style:
